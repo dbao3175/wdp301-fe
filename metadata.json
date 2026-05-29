@@ -1,0 +1,6 @@
+{
+  "name": "WDP301 FE",
+  "description": "Bảng điều khiển quản lý quy trình dịch và thiết kế Manga thời gian thực.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
