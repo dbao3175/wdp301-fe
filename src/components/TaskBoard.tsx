@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   CheckCircle,
@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Task, Chapter, Series, User as UserType, SeriesRank, Vote } from "../types";
 import { MOCK_USERS, getStatusBadgeColor } from "../data";
+import { RolePermissions, TaskBoardTab, getPermissions } from "../auth/permissions";
 
 interface TaskBoardProps {
   currentUser: UserType | null;
@@ -34,6 +35,7 @@ interface TaskBoardProps {
   chapters: Chapter[];
   seriesList: Series[];
   ranksList: SeriesRank[];
+  permissions?: RolePermissions;
   onTaskSubmit: (id: string) => Promise<void>;
   onSeriesReview: (seriesId: string, action: "APPROVED" | "REJECTED", note: string, pubSchedule?: "WEEKLY" | "MONTHLY") => Promise<void>;
   onStatusTransition: (seriesId: string, status: "APPROVED" | "IN_PRODUCTION" | "PUBLISHED" | "REJECTED" | "CANCELLED") => Promise<void>;
@@ -60,8 +62,18 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   onChapterPublish,
   votes,
   onVoteSubmit,
+  permissions: permissionsProp,
 }) => {
-  const [activeTab, setActiveTab] = useState<"kanban" | "reviews" | "ratings" | "chapters" >("kanban");
+  const permissions = permissionsProp ?? getPermissions(currentUser?.role ?? null);
+  const [activeTab, setActiveTab] = useState<TaskBoardTab>(permissions.defaultTaskBoardTab);
+
+  useEffect(() => {
+    if (!permissions.taskBoardTabs.includes(activeTab)) {
+      setActiveTab(permissions.defaultTaskBoardTab);
+    }
+  }, [currentUser?.role, permissions]);
+
+  const showTab = (tab: TaskBoardTab) => permissions.taskBoardTabs.includes(tab);
 
   // Kanban Fiters state
   const [seriesFilter, setSeriesFilter] = useState<string>("all");
@@ -146,7 +158,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     <div className="flex flex-col flex-1" id="board-container">
       
       {/* Tab Selectors */}
-      <div className="flex bg-white border border-zinc-200 p-1.5 rounded-2xl mb-6 shadow-xs gap-1.5">
+      <div className="flex bg-white border border-zinc-200 p-1.5 rounded-2xl mb-6 shadow-xs gap-1.5 flex-wrap">
+        {showTab("kanban") && (
         <button
           type="button"
           id="tab-btn-kanban"
@@ -160,7 +173,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
           <Activity className="w-4 h-4" />
           QUY TRÌNH TASK & TRỢ LÝ
         </button>
+        )}
 
+        {showTab("reviews") && (
         <button
           type="button"
           id="tab-btn-reviews"
@@ -179,7 +194,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
             </span>
           )}
         </button>
+        )}
 
+        {showTab("ratings") && (
         <button
           type="button"
           id="tab-btn-ratings"
@@ -193,7 +210,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
           <Award className="w-4 h-4" />
           BẢNG RATING
         </button>
+        )}
 
+        {showTab("chapters") && (
         <button
           type="button"
           id="tab-btn-chapters"
@@ -207,6 +226,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
           <BookOpen className="w-4 h-4" />
           QUẢN LÝ CHAPTERS
         </button>
+        )}
       </div>
 
       {/* RENDER ACTIVE TAB */}
@@ -366,7 +386,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                           <div className="mt-3.5 pt-3 border-t border-zinc-100 flex items-center justify-between text-[10px] text-zinc-400">
                             <span>Sáng lập: Vừa cập nhật</span>
                             
-                            {isTaskMine ? (
+                            {isTaskMine && permissions.canSubmitTask ? (
                               <button
                                 id={`submit-task-btn-${task._id}`}
                                 onClick={() => onTaskSubmit(task._id)}
@@ -513,7 +533,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                       <div className="flex gap-1.5">
                         
                         {/* Editor review trigger */}
-                        {isPending && currentUser?.role === "EDITOR" && (
+                        {isPending && permissions.canReviewSeriesAsEditor && (
                           <button
                             id={`rev-btn-${series._id}`}
                             onClick={() => setReviewingId(series._id)}
@@ -524,7 +544,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                         )}
 
                         {/* Board Member consensus vote trigger */}
-                        {isPending && currentUser?.role === "BOARD_MEMBER" && (
+                        {isPending && permissions.canVoteSeries && (
                           <button
                             id={`vote-trg-${series._id}`}
                             onClick={() => {
@@ -539,7 +559,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                         )}
 
                         {/* Board Member workflow triggers for transitions */}
-                        {series.status === "APPROVED" && (currentUser?.role === "BOARD_MEMBER" || currentUser?.role === "EDITOR") && (
+                        {series.status === "APPROVED" && (permissions.canVoteSeries || permissions.canReviewSeriesAsEditor) && (
                           <button
                             id={`prod-btn-${series._id}`}
                             onClick={() => {
@@ -551,7 +571,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                           </button>
                         )}
 
-                        {series.status === "IN_PRODUCTION" && (currentUser?.role === "BOARD_MEMBER" || currentUser?.role === "EDITOR") && (
+                        {series.status === "IN_PRODUCTION" && (permissions.canVoteSeries || permissions.canReviewSeriesAsEditor) && (
                           <button
                             id={`pub-btn-${series._id}`}
                             onClick={() => {
@@ -564,7 +584,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                         )}
 
                         {/* Cancel helper for Active Manga */}
-                        {["APPROVED", "IN_PRODUCTION"].includes(series.status) && (currentUser?.role === "BOARD_MEMBER" || currentUser?.role === "EDITOR") && (
+                        {["APPROVED", "IN_PRODUCTION"].includes(series.status) && permissions.canCancelSeries && (
                           <button
                             id={`cancel-btn-${series._id}`}
                             onClick={() => {
@@ -764,10 +784,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       )}
 
       {/* 3. RATINGS & LEADERBOARD TAB */}
-      {activeTab === "ratings" && (
+      {activeTab === "ratings" && showTab("ratings") && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6" id="ratings-workspace">
           
           {/* Form to submit Rating */}
+          {permissions.canSubmitRatings && (
           <div className="md:col-span-5 bg-white border border-zinc-200 rounded-2xl p-5 shadow-xs space-y-4">
             <div>
               <h3 className="text-sm font-bold text-zinc-950 flex items-center gap-1.5">
@@ -835,9 +856,12 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
               </button>
             </form>
           </div>
+          )}
 
           {/* Leaderboard displays */}
-          <div className="md:col-span-7 bg-white border border-zinc-200 rounded-2xl p-5 shadow-xs space-y-4">
+          <div className={`bg-white border border-zinc-200 rounded-2xl p-5 shadow-xs space-y-4 ${
+            permissions.canSubmitRatings ? "md:col-span-7" : "md:col-span-12"
+          }`}>
             <div>
               <h3 className="text-sm font-bold text-zinc-950 flex items-center gap-1.5">
                 <Award className="w-4 h-4 text-indigo-600" />
@@ -1020,7 +1044,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                             </button>
 
                             {/* Publish live Chapter event */}
-                            {(currentUser?.role === "EDITOR" || currentUser?.role === "BOARD_MEMBER") && (
+                            {permissions.canPublishChapter && (
                               <button
                                 type="button"
                                 onClick={async () => {

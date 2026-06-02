@@ -17,11 +17,27 @@ import {
 } from "lucide-react";
 import { Header } from "./components/Header";
 import { StatsGrid } from "./components/StatsGrid";
-import { CreateForm } from "./components/CreateForm";
-import { TaskBoard } from "./components/TaskBoard";
-import { ActivityFeed } from "./components/ActivityFeed";
-import { Chapter, Task, Series, User, SeriesRank, ActivityLog, Vote } from "./types";
+import { RoleDashboard, RoleWelcomeBanner } from "./pages/RoleDashboard";
+import {
+  Chapter,
+  Task,
+  Series,
+  User,
+  SeriesRank,
+  ActivityLog,
+  Vote,
+  ManuscriptReview,
+  EditorDraftNote,
+  ManuscriptReviewStatus,
+  AppNotification,
+  TaskDeliveryStatus,
+} from "./types";
 import { INITIAL_CHAPTERS, INITIAL_TASKS, INITIAL_SERIES, INITIAL_RANKS, MOCK_USERS } from "./data";
+import { createNotification } from "./workflow/notifications";
+import { withWorkflow, getMangakaId, SeriesWorkflowStatus } from "./workflow/seriesWorkflow";
+
+const EDITOR_USER_ID = "usr-loc";
+const BOARD_USER_ID = "usr-bao";
 
 export default function App() {
   // Connection and URL state management
@@ -70,6 +86,21 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [manuscriptReviews, setManuscriptReviews] = useState<Record<string, ManuscriptReview>>(() => {
+    const saved = localStorage.getItem("wdp301_manuscript_reviews");
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  const [editorDraftNotes, setEditorDraftNotes] = useState<Record<string, EditorDraftNote>>(() => {
+    const saved = localStorage.getItem("wdp301_editor_notes");
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
+    const saved = localStorage.getItem("wdp301_notifications");
+    return saved ? JSON.parse(saved) : [];
+  });
+
   // Log events list state
   const [logs, setLogs] = useState<ActivityLog[]>(() => {
     const saved = localStorage.getItem("wdp301_logs");
@@ -101,13 +132,28 @@ export default function App() {
     localStorage.setItem("wdp301_tasks", JSON.stringify(tasks));
     localStorage.setItem("wdp301_ranks", JSON.stringify(ranksList));
     localStorage.setItem("wdp301_votes", JSON.stringify(votes));
+    localStorage.setItem("wdp301_manuscript_reviews", JSON.stringify(manuscriptReviews));
+    localStorage.setItem("wdp301_editor_notes", JSON.stringify(editorDraftNotes));
+    localStorage.setItem("wdp301_notifications", JSON.stringify(notifications));
     localStorage.setItem("wdp301_logs", JSON.stringify(logs));
     if (currentUser) {
       localStorage.setItem("wdp301_current_user", JSON.stringify(currentUser));
     } else {
       localStorage.removeItem("wdp301_current_user");
     }
-  }, [connectionMode, backendUrl, seriesList, chapters, tasks, ranksList, votes, logs, currentUser]);
+  }, [connectionMode, backendUrl, seriesList, chapters, tasks, ranksList, votes, manuscriptReviews, editorDraftNotes, notifications, logs, currentUser]);
+
+  const pushNotify = (n: Omit<AppNotification, "id" | "read" | "createdAt">) => {
+    setNotifications((prev) => [createNotification(n), ...prev].slice(0, 120));
+  };
+
+  const patchSeries = (seriesId: string, ws: SeriesWorkflowStatus, extra?: Partial<Series>) => {
+    setSeriesList((prev) =>
+      prev.map((s) => (s._id === seriesId ? withWorkflow(s, ws, extra) : s))
+    );
+  };
+
+  const getSeriesById = (id: string) => seriesList.find((s) => s._id === id);
 
   // Add system log helper
   const addLog = (type: ActivityLog["type"], message: string, meta?: any) => {
@@ -363,14 +409,17 @@ export default function App() {
       }
     } else {
       // Sandbox Simulator
-      const simS: Series = {
-        _id: `ser-sim-${Date.now()}`,
-        title,
-        synopsis,
-        mangakaId: currentUser?._id || "usr-oda",
-        status: "PENDING",
-        createdAt: new Date().toISOString()
-      };
+      const simS: Series = withWorkflow(
+        {
+          _id: `ser-sim-${Date.now()}`,
+          title,
+          synopsis,
+          mangakaId: currentUser?._id || "usr-oda",
+          status: "PENDING",
+          createdAt: new Date().toISOString(),
+        },
+        "DRAFT"
+      );
       setSeriesList(prev => [simS, ...prev]);
       addLog("series_proposed", `📝 [Sandbox Model] Đệ trình thành công Manga đề xuất: "${title}" chờ editor duyệt.`, simS);
     }
@@ -448,9 +497,20 @@ export default function App() {
         assignedTo,
         title,
         status: "PENDING",
-        createdAt: new Date().toISOString()
+        deliveryStatus: "ASSIGNED",
+        createdAt: new Date().toISOString(),
       };
-      setTasks(prev => [simT, ...prev]);
+      setTasks((prev) => [simT, ...prev]);
+      const ser = getSeriesById(seriesId);
+      pushNotify({
+        recipientUserId: assignedTo,
+        recipientRole: "ASSISTANT",
+        title: "Công việc mới",
+        message: `Mangaka giao: "${title}" — ${ser?.title || "Series"}`,
+        seriesId,
+        chapterId,
+        taskId: simT._id,
+      });
       setTimeout(() => {
         addLog("task_assigned", `🔔 [Socket Feedback] Nhiệm vụ "${title}" đã nằm trên hàng chờ của trợ lý @${getMemberName(assignedTo)}!`, simT);
       }, 350);
@@ -480,7 +540,23 @@ export default function App() {
         setApiError(`Lỗi nộp bài lên backend: ${err.message}`);
       }
     } else {
-      setTasks(prev => prev.map(t => t._id === taskId ? { ...t, status: "DONE" } : t));
+      setTasks((prev) =>
+        prev.map((t) =>
+          t._id === taskId
+            ? { ...t, status: "DONE", deliveryStatus: "SUBMITTED" as TaskDeliveryStatus, updatedAt: new Date().toISOString() }
+            : t
+        )
+      );
+      const ser = getSeriesById(target.seriesId);
+      const mId = ser ? getMangakaId(ser) : "usr-oda";
+      pushNotify({
+        recipientUserId: mId,
+        recipientRole: "MANGAKA",
+        title: "Assistant đã nộp bài",
+        message: `"${target.title}" — kiểm duyệt và gửi Editor khi xong.`,
+        seriesId: target.seriesId,
+        taskId,
+      });
       setTimeout(() => {
         addLog("task_done", `🎉 [Sandbox Socket] Trợ lý @${getMemberName(target.assignedTo)} hoàn thành nộp tập sự: "${target.title}"!`, { ...target, status: "DONE" });
       }, 300);
@@ -777,6 +853,259 @@ export default function App() {
     }
   };
 
+  const handleManuscriptReview = (
+    taskId: string,
+    status: ManuscriptReviewStatus,
+    note: string
+  ) => {
+    if (!currentUser) return;
+    const review: ManuscriptReview = {
+      taskId,
+      status,
+      note,
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: currentUser._id,
+    };
+    setManuscriptReviews((prev) => ({ ...prev, [taskId]: review }));
+    if (status === "APPROVED") {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t._id === taskId
+            ? { ...t, deliveryStatus: "MANGAKA_APPROVED" as TaskDeliveryStatus }
+            : t
+        )
+      );
+    }
+    const label = status === "APPROVED" ? "phê duyệt" : "yêu cầu chỉnh sửa";
+    addLog("manuscript_reviewed", `📝 Mangaka đã ${label} bản tổng hợp task #${taskId.slice(-6)}`, review);
+  };
+
+  const handleEditorDraftNote = (
+    chapterId: string,
+    contentNote: string,
+    dialogueNote: string,
+    scriptNote: string
+  ) => {
+    if (!currentUser) return;
+    const note: EditorDraftNote = {
+      chapterId,
+      contentNote,
+      dialogueNote,
+      scriptNote,
+      updatedAt: new Date().toISOString(),
+      editorId: currentUser._id,
+    };
+    setEditorDraftNotes((prev) => ({ ...prev, [chapterId]: note }));
+    addLog("draft_note_added", `✏️ Editor gửi yêu cầu chỉnh sửa cho chapter`, note);
+  };
+
+  const handleSubmitSeriesToEditor = (seriesId: string) => {
+    const ser = getSeriesById(seriesId);
+    if (!ser) return;
+    patchSeries(seriesId, "PENDING_EDITOR");
+    pushNotify({
+      recipientUserId: EDITOR_USER_ID,
+      recipientRole: "EDITOR",
+      title: "Đề xuất series mới",
+      message: `Mangaka gửi "${ser.title}" — chờ duyệt và gửi Board.`,
+      seriesId,
+    });
+    addLog("workflow_transition", `📤 Mangaka gửi "${ser.title}" lên Editor`, { seriesId });
+  };
+
+  const handleMangakaReviseSeries = (seriesId: string, title: string, synopsis: string) => {
+    patchSeries(seriesId, "PENDING_EDITOR", { title, synopsis, revisionNote: undefined });
+    const ser = getSeriesById(seriesId);
+    pushNotify({
+      recipientUserId: EDITOR_USER_ID,
+      recipientRole: "EDITOR",
+      title: "Mangaka nộp lại sau chỉnh sửa",
+      message: `"${title}" đã được cập nhật — vui lòng duyệt lại.`,
+      seriesId,
+    });
+    addLog("workflow_transition", `🔄 Mangaka chỉnh sửa & gửi lại: "${title}"`, { seriesId });
+  };
+
+  const handleEditorRequestRevision = (seriesId: string, note: string) => {
+    const ser = getSeriesById(seriesId);
+    if (!ser) return;
+    patchSeries(seriesId, "REVISION_REQUIRED", { revisionNote: note, reviewNote: note, reviewedBy: currentUser?._id });
+    pushNotify({
+      recipientUserId: getMangakaId(ser),
+      recipientRole: "MANGAKA",
+      title: "Editor yêu cầu chỉnh sửa",
+      message: `"${ser.title}": ${note}`,
+      seriesId,
+    });
+    addLog("workflow_transition", `📝 Editor yêu cầu sửa series`, { seriesId, note });
+  };
+
+  const handleEditorSendToBoard = (seriesId: string, note: string) => {
+    const ser = getSeriesById(seriesId);
+    if (!ser) return;
+    patchSeries(seriesId, "AWAITING_BOARD", {
+      reviewNote: note,
+      reviewedBy: currentUser?._id,
+      reviewedAt: new Date().toISOString(),
+    });
+    pushNotify({
+      recipientUserId: BOARD_USER_ID,
+      recipientRole: "BOARD_MEMBER",
+      title: "Series chờ vote xuất bản",
+      message: `Editor gửi "${ser.title}" lên Hội đồng — vote Weekly/Monthly.`,
+      seriesId,
+    });
+    addLog("workflow_transition", `📨 Editor gửi thủ công "${ser.title}" lên Board`, { seriesId });
+  };
+
+  const handleBoardVotePublish = (
+    seriesId: string,
+    pubSchedule: "WEEKLY" | "MONTHLY",
+    comment?: string
+  ) => {
+    const ser = getSeriesById(seriesId);
+    if (!ser) return;
+    patchSeries(seriesId, "IN_PRODUCTION", {
+      pubSchedule,
+      reviewNote: comment,
+      productionStartedAt: new Date().toISOString(),
+    });
+    pushNotify({
+      recipientUserId: EDITOR_USER_ID,
+      recipientRole: "EDITOR",
+      title: "Board đã vote xuất bản",
+      message: `"${ser.title}" — ${pubSchedule}. Đặt deadline chapter cho Mangaka.`,
+      seriesId,
+    });
+    pushNotify({
+      recipientUserId: getMangakaId(ser),
+      recipientRole: "MANGAKA",
+      title: "Series vào sản xuất",
+      message: `"${ser.title}" xuất bản ${pubSchedule}. Chờ Editor giao deadline.`,
+      seriesId,
+    });
+    addLog("workflow_transition", `📅 Board vote ${pubSchedule} → IN_PRODUCTION`, { seriesId });
+  };
+
+  const handleBoardRejectSeries = (seriesId: string, comment?: string) => {
+    patchSeries(seriesId, "CANCELLED", { reviewNote: comment });
+    const ser = getSeriesById(seriesId);
+    if (ser) {
+      pushNotify({
+        recipientUserId: getMangakaId(ser),
+        recipientRole: "MANGAKA",
+        title: "Series bị huỷ",
+        message: `"${ser.title}" không được phê duyệt.`,
+        seriesId,
+      });
+    }
+    addLog("workflow_transition", `🚫 Board huỷ series`, { seriesId });
+  };
+
+  const handleEditorSetChapterDeadline = (chapterId: string, dueAt: string) => {
+    setChapters((prev) =>
+      prev.map((c) =>
+        c._id === chapterId
+          ? { ...c, dueAt, editorDeadlineSet: true, updatedAt: new Date().toISOString() }
+          : c
+      )
+    );
+    const chap = chapters.find((c) => c._id === chapterId);
+    addLog("workflow_transition", `📆 Editor đặt deadline chapter`, { chapterId, dueAt });
+  };
+
+  const handleEditorNotifyMangakaStart = (seriesId: string) => {
+    const ser = getSeriesById(seriesId);
+    if (!ser) return;
+    pushNotify({
+      recipientUserId: getMangakaId(ser),
+      recipientRole: "MANGAKA",
+      title: "Bắt đầu sản xuất",
+      message: `Editor đã giao deadline — bắt đầu làm và phân công Assistant cho "${ser.title}".`,
+      seriesId,
+    });
+    addLog("workflow_transition", `▶️ Editor báo Mangaka bắt đầu`, { seriesId });
+  };
+
+  const handleMangakaSendWorkToEditor = (seriesId: string, taskIds: string[]) => {
+    const ser = getSeriesById(seriesId);
+    if (!ser) return;
+    setTasks((prev) =>
+      prev.map((t) =>
+        taskIds.includes(t._id)
+          ? { ...t, deliveryStatus: "WITH_EDITOR" as TaskDeliveryStatus, updatedAt: new Date().toISOString() }
+          : t
+      )
+    );
+    pushNotify({
+      recipientUserId: EDITOR_USER_ID,
+      recipientRole: "EDITOR",
+      title: "Mangaka gửi bản hoàn chỉnh",
+      message: `"${ser.title}" — ${taskIds.length} task chờ duyệt xuất bản.`,
+      seriesId,
+    });
+    addLog("workflow_transition", `📬 Mangaka → Editor duyệt xuất bản`, { seriesId, taskIds });
+  };
+
+  const handleEditorApproveForPublish = (seriesId: string, note?: string) => {
+    const ser = getSeriesById(seriesId);
+    if (!ser) return;
+    patchSeries(seriesId, "PENDING_PUBLISH", { reviewNote: note });
+    pushNotify({
+      recipientUserId: BOARD_USER_ID,
+      recipientRole: "BOARD_MEMBER",
+      title: "Chờ xuất bản chính thức",
+      message: `Editor duyệt "${ser.title}" — Board chốt PUBLISHED.`,
+      seriesId,
+    });
+    addLog("workflow_transition", `✅ Editor duyệt → gửi Board xuất bản`, { seriesId });
+  };
+
+  const handleBoardFinalPublish = (seriesId: string) => {
+    const ser = getSeriesById(seriesId);
+    if (!ser) return;
+    patchSeries(seriesId, "PUBLISHED");
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.seriesId === seriesId ? { ...t, deliveryStatus: "PUBLISHED" as TaskDeliveryStatus } : t
+      )
+    );
+    pushNotify({
+      recipientUserId: getMangakaId(ser),
+      recipientRole: "MANGAKA",
+      title: "Đã xuất bản",
+      message: `"${ser.title}" đã PUBLISHED trên hệ thống.`,
+      seriesId,
+    });
+    pushNotify({
+      recipientUserId: EDITOR_USER_ID,
+      recipientRole: "EDITOR",
+      title: "Xuất bản hoàn tất",
+      message: `"${ser.title}" — Board đã chốt PUBLISHED.`,
+      seriesId,
+    });
+    addLog("workflow_transition", `🚀 PUBLISHED: "${ser.title}"`, { seriesId });
+  };
+
+  const handleMarkNotificationRead = (id: string) => {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+  };
+
+  const handleMarkAllNotificationsRead = () => {
+    if (!currentUser) return;
+    setNotifications((prev) =>
+      prev.map((n) => {
+        const mine =
+          n.recipientUserId === currentUser._id ||
+          n.recipientRole === currentUser.role ||
+          n.recipientRole === "ALL";
+        return mine ? { ...n, read: true } : n;
+      })
+    );
+  };
+
+  const handleClearLogs = () => setLogs([]);
+
   const handleResetSandbox = () => {
     localStorage.removeItem("wdp301_series");
     localStorage.removeItem("wdp301_chapters");
@@ -788,6 +1117,7 @@ export default function App() {
     setChapters(INITIAL_CHAPTERS);
     setTasks(INITIAL_TASKS);
     setRanksList(INITIAL_RANKS);
+    setNotifications([]);
     setLogs([
       {
         id: `log-reset-${Date.now()}`,
@@ -851,12 +1181,15 @@ export default function App() {
               <h2 className="text-sm font-bold tracking-tight">
                 Liên kết: {connectionMode === "sandbox" ? "Mầm Cát (Sandbox Simulator) thiết kế khép kín" : `MongoDB Live Server (${backendUrl})`}
               </h2>
-              <p className="text-[11px] text-zinc-400 max-w-2xl mt-0.5 leading-relaxed">
-                {connectionMode === "sandbox" 
-                  ? "Bạn đang chạy mượt mà không cần backend! Bằng cách đổi tài khoản ở thanh điều hướng góc trên, bạn sẽ lập tức đổi vai trò sang Eiichiro Oda (Mangaka), Thiên Lộc (Editor)..."
-                  : `Hệ thống tự động đồng bộ JWT token khi bạn đổi vai trò ở thanh trên. Công việc được dồn về hoặc hiển thị Kanban đồng độ live qua Sockets.`
-                }
-              </p>
+              {currentUser ? (
+                <RoleWelcomeBanner user={currentUser} />
+              ) : (
+                <p className="text-[11px] text-zinc-400 max-w-2xl mt-0.5 leading-relaxed">
+                  {connectionMode === "sandbox"
+                    ? "Đăng nhập hoặc chọn tài khoản mẫu ở thanh trên để vào bảng điều khiển theo vai trò."
+                    : "Hệ thống đồng bộ JWT khi đổi vai trò. Mỗi role chỉ thấy chức năng được phép."}
+                </p>
+              )}
             </div>
           </div>
 
@@ -884,54 +1217,61 @@ export default function App() {
         </div>
 
         {/* Stats Summary Panel */}
-        <StatsGrid 
-          seriesList={seriesList} 
-          chapters={chapters} 
-          tasks={tasks} 
-          usersCount={MOCK_USERS.length} 
+        <StatsGrid
+          seriesList={seriesList}
+          chapters={chapters}
+          tasks={tasks}
+          usersCount={MOCK_USERS.length}
         />
 
-        {/* Main Body Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="dashboard-layout">
-          
-          {/* Creation Forms and Activity Logs (left panel) */}
-          <div className="lg:col-span-4 space-y-6 flex flex-col justify-start" id="control-panel">
-            <CreateForm 
-              currentUser={currentUser}
-              seriesList={seriesList}
-              chapters={chapters}
-              onSeriesCreate={handleSeriesCreate}
-              onChapterCreate={handleChapterCreate}
-              onTaskCreate={handleTaskCreate}
-            />
-
-            <ActivityFeed 
-              logs={logs}
-              onClearLogs={() => setLogs([])}
-            />
+        {currentUser ? (
+          <RoleDashboard
+            currentUser={currentUser}
+            seriesList={seriesList}
+            chapters={chapters}
+            tasks={tasks}
+            ranksList={ranksList}
+            votes={votes}
+            logs={logs}
+            notifications={notifications}
+            manuscriptReviews={manuscriptReviews}
+            editorDraftNotes={editorDraftNotes}
+            onSeriesCreate={handleSeriesCreate}
+            onSubmitSeriesToEditor={handleSubmitSeriesToEditor}
+            onMangakaReviseSeries={handleMangakaReviseSeries}
+            onEditorRequestRevision={handleEditorRequestRevision}
+            onEditorSendToBoard={handleEditorSendToBoard}
+            onBoardVotePublish={handleBoardVotePublish}
+            onBoardRejectSeries={handleBoardRejectSeries}
+            onEditorSetChapterDeadline={handleEditorSetChapterDeadline}
+            onEditorNotifyMangakaStart={handleEditorNotifyMangakaStart}
+            onMangakaSendWorkToEditor={handleMangakaSendWorkToEditor}
+            onEditorApproveForPublish={handleEditorApproveForPublish}
+            onBoardFinalPublish={handleBoardFinalPublish}
+            onChapterCreate={handleChapterCreate}
+            onTaskCreate={handleTaskCreate}
+            onTaskSubmit={handleTaskSubmit}
+            onSeriesReview={handleSeriesReview}
+            onStatusTransition={handleStatusTransition}
+            onRatingSubmit={handleRatingSubmit}
+            onChapterUpdate={handleChapterUpdate}
+            onChapterDelete={handleChapterDelete}
+            onChapterPublish={handleChapterPublish}
+            onVoteSubmit={handleVoteSubmit}
+            onManuscriptReview={handleManuscriptReview}
+            onEditorDraftNote={handleEditorDraftNote}
+            onMarkNotificationRead={handleMarkNotificationRead}
+            onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+            onClearLogs={handleClearLogs}
+          />
+        ) : (
+          <div className="py-16 text-center border border-dashed border-zinc-300 rounded-2xl bg-white">
+            <p className="text-sm font-bold text-zinc-700">Chưa đăng nhập</p>
+            <p className="text-xs text-zinc-500 mt-2">
+              Chọn tài khoản mẫu (Sandbox) hoặc đăng nhập để truy cập bảng điều khiển theo vai trò.
+            </p>
           </div>
-
-          {/* Kanban / Reviews / Leaderboard Hub (right panel) */}
-          <div className="lg:col-span-8 flex flex-col" id="board-panel">
-            <TaskBoard
-              currentUser={currentUser}
-              tasks={tasks}
-              chapters={chapters}
-              seriesList={seriesList}
-              ranksList={ranksList}
-              onTaskSubmit={handleTaskSubmit}
-              onSeriesReview={handleSeriesReview}
-              onStatusTransition={handleStatusTransition}
-              onRatingSubmit={handleRatingSubmit}
-              onChapterUpdate={handleChapterUpdate}
-              onChapterDelete={handleChapterDelete}
-              onChapterPublish={handleChapterPublish}
-              votes={votes}
-              onVoteSubmit={handleVoteSubmit}
-            />
-          </div>
-
-        </div>
+        )}
 
       </main>
     </div>

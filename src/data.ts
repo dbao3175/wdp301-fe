@@ -55,6 +55,7 @@ export const INITIAL_SERIES: Series[] = [
     synopsis: "Hành trình tìm kiếm kho báu One Piece của Luffy và đồng đội để trở thành Vua Hải Tặc.",
     mangakaId: { _id: "usr-oda", name: "Eiichiro Oda", email: "mangaka@test.com" },
     status: "IN_PRODUCTION",
+    workflowStatus: "IN_PRODUCTION",
     pubSchedule: "WEEKLY",
     reviewedBy: "usr-loc",
     reviewNote: "Dự án cực kỳ tiềm năng, duyệt phát hành hàng tuần!",
@@ -67,6 +68,7 @@ export const INITIAL_SERIES: Series[] = [
     synopsis: "Cuộc chiến của Yuji Itadori chống lại những Chú Linh hắc ám sau khi nuốt ngón tay của Sukuna.",
     mangakaId: { _id: "usr-oda", name: "Eiichiro Oda", email: "mangaka@test.com" },
     status: "APPROVED",
+    workflowStatus: "AWAITING_BOARD",
     pubSchedule: "MONTHLY",
     reviewedBy: "usr-loc",
     createdAt: new Date(Date.now() - 3600 * 24 * 10 * 1000).toISOString()
@@ -77,6 +79,7 @@ export const INITIAL_SERIES: Series[] = [
     synopsis: "Gia đình điệp viên giả vờ bao gồm Loid, Anya và Yor cùng thực hiện sứ mệnh gì bìn hòa bình thế giới.",
     mangakaId: { _id: "usr-oda", name: "Eiichiro Oda", email: "mangaka@test.com" },
     status: "PENDING",
+    workflowStatus: "PENDING_EDITOR",
     createdAt: new Date(Date.now() - 3600 * 24 * 2 * 1000).toISOString()
   }
 ];

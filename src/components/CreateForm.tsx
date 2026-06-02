@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   FolderPlus, 
   UserPlus, 
@@ -18,11 +18,13 @@ import {
 } from "lucide-react";
 import { Chapter, Series, User } from "../types";
 import { MOCK_USERS } from "../data";
+import { RolePermissions, getPermissions, getSeriesMangakaId } from "../auth/permissions";
 
 interface CreateFormProps {
   currentUser: User | null;
   seriesList: Series[];
   chapters: Chapter[];
+  permissions?: RolePermissions;
   onSeriesCreate: (title: string, synopsis: string) => Promise<void>;
   onChapterCreate: (seriesId: string, chapterNumber: number, title: string, dueAt?: string) => Promise<void>;
   onTaskCreate: (seriesId: string, chapterId: string, assignedTo: string, title: string) => Promise<void>;
@@ -32,20 +34,25 @@ export const CreateForm: React.FC<CreateFormProps> = ({
   currentUser,
   seriesList,
   chapters,
+  permissions: permissionsProp,
   onSeriesCreate,
   onChapterCreate,
   onTaskCreate,
 }) => {
-  const [activeTab, setActiveTab] = useState<"proposal" | "chapter" | "task">("task");
+  const permissions = permissionsProp ?? getPermissions(currentUser?.role ?? null);
+  const [activeTab, setActiveTab] = useState<"proposal" | "chapter" | "task">(
+    permissions.defaultCreateTab
+  );
 
-  // If role is Mangaka, default to proposal tab
   useEffect(() => {
-    if (currentUser?.role === "MANGAKA") {
-      setActiveTab("proposal");
-    } else {
-      setActiveTab("task");
-    }
-  }, [currentUser]);
+    if (permissions.createFormTabs.includes(activeTab)) return;
+    const first = permissions.createFormTabs[0];
+    if (first) setActiveTab(first);
+  }, [currentUser, permissions]);
+
+  if (permissions.createFormTabs.length === 0) {
+    return null;
+  }
 
   // Series Proposals Form State
   const [propTitle, setPropTitle] = useState("");
@@ -66,24 +73,42 @@ export const CreateForm: React.FC<CreateFormProps> = ({
   const [taskTitle, setTaskTitle] = useState("");
   const [isSubmittingTask, setIsSubmittingTask] = useState(false);
 
+  const isMangaka = currentUser?.role === "MANGAKA";
+
+  const assignableSeriesForTasks = useMemo(() => {
+    const inProduction = (s: Series) =>
+      ["IN_PRODUCTION", "PUBLISHED"].includes(s.status);
+
+    if (isMangaka && currentUser) {
+      return seriesList.filter(
+        (s) =>
+          getSeriesMangakaId(s.mangakaId) === currentUser._id && inProduction(s)
+      );
+    }
+    return seriesList.filter(inProduction);
+  }, [seriesList, currentUser, isMangaka]);
+
+  const activeSeriesForChapters = seriesList.filter((s) =>
+    ["APPROVED", "IN_PRODUCTION", "PUBLISHED"].includes(s.status)
+  );
+
   // Select initial series values when seriesList loaded
   useEffect(() => {
-    if (seriesList.length > 0) {
-      if (!chapSeriesId) setChapSeriesId(seriesList[0]._id);
-      if (!taskSeriesId) setTaskSeriesId(seriesList[0]._id);
+    if (activeSeriesForChapters.length > 0 && !chapSeriesId) {
+      setChapSeriesId(activeSeriesForChapters[0]._id);
     }
-  }, [seriesList]);
+    if (assignableSeriesForTasks.length > 0 && !taskSeriesId) {
+      setTaskSeriesId(assignableSeriesForTasks[0]._id);
+    }
+  }, [seriesList, assignableSeriesForTasks, activeSeriesForChapters]);
 
   // Default task assigned to a valid assistant
   useEffect(() => {
-    const assistants = MOCK_USERS.filter(u => u.role === "ASSISTANT");
+    const assistants = MOCK_USERS.filter((u) => u.role === "ASSISTANT");
     if (assistants.length > 0 && !taskAssignedTo) {
       setTaskAssignedTo(assistants[0]._id);
     }
   }, []);
-
-  // Filter series depending on status for chapters (usually we only add chapters to APPROVED or IN_PRODUCTION series)
-  const activeSeriesForChapters = seriesList.filter(s => ["APPROVED", "IN_PRODUCTION", "PUBLISHED"].includes(s.status));
 
   // Auto set first chapter when series changes in task tab
   const filteredChapters = chapters.filter(c => c.seriesId === taskSeriesId);
@@ -150,7 +175,7 @@ export const CreateForm: React.FC<CreateFormProps> = ({
       {/* Tab select trigger headers */}
       <div className="flex border-b border-zinc-200 bg-zinc-50/70 p-1 gap-1">
         
-        {/* Only Mangaka typically creates proposals, but let all test in Sandbox/Simulator */}
+        {permissions.createFormTabs.includes("proposal") && (
         <button
           type="button"
           id="tab-proposal-trigger"
@@ -164,7 +189,9 @@ export const CreateForm: React.FC<CreateFormProps> = ({
           <FileText className="w-3.5 h-3.5" />
           Manga Mới
         </button>
+        )}
 
+        {permissions.createFormTabs.includes("chapter") && (
         <button
           type="button"
           id="tab-chapter-trigger"
@@ -180,7 +207,9 @@ export const CreateForm: React.FC<CreateFormProps> = ({
           <FolderPlus className="w-3.5 h-3.5" />
           Khai Chapter
         </button>
+        )}
 
+        {permissions.createFormTabs.includes("task") && (
         <button
           type="button"
           id="tab-task-trigger"
@@ -196,6 +225,7 @@ export const CreateForm: React.FC<CreateFormProps> = ({
           <UserPlus className="w-3.5 h-3.5" />
           Giao Việc
         </button>
+        )}
       </div>
 
       <div className="p-5 flex-1 flex flex-col justify-between">
@@ -328,6 +358,21 @@ export const CreateForm: React.FC<CreateFormProps> = ({
         {activeTab === "task" && (
           <form onSubmit={handleCreateTaskSubmit} className="space-y-4-3.5 flex-1 flex flex-col justify-between" id="form-task">
             <div className="space-y-3.5">
+              {isMangaka && (
+                <div className="flex items-center gap-2 p-2.5 bg-orange-50 border border-orange-100 rounded-xl text-orange-900 text-[11px] font-medium leading-normal">
+                  <UserPlus className="w-4 h-4 text-orange-600 shrink-0" />
+                  <span>
+                    <strong>Mangaka</strong> phân công việc cho Assistant (Production Phase).
+                    Editor không còn quyền giao việc.
+                  </span>
+                </div>
+              )}
+
+              {assignableSeriesForTasks.length === 0 ? (
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl p-3">
+                  Chưa có series ở giai đoạn sản xuất (IN_PRODUCTION) để giao việc.
+                </p>
+              ) : (
               <div>
                 <label className="block text-xs font-semibold text-zinc-705 mb-1 flex items-center gap-1">
                   <Tag className="w-3.5 h-3.5 text-zinc-400" /> Chọn Manga Series
@@ -338,12 +383,15 @@ export const CreateForm: React.FC<CreateFormProps> = ({
                   onChange={(e) => setTaskSeriesId(e.target.value)}
                   className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-xs font-bold focus:ring-1 focus:ring-zinc-950 outline-none"
                 >
-                  {seriesList.map(s => (
+                  {assignableSeriesForTasks.map(s => (
                     <option key={s._id} value={s._id}>{s.title}</option>
                   ))}
                 </select>
               </div>
+              )}
 
+              {assignableSeriesForTasks.length > 0 && (
+              <>
               <div>
                 <label className="block text-xs font-semibold text-zinc-705 mb-1 flex items-center gap-1">
                   <BookOpen className="w-3.5 h-3.5 text-zinc-400" /> Chọn Chapter mục tiêu
@@ -363,7 +411,8 @@ export const CreateForm: React.FC<CreateFormProps> = ({
                   </select>
                 ) : (
                   <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-xl p-3 flex flex-col gap-1.5">
-                    <span>Bộ truyện này chưa có Chapter nào được tạo!</span>
+                    <span>Bộ truyện này chưa có Chapter. Liên hệ Editor để khai báo Chapter.</span>
+                    {!isMangaka && permissions.createFormTabs.includes("chapter") && (
                     <button
                       type="button"
                       onClick={() => {
@@ -374,6 +423,7 @@ export const CreateForm: React.FC<CreateFormProps> = ({
                     >
                       Khai báo Chapter ngay →
                     </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -413,12 +463,14 @@ export const CreateForm: React.FC<CreateFormProps> = ({
                   className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-xs font-semibold focus:ring-1 focus:ring-zinc-950 outline-none"
                 />
               </div>
+              </>
+              )}
             </div>
 
             <button
               id="submit-task-btn"
               type="submit"
-              disabled={isSubmittingTask || !taskChapterId || !taskAssignedTo}
+              disabled={isSubmittingTask || !taskChapterId || !taskAssignedTo || assignableSeriesForTasks.length === 0}
               className="mt-4 w-full bg-zinc-900 text-white rounded-xl py-2.5 px-4 text-xs font-bold hover:bg-zinc-850 disabled:bg-zinc-300 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
