@@ -4,9 +4,14 @@
  */
 
 import { useState, useEffect, useRef } from "react";
+import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
 import { 
   Wifi, 
+  WifiOff, 
+  Settings, 
+  User as UserIcon, 
+  Server, 
   Sparkles, 
   Database, 
   HelpCircle, 
@@ -18,6 +23,12 @@ import {
 import { Header } from "./components/Header";
 import { StatsGrid } from "./components/StatsGrid";
 import { RoleDashboard, RoleWelcomeBanner } from "./pages/RoleDashboard";
+import { MangakaDashboard } from "./pages/mangaka/MangakaDashboard";
+import { AssistantDashboard } from "./pages/assistant/AssistantDashboard";
+import { EditorDashboard } from "./pages/tantoueditor/EditorDashboard";
+import { BoardDashboard } from "./pages/editorialboard/BoardDashboard";
+import { RolePermissionManager } from "./components/RolePermissionManager";
+import { roleToDashboardPath } from "./auth/routes";
 import {
   Chapter,
   Task,
@@ -40,6 +51,23 @@ const EDITOR_USER_ID = "usr-loc";
 const BOARD_USER_ID = "usr-bao";
 
 export default function App() {
+  return (
+    <HashRouter>
+      <MainApp />
+    </HashRouter>
+  );
+}
+
+function MainApp() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Dynamic users state
+  const [users, setUsers] = useState<User[]>(() => {
+    const saved = localStorage.getItem("wdp301_users");
+    return saved ? JSON.parse(saved) : MOCK_USERS;
+  });
+
   // Connection and URL state management
   const [connectionMode, setConnectionMode] = useState<"sandbox" | "backend" | "sandbox">(() => {
     return (localStorage.getItem("wdp301_conn_mode") as "sandbox" | "backend") || "sandbox";
@@ -52,9 +80,31 @@ export default function App() {
   // Authenticated Current User
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem("wdp301_current_user");
-    return saved ? JSON.parse(saved) : MOCK_USERS[3]; // Default initially to Lan Chi (Assistant role)
+    if (saved) {
+      try { return JSON.parse(saved); } catch(e) {}
+    }
+    // Default initially to Lan Chi (Assistant role or whatever is in dynamic users list)
+    return users.find(u => u._id === "usr-chi") || users[3];
   });
   const [isLoadingAuth, setIsLoadingAuth] = useState(false);
+
+  // Permission trigger version to force refresh
+  const [permissionsVersion, setPermissionsVersion] = useState(0);
+
+  // Sync current user role if updated dynamically
+  useEffect(() => {
+    if (currentUser) {
+      const match = users.find(u => u._id === currentUser._id);
+      if (match && match.role !== currentUser.role) {
+        setCurrentUser(prev => prev ? { ...prev, role: match.role } : null);
+      }
+    }
+  }, [users, currentUser]);
+
+  // Persist users to local storage
+  useEffect(() => {
+    localStorage.setItem("wdp301_users", JSON.stringify(users));
+  }, [users]);
 
   // Manga Series proposed list
   const [seriesList, setSeriesList] = useState<Series[]>(() => {
@@ -239,6 +289,7 @@ export default function App() {
     if (connectionMode !== "backend") {
       setCurrentUser(targetUser);
       addLog("connection_change", `👤 Đã đổi vai trò (Sandbox): ${targetUser.name} (${targetUser.role})`);
+      navigate(roleToDashboardPath(targetUser.role));
       return;
     }
 
@@ -300,11 +351,13 @@ export default function App() {
       
       // Load all workspace files from Mongo DB
       fetchDataFromBackend(actualToken);
+      navigate(roleToDashboardPath(authenticatedUser.role));
     } catch (err: any) {
       console.error(err);
       setApiError(`Lỗi xác thực và tự động tạo vai trò: ${err.message}. FE sẽ dùng chế độ mô phỏng cho vai trò này.`);
       // Fallback locally
       setCurrentUser(targetUser);
+      navigate(roleToDashboardPath(targetUser.role));
     } finally {
       setIsLoadingAuth(false);
     }
@@ -817,6 +870,7 @@ export default function App() {
       setCurrentUser(authenticatedUser);
       addLog("connection_change", `🟢 ĐĂNG NHẬP THỦ CÔNG: Đồng bộ tài khoản và token thành công!`, authData);
       fetchDataFromBackend(actualToken);
+      navigate(roleToDashboardPath(authenticatedUser.role));
     } catch (err: any) {
       console.error(err);
       setApiError(`Lỗi đăng nhập: ${err.message}. Hãy kiểm tra kết nối cổng backend và tài khoản mật khẩu.`);
@@ -1128,6 +1182,13 @@ export default function App() {
     ]);
   };
 
+  // Auto redirect based on path and role
+  useEffect(() => {
+    if (location.pathname === "/" && currentUser) {
+      navigate(roleToDashboardPath(currentUser.role), { replace: true });
+    }
+  }, [currentUser, location.pathname, navigate]);
+
   return (
     <div className="bg-zinc-50 min-h-screen pb-12 text-zinc-900 selection:bg-zinc-900 selection:text-white font-sans" id="app-root">
       
@@ -1137,6 +1198,7 @@ export default function App() {
         backendUrl={backendUrl}
         isBackendConnected={isBackendConnected}
         currentUser={currentUser}
+        users={users}
         isLoadingAuth={isLoadingAuth}
         onConnectionModeChange={setConnectionMode}
         onBackendUrlChange={setBackendUrl}
@@ -1221,59 +1283,229 @@ export default function App() {
           seriesList={seriesList}
           chapters={chapters}
           tasks={tasks}
-          usersCount={MOCK_USERS.length}
+          usersCount={users.length}
         />
 
-        {currentUser ? (
-          <RoleDashboard
-            currentUser={currentUser}
-            seriesList={seriesList}
-            chapters={chapters}
-            tasks={tasks}
-            ranksList={ranksList}
-            votes={votes}
-            logs={logs}
-            notifications={notifications}
-            manuscriptReviews={manuscriptReviews}
-            editorDraftNotes={editorDraftNotes}
-            onSeriesCreate={handleSeriesCreate}
-            onSubmitSeriesToEditor={handleSubmitSeriesToEditor}
-            onMangakaReviseSeries={handleMangakaReviseSeries}
-            onEditorRequestRevision={handleEditorRequestRevision}
-            onEditorSendToBoard={handleEditorSendToBoard}
-            onBoardVotePublish={handleBoardVotePublish}
-            onBoardRejectSeries={handleBoardRejectSeries}
-            onEditorSetChapterDeadline={handleEditorSetChapterDeadline}
-            onEditorNotifyMangakaStart={handleEditorNotifyMangakaStart}
-            onMangakaSendWorkToEditor={handleMangakaSendWorkToEditor}
-            onEditorApproveForPublish={handleEditorApproveForPublish}
-            onBoardFinalPublish={handleBoardFinalPublish}
-            onChapterCreate={handleChapterCreate}
-            onTaskCreate={handleTaskCreate}
-            onTaskSubmit={handleTaskSubmit}
-            onSeriesReview={handleSeriesReview}
-            onStatusTransition={handleStatusTransition}
-            onRatingSubmit={handleRatingSubmit}
-            onChapterUpdate={handleChapterUpdate}
-            onChapterDelete={handleChapterDelete}
-            onChapterPublish={handleChapterPublish}
-            onVoteSubmit={handleVoteSubmit}
-            onManuscriptReview={handleManuscriptReview}
-            onEditorDraftNote={handleEditorDraftNote}
-            onMarkNotificationRead={handleMarkNotificationRead}
-            onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
-            onClearLogs={handleClearLogs}
-          />
-        ) : (
-          <div className="py-16 text-center border border-dashed border-zinc-300 rounded-2xl bg-white">
-            <p className="text-sm font-bold text-zinc-700">Chưa đăng nhập</p>
-            <p className="text-xs text-zinc-500 mt-2">
-              Chọn tài khoản mẫu (Sandbox) hoặc đăng nhập để truy cập bảng điều khiển theo vai trò.
-            </p>
-          </div>
-        )}
+        <div className="mt-4" key={permissionsVersion}>
+          <Routes>
+            <Route path="/" element={
+              currentUser ? (
+                <Navigate to={roleToDashboardPath(currentUser.role)} replace />
+              ) : (
+                <div className="py-16 text-center border border-dashed border-zinc-350 rounded-2xl bg-white">
+                  <p className="text-sm font-bold text-zinc-700">Chưa đăng nhập</p>
+                  <p className="text-xs text-zinc-500 mt-2">
+                    Chọn tài khoản mẫu (Sandbox) hoặc đăng nhập để truy cập bảng điều khiển theo vai trò.
+                  </p>
+                </div>
+              )
+            } />
+            
+            <Route path="/mangaka" element={
+              <ProtectedRoute allowedRoles={["MANGAKA"]} currentUser={currentUser}>
+                <MangakaDashboard
+                  currentUser={currentUser!}
+                  seriesList={seriesList}
+                  chapters={chapters}
+                  tasks={tasks}
+                  ranksList={ranksList}
+                  votes={votes}
+                  logs={logs}
+                  notifications={notifications}
+                  manuscriptReviews={manuscriptReviews}
+                  editorDraftNotes={editorDraftNotes}
+                  onSeriesCreate={handleSeriesCreate}
+                  onSubmitSeriesToEditor={handleSubmitSeriesToEditor}
+                  onMangakaReviseSeries={handleMangakaReviseSeries}
+                  onMangakaSendWorkToEditor={handleMangakaSendWorkToEditor}
+                  onManuscriptReview={handleManuscriptReview}
+                  onMarkNotificationRead={handleMarkNotificationRead}
+                  onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+                  onClearLogs={handleClearLogs}
+                  onTaskSubmit={handleTaskSubmit}
+                  onSeriesReview={handleSeriesReview}
+                  onStatusTransition={handleStatusTransition}
+                  onRatingSubmit={handleRatingSubmit}
+                  onChapterUpdate={handleChapterUpdate}
+                  onChapterDelete={handleChapterDelete}
+                  onChapterPublish={handleChapterPublish}
+                  onVoteSubmit={handleVoteSubmit}
+                  onChapterCreate={handleChapterCreate}
+                  onTaskCreate={handleTaskCreate}
+                />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/assistant" element={
+              <ProtectedRoute allowedRoles={["ASSISTANT"]} currentUser={currentUser}>
+                <AssistantDashboard
+                  currentUser={currentUser!}
+                  seriesList={seriesList}
+                  chapters={chapters}
+                  tasks={tasks}
+                  ranksList={ranksList}
+                  votes={votes}
+                  logs={logs}
+                  notifications={notifications}
+                  manuscriptReviews={manuscriptReviews}
+                  editorDraftNotes={editorDraftNotes}
+                  onTaskSubmit={handleTaskSubmit}
+                  onMarkNotificationRead={handleMarkNotificationRead}
+                  onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+                  onClearLogs={handleClearLogs}
+                  onSeriesCreate={handleSeriesCreate}
+                  onSubmitSeriesToEditor={handleSubmitSeriesToEditor}
+                  onMangakaReviseSeries={handleMangakaReviseSeries}
+                  onMangakaSendWorkToEditor={handleMangakaSendWorkToEditor}
+                  onManuscriptReview={handleManuscriptReview}
+                  onSeriesReview={handleSeriesReview}
+                  onStatusTransition={handleStatusTransition}
+                  onRatingSubmit={handleRatingSubmit}
+                  onChapterUpdate={handleChapterUpdate}
+                  onChapterDelete={handleChapterDelete}
+                  onChapterPublish={handleChapterPublish}
+                  onVoteSubmit={handleVoteSubmit}
+                  onChapterCreate={handleChapterCreate}
+                  onTaskCreate={handleTaskCreate}
+                />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/editor" element={
+              <ProtectedRoute allowedRoles={["EDITOR"]} currentUser={currentUser}>
+                <EditorDashboard
+                  currentUser={currentUser!}
+                  seriesList={seriesList}
+                  chapters={chapters}
+                  tasks={tasks}
+                  ranksList={ranksList}
+                  votes={votes}
+                  logs={logs}
+                  notifications={notifications}
+                  manuscriptReviews={manuscriptReviews}
+                  editorDraftNotes={editorDraftNotes}
+                  onChapterCreate={handleChapterCreate}
+                  onTaskSubmit={handleTaskSubmit}
+                  onSeriesReview={handleSeriesReview}
+                  onStatusTransition={handleStatusTransition}
+                  onRatingSubmit={handleRatingSubmit}
+                  onChapterUpdate={handleChapterUpdate}
+                  onChapterDelete={handleChapterDelete}
+                  onChapterPublish={handleChapterPublish}
+                  onVoteSubmit={handleVoteSubmit}
+                  onEditorRequestRevision={handleEditorRequestRevision}
+                  onEditorSendToBoard={handleEditorSendToBoard}
+                  onEditorSetChapterDeadline={handleEditorSetChapterDeadline}
+                  onEditorNotifyMangakaStart={handleEditorNotifyMangakaStart}
+                  onEditorApproveForPublish={handleEditorApproveForPublish}
+                  onMarkNotificationRead={handleMarkNotificationRead}
+                  onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+                  onClearLogs={handleClearLogs}
+                  onSeriesCreate={handleSeriesCreate}
+                  onSubmitSeriesToEditor={handleSubmitSeriesToEditor}
+                  onMangakaReviseSeries={handleMangakaReviseSeries}
+                  onMangakaSendWorkToEditor={handleMangakaSendWorkToEditor}
+                  onManuscriptReview={handleManuscriptReview}
+                  onTaskCreate={handleTaskCreate}
+                />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/board_member" element={<Navigate to="/board" replace />} />
+
+            <Route path="/board" element={
+              <ProtectedRoute allowedRoles={["BOARD_MEMBER"]} currentUser={currentUser}>
+                <BoardDashboard
+                  currentUser={currentUser!}
+                  seriesList={seriesList}
+                  chapters={chapters}
+                  tasks={tasks}
+                  ranksList={ranksList}
+                  votes={votes}
+                  logs={logs}
+                  notifications={notifications}
+                  manuscriptReviews={manuscriptReviews}
+                  editorDraftNotes={editorDraftNotes}
+                  onTaskSubmit={handleTaskSubmit}
+                  onSeriesReview={handleSeriesReview}
+                  onStatusTransition={handleStatusTransition}
+                  onRatingSubmit={handleRatingSubmit}
+                  onChapterUpdate={handleChapterUpdate}
+                  onChapterDelete={handleChapterDelete}
+                  onChapterPublish={handleChapterPublish}
+                  onVoteSubmit={handleVoteSubmit}
+                  onBoardVotePublish={handleBoardVotePublish}
+                  onBoardRejectSeries={handleBoardRejectSeries}
+                  onBoardFinalPublish={handleBoardFinalPublish}
+                  onMarkNotificationRead={handleMarkNotificationRead}
+                  onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+                  onClearLogs={handleClearLogs}
+                  onSeriesCreate={handleSeriesCreate}
+                  onSubmitSeriesToEditor={handleSubmitSeriesToEditor}
+                  onMangakaReviseSeries={handleMangakaReviseSeries}
+                  onMangakaSendWorkToEditor={handleMangakaSendWorkToEditor}
+                  onManuscriptReview={handleManuscriptReview}
+                  onChapterCreate={handleChapterCreate}
+                  onTaskCreate={handleTaskCreate}
+                />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/admin/permissions" element={
+              <RolePermissionManager
+                currentUser={currentUser}
+                users={users}
+                onUpdateUsers={setUsers}
+                onPermissionsChanged={() => setPermissionsVersion(prev => prev + 1)}
+                onBackToDashboard={() => {
+                  if (currentUser) {
+                    navigate(roleToDashboardPath(currentUser.role));
+                  } else {
+                    navigate("/");
+                  }
+                }}
+              />
+            } />
+            
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
 
       </main>
     </div>
   );
 }
+
+interface ProtectedRouteProps {
+  allowedRoles: string[];
+  currentUser: User | null;
+  children: React.ReactNode;
+}
+
+const ProtectedRoute = ({ allowedRoles, currentUser, children }: ProtectedRouteProps) => {
+  if (!currentUser) {
+    return <Navigate to="/" replace />;
+  }
+  
+  if (!allowedRoles.includes(currentUser.role)) {
+    return (
+      <div className="py-16 text-center border border-dashed border-rose-350 rounded-2xl bg-rose-50 max-w-2xl mx-auto mt-12 px-6">
+        <AlertTriangle className="w-12 h-12 text-rose-600 mx-auto mb-3" />
+        <h3 className="text-sm font-bold text-rose-900">Không có quyền truy cập</h3>
+        <p className="text-xs text-rose-700 mt-2 leading-relaxed">
+          Tài khoản của bạn ({currentUser.name} - vai trò {currentUser.role}) không được phân quyền truy cập trang này.
+        </p>
+        <button
+          onClick={() => { window.location.hash = `#${roleToDashboardPath(currentUser.role)}`; }}
+          className="mt-4 px-4 py-2 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 transition-colors cursor-pointer"
+        >
+          Quay lại Bảng điều khiển của tôi
+        </button>
+      </div>
+    );
+  }
+  
+  return <>{children}</>;
+};
+
+

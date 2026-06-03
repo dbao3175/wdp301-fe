@@ -135,8 +135,43 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
 };
 
 export function getPermissions(role?: UserRole | null): RolePermissions {
-  if (!role) return ROLE_PERMISSIONS.MANGAKA;
-  return ROLE_PERMISSIONS[role];
+  const targetRole = role || "MANGAKA";
+  
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("wdp301_role_permissions");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed[targetRole]) {
+          return parsed[targetRole];
+        }
+      }
+    } catch (e) {
+      console.error("Error reading permissions from localStorage", e);
+    }
+  }
+  
+  return ROLE_PERMISSIONS[targetRole];
+}
+
+export function savePermissions(permissions: Record<UserRole, RolePermissions>): void {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("wdp301_role_permissions", JSON.stringify(permissions));
+    } catch (e) {
+      console.error("Error saving permissions to localStorage", e);
+    }
+  }
+}
+
+export function resetPermissionsToDefault(): void {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem("wdp301_role_permissions");
+    } catch (e) {
+      console.error("Error resetting permissions to default", e);
+    }
+  }
 }
 
 export function getSeriesMangakaId(
@@ -144,3 +179,4 @@ export function getSeriesMangakaId(
 ): string {
   return typeof mangakaId === "object" ? mangakaId._id : mangakaId;
 }
+

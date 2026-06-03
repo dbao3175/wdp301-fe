@@ -2,6 +2,12 @@
 
 Dự án Frontend được xây dựng hoàn chỉnh bằng **React 19**, **Vite**, **Tailwind CSS v4** và **Socket.io Client** để kết nối trực tiếp với backend **WDP301_BE** (MongoDB + Express + Socket.io Server).
 
+## Architecture documentation
+
+Full system design (database, ERD, API, RBAC, sequences, production target with **Spring Boot + MySQL**):
+
+**[docs/README.md](./docs/README.md)**
+
 ---
 
 ## ⚡ GIẢI THÍCH LỖI "Cannot GET /" & ĐỤNG ĐỘ CỔNG (PORT 3000)

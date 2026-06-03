@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { 
   Wifi, 
   WifiOff, 
@@ -15,16 +16,18 @@ import {
   Lock,
   LogOut,
   RefreshCw,
-  UserCheck
+  UserCheck,
+  Shield
 } from "lucide-react";
 import { User } from "../types";
-import { MOCK_USERS, getRoleBadgeColor } from "../data";
+import { getRoleBadgeColor } from "../data";
 
 interface HeaderProps {
   connectionMode: "sandbox" | "backend";
   backendUrl: string;
   isBackendConnected: boolean;
   currentUser: User | null;
+  users: User[];
   isLoadingAuth: boolean;
   onConnectionModeChange: (mode: "sandbox" | "backend") => void;
   onBackendUrlChange: (url: string) => void;
@@ -39,6 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
   backendUrl,
   isBackendConnected,
   currentUser,
+  users,
   isLoadingAuth,
   onConnectionModeChange,
   onBackendUrlChange,
@@ -158,14 +162,14 @@ export const Header: React.FC<HeaderProps> = ({
                 id="role-switch-select"
                 value={currentUser?._id || ""}
                 onChange={(e) => {
-                  const targetUsr = MOCK_USERS.find(u => u._id === e.target.value);
+                  const targetUsr = users.find(u => u._id === e.target.value);
                   if (targetUsr) onUserSwitch(targetUsr);
                 }}
                 disabled={isLoadingAuth}
                 className="text-xs font-semibold bg-transparent border-0 focus:ring-0 text-zinc-800 cursor-pointer outline-none py-1 pr-8 disabled:opacity-50"
               >
                 {!currentUser && <option value="">Chọn TK để Test...</option>}
-                {MOCK_USERS.map((u) => (
+                {users.map((u) => (
                   <option key={u._id} value={u._id}>
                     {u.name} ({u.role})
                   </option>
@@ -192,6 +196,16 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Go to Permissions dynamic RBAC page */}
+            <Link
+              to="/admin/permissions"
+              className="p-2 px-3 rounded-xl border border-zinc-200 text-zinc-650 hover:text-zinc-900 bg-zinc-50 hover:bg-zinc-100 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold shrink-0 shadow-xs"
+              title="Quản trị vai trò & Phân quyền thành viên"
+            >
+              <Shield className="w-3.5 h-3.5 text-zinc-500" />
+              <span className="hidden sm:inline">Phân Quyền</span>
+            </Link>
 
             {/* Manual Auth Active lock */}
             <button
