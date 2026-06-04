@@ -293,7 +293,7 @@ export default function App() {
         </div>
       ) : (
         /* ======================== MAIN APPLICATION WORKSPACE ======================== */
-        <div className="min-h-screen pt-16 lg:pt-0 lg:pl-72">
+        <div className="min-h-screen pt-16 md:pt-0 md:pl-72">
           
           {/* Main Navigation Sidebar Pane */}
           <Navigation 

@@ -1,286 +1,130 @@
 {
   "users": [
     {
-      "_id": "u1",
-      "name": "Minh Tuấn (Mangaka)",
-      "email": "mangaka@example.com",
-      "role": "MANGAKA",
-      "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuCHg4AqOzqTV4dewyU1i46CaCUf4pdWEGhiU2lW3liCFs9JIde6fE9uwaRXVueKT86jIlGpymMPHJCh6-Coee4I6o2JxMGU-b-ts2Dmy6dKXtzK6RPgJ9XIL-1TYRm1JkqG8CkCx_ZgdB3cBNUUJyT9pvzu7uKesV0D55DoIMkLIv6PspHUrWtqKEj3H2tBogMUnEDiuCIIKF5mSpOCdwVfdskbQpvNQx3V_lA8OtcIk6q8LZ9AmfiRwuw0bF5K5naoU52pMuRXDiP2"
-    },
-    {
-      "_id": "u2",
-      "name": "Kenji Sato (Assistant)",
-      "email": "assistant@example.com",
+      "_id": "6a192df65f3958c587c4ed09",
+      "name": "Takuma Narita",
+      "email": "assistant@test.com",
+      "password": "$2a$12$uiyR7VedUeVR85hYbIPMfOw1vclAfCLwUpAnirRwjHCF/2rUgZr6G",
       "role": "ASSISTANT",
-      "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuByWi6Zl9Aq5qImGVzCM9dhGi2im5oNDHcYKm7_gdy-y_OSg-Pknn0o2Seu12-bt1ZlvW5mUwYsHbUzshmDVAh9HLeU2zsF4S5qvBZcASl2N4mHoV4QkyO3oaBVVg5I3WsU787UzwLfvdhrTVpYwQpRHM10fQ67X_0IXkIfhdkBbM5hGfouxY6d_0YEaDvNbGo2xqh8PeDhZhx73aSK3GLz-B8_C9WMamYLJXcYZShKrPQs9cA-qJJWPqKe3zVBhGuEz1CkezmEZARm"
+      "avatar": "",
+      "createdAt": "2026-05-29T06:11:02.512Z",
+      "updatedAt": "2026-05-29T06:11:02.512Z",
+      "__v": 0
     },
     {
-      "_id": "u3",
-      "name": "Mei Lin",
-      "email": "assistant2@example.com",
-      "role": "ASSISTANT",
-      "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuDb75LL8ZWct7hOj_Lpk8YxqEv5BjlWa2mgnocgPm9ezXoHO2Eo7INteNIxv3zb59h68u5MrIsX4qE02NGXmancNIhDRjuLuw8cxldllyVXH8ZRRLi01owyzX7zHvC-NGEEnQuQDiF5_9C8BO2AJvtFze4KTeSuHEeW4eoMhlvbPbvZtfDUx1qbYDwAmHMmL2Wnf9Ue9jyCn5WnL98U1dHFJYXetVyECwx5fpaqDoerU6KxLWjbM5TxO2vJ4bceFRnggczcCiKg-8R0"
-    },
-    {
-      "_id": "u4",
-      "name": "Quốc Anh (Editor)",
-      "email": "editor@example.com",
+      "_id": "6a192df65f3958c587c4ed0a",
+      "name": "Yujiro Hattori",
+      "email": "editor@test.com",
+      "password": "$2a$12$YMrEL.SCd5vzX1lhjzZfCO3I2U/.iwWcB1U.3.eN6ua072zUhgnaC",
       "role": "EDITOR",
-      "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuAVi7aFSbo-LyrCWDY1XT3sJ8w7jPP5GQRbTdz4nvQMQWPmEme3f92cnzxzIb7YzKn3JOkYN8m5-Z6Ek55flh7p2pvz3X5oM5-VpM-xDDxX4A--79wtyhSZ_J97mQJvZm82ptTfjkLRQvCyVJ1h0xoxsS_T8kHsj2bKKKC2BGIoTEB5uXKqQ-njmmYbZnSXJPOQhHkEcA-6DBmGAgsPaEj-M3_Nw0STUg5cJu56ITbBHbw9s3efEj4urYplhuRmgKwPmBMATWNqf5T-"
+      "avatar": "",
+      "createdAt": "2026-05-29T06:11:02.512Z",
+      "updatedAt": "2026-05-29T06:11:02.512Z",
+      "__v": 0
     },
     {
-      "_id": "u5",
-      "name": "Akihiro T. (Board)",
-      "email": "board@example.com",
+      "_id": "6a192df65f3958c587c4ed08",
+      "name": "Eiichiro Oda",
+      "email": "mangaka@test.com",
+      "password": "$2a$12$9okjg6bbK3nDphUdNpPA..uOUsVRzuWJQ.M5gDhDk.ArkvqKmYuOu",
+      "role": "MANGAKA",
+      "avatar": "",
+      "createdAt": "2026-05-29T06:11:02.512Z",
+      "updatedAt": "2026-05-29T06:11:02.512Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a192df65f3958c587c4ed0b",
+      "name": "Sasaki Board",
+      "email": "board@test.com",
+      "password": "$2a$12$L5c2Xz6ARoUj.LpI6zpXZ.mw2tIm6ah49rPkC0buHwnRk8jVl57py",
       "role": "BOARD_MEMBER",
-      "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuB-Y24_KFTU88hcNYomZqWcHloXlbLaqXPH9qMM3qQn4JMyBC7d50DZ4LmEG4B9uq6CvbDNBBtjvW5szNUZxcvPIZygGA_lUFjAmfd2czkfAVQnVQ4FHF4r5Y1oLYjls7Gc1pnSNvNU7Ovy_FjExXjNdDdxl2n8ncBlJSM8RV8AtaqfenpxoWuDukWYHrkD-fzzpdwugHREE3WTNbEbBHIlPgbjzVnKg_Uv_LCB5l4OO5vsDNgHwEsOH3yEkK1QkUfwYEWlnlWPHIoV"
+      "avatar": "",
+      "createdAt": "2026-05-29T06:11:02.512Z",
+      "updatedAt": "2026-05-29T06:11:02.512Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a1e7bf099369f35db2f1986",
+      "name": "Quân",
+      "email": "hoangquan111004@gmail.com",
+      "password": "$2a$12$VC5p7BVMEnTXcvodwH29c.ZC0gE5kqXF5Su6AiEpytQCp3N6hsu4.",
+      "role": "MANGAKA",
+      "avatar": "",
+      "createdAt": "2026-06-02T06:45:04.180Z",
+      "updatedAt": "2026-06-02T06:45:04.180Z",
+      "__v": 0
+    },
+    {
+      "_id": "u_1780592298890",
+      "name": "Trinh Nguyen Bao Duy",
+      "email": "mangakaduy@test.com",
+      "password": "123456",
+      "role": "MANGAKA",
+      "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuCHg4AqOzqTV4dewyU1i46CaCUf4pdWEGhiU2lW3liCFs9JIde6fE9uwaRXVueKT86jIlGpymMPHJCh6-Coee4I6o2JxMGU-b-ts2Dmy6dKXtzK6RPgJ9XIL-1TYRm1JkqG8CkCx_ZgdB3cBNUUJyT9pvzu7uKesV0D55DoIMkLIv6PspHUrWtqKEj3H2tBogMUnEDiuCIIKF5mSpOCdwVfdskbQpvNQx3V_lA8OtcIk6q8LZ9AmfiRwuw0bF5K5naoU52pMuRXDiP2",
+      "__v": 0,
+      "createdAt": "2026-06-04T16:58:19.090Z",
+      "updatedAt": "2026-06-04T16:58:19.090Z"
     }
   ],
   "series": [
     {
-      "_id": "s1",
-      "title": "Neon Genesis",
-      "synopsis": "In a post-apocalyptic future, young pilots navigate giant biomechanical suits to defend the remaining strongholds of humanity.",
-      "mangakaId": "u1",
-      "status": "IN_PRODUCTION",
-      "pubSchedule": "WEEKLY",
-      "createdAt": "2026-05-05T15:15:36.697Z"
+      "_id": "6a192e015f3958c587c4ed10",
+      "title": "Dragon Slayer Chronicles",
+      "synopsis": "A young warrior embarks on a journey to slay ancient dragons threatening the kingdom.",
+      "mangakaId": "6a192df65f3958c587c4ed08",
+      "status": "PENDING",
+      "pubSchedule": null,
+      "reviewedBy": null,
+      "reviewNote": "",
+      "reviewedAt": null,
+      "createdAt": "2026-05-29T06:11:13.174Z",
+      "updatedAt": "2026-05-29T06:11:13.174Z",
+      "__v": 0
     },
     {
-      "_id": "s2",
-      "title": "Cyberpunk Drifter",
-      "synopsis": "A rogue courier with a bionic heart gets entangled in a corporate warfare while delivering a mysterious quantum flash drive.",
-      "mangakaId": "u1",
-      "status": "IN_PRODUCTION",
-      "pubSchedule": "MONTHLY",
-      "createdAt": "2026-05-20T15:15:36.698Z"
+      "_id": "6a192e015f3958c587c4ed12",
+      "title": "Moonlit Garden",
+      "synopsis": "A botanical artist discovers that the flowers she paints come to life under moonlight.",
+      "mangakaId": "6a192df65f3958c587c4ed08",
+      "status": "PENDING",
+      "pubSchedule": null,
+      "reviewedBy": null,
+      "reviewNote": "",
+      "reviewedAt": null,
+      "createdAt": "2026-05-29T06:11:13.174Z",
+      "updatedAt": "2026-05-29T06:11:13.174Z",
+      "__v": 0
     },
     {
-      "_id": "s3",
-      "title": "Dragon's Ascent",
-      "synopsis": "A young monk sets off on a perilous mountain climb to awaken the final ancient dragon deity and break a centuries-old curse.",
-      "mangakaId": "u1",
+      "_id": "6a192e015f3958c587c4ed11",
+      "title": "Cyber Ronin 2099",
+      "synopsis": "In a cyberpunk future, a masterless samurai fights corporate tyranny with a plasma katana.",
+      "mangakaId": "6a192df65f3958c587c4ed08",
       "status": "APPROVED",
-      "pubSchedule": "MONTHLY",
-      "createdAt": "2026-05-25T15:15:36.698Z"
-    },
-    {
-      "_id": "s4",
-      "title": "Neon Samurai",
-      "synopsis": "A synthesis of classical swordsmanship and futuristic neon augmentations in a neo-shogunate under siege by deep cybernetic invaders.",
-      "mangakaId": "u1",
-      "status": "PENDING",
-      "createdAt": "2026-06-04T15:15:36.698Z"
-    },
-    {
-      "_id": "s5",
-      "title": "Whispering Petals",
-      "synopsis": "An elegant, heartwarming slice-of-life romance depicting two aspiring botanical artists finding their voice together in Tokyo.",
-      "mangakaId": "u1",
-      "status": "PENDING",
-      "createdAt": "2026-06-04T15:15:36.698Z"
+      "pubSchedule": "WEEKLY",
+      "reviewedBy": "6a192df65f3958c587c4ed0a",
+      "reviewNote": "Great hook and fast pacing, perfect for weekly.",
+      "reviewedAt": "Fri May 29 2026 13:11:13 GMT+0700 (Indochina Time)",
+      "createdAt": "2026-05-29T06:11:13.174Z",
+      "updatedAt": "2026-05-29T06:11:13.174Z",
+      "__v": 0
     }
   ],
   "chapters": [
     {
-      "_id": "c1",
-      "seriesId": "s1",
-      "chapterNumber": 142,
+      "_id": "c_1780592595684",
+      "seriesId": "6a192e015f3958c587c4ed11",
+      "chapterNumber": 1,
       "status": "IN_PROGRESS",
-      "deadline": "2026-06-12",
-      "dueAt": "2026-06-12"
-    },
-    {
-      "_id": "c2",
-      "seriesId": "s2",
-      "chapterNumber": 8,
-      "status": "IN_PROGRESS",
-      "deadline": "2026-06-10",
-      "dueAt": "2026-06-10"
-    },
-    {
-      "_id": "c3",
-      "seriesId": "s1",
-      "chapterNumber": 141,
-      "status": "COMPLETED",
-      "deadline": "2026-06-05",
-      "dueAt": "2026-06-05"
-    },
-    {
-      "_id": "c4",
-      "seriesId": "s3",
-      "chapterNumber": 42,
-      "status": "IN_PROGRESS",
-      "deadline": "2026-06-15",
-      "dueAt": "2026-06-15"
+      "deadline": "2026-06-25",
+      "dueAt": "2026-06-25"
     }
   ],
-  "tasks": [
-    {
-      "_id": "t1",
-      "seriesId": "s1",
-      "chapterId": "c1",
-      "assignedTo": "u2",
-      "assignedBy": "u1",
-      "title": "Shading Backgrounds on Page 12",
-      "status": "PENDING",
-      "region": {
-        "x": 50,
-        "y": 50,
-        "width": 300,
-        "height": 200,
-        "type": "panel"
-      },
-      "pageIds": [
-        "p1"
-      ]
-    },
-    {
-      "_id": "t2",
-      "seriesId": "s1",
-      "chapterId": "c1",
-      "assignedTo": "u2",
-      "assignedBy": "u1",
-      "title": "Adding Speed Lines to Action Panels",
-      "status": "PENDING",
-      "region": {
-        "x": 400,
-        "y": 50,
-        "width": 250,
-        "height": 250,
-        "type": "panel"
-      },
-      "pageIds": [
-        "p1"
-      ]
-    },
-    {
-      "_id": "t3",
-      "seriesId": "s2",
-      "chapterId": "c2",
-      "assignedTo": "u3",
-      "assignedBy": "u1",
-      "title": "Inking Character Face Detail, Chapter 8",
-      "status": "PENDING",
-      "region": {
-        "x": 100,
-        "y": 350,
-        "width": 200,
-        "height": 180,
-        "type": "character"
-      },
-      "pageIds": [
-        "p2"
-      ]
-    },
-    {
-      "_id": "t4",
-      "seriesId": "s1",
-      "chapterId": "c3",
-      "assignedTo": "u2",
-      "assignedBy": "u1",
-      "title": "Toning Background Scene 141",
-      "status": "COMPLETED",
-      "completedAt": "2026-06-04T15:15:36.698Z",
-      "pageIds": [
-        "p3"
-      ]
-    }
-  ],
-  "ratings": [
-    {
-      "_id": "r1",
-      "seriesId": "s4",
-      "voteCount": 92450,
-      "source": "Web Platform",
-      "submittedBy": "u4",
-      "createdAt": "2026-06-04T15:15:36.698Z"
-    },
-    {
-      "_id": "r2",
-      "seriesId": "s5",
-      "voteCount": 85120,
-      "source": "Mobile App",
-      "submittedBy": "u4",
-      "createdAt": "2026-06-04T15:15:36.698Z"
-    }
-  ],
-  "votes": [
-    {
-      "_id": "v1",
-      "submissionId": "s4",
-      "voterId": "u5",
-      "decision": "ACCEPT",
-      "comment": "Outstanding plot line, highly recommended.",
-      "createdAt": "2026-06-04T15:15:36.698Z"
-    }
-  ],
-  "annotations": [
-    {
-      "_id": "a1",
-      "pageId": "p1",
-      "annotatorId": "u4",
-      "coords": {
-        "x": 240,
-        "y": 140
-      },
-      "content": "Pacing feels a bit rushed in this panel. Add more action line markers.",
-      "type": "CONTENT",
-      "createdAt": "2026-06-04T15:15:36.698Z"
-    }
-  ],
-  "pages": [
-    {
-      "_id": "p1",
-      "chapterId": "c1",
-      "pageNumber": 12,
-      "imageUrl": "none",
-      "assistantImageUrl": "none",
-      "status": "DRAFT",
-      "resources": [],
-      "note": "",
-      "reviewNote": ""
-    },
-    {
-      "_id": "p2",
-      "chapterId": "c2",
-      "pageNumber": 1,
-      "imageUrl": "none",
-      "assistantImageUrl": "none",
-      "status": "DRAFT",
-      "resources": [],
-      "note": "",
-      "reviewNote": ""
-    },
-    {
-      "_id": "p3",
-      "chapterId": "c3",
-      "pageNumber": 5,
-      "imageUrl": "none",
-      "assistantImageUrl": "none",
-      "status": "COMPLETED",
-      "resources": [],
-      "note": "",
-      "reviewNote": ""
-    }
-  ],
-  "assistantEarnings": [
-    {
-      "_id": "e1",
-      "assistantId": "u2",
-      "month": "2026-06",
-      "totalPagesApproved": 5,
-      "ratePerPage": 150,
-      "totalEarning": 750,
-      "approvedPages": [
-        {
-          "pageId": "p3",
-          "chapterId": "c3",
-          "seriesId": "s1",
-          "approvedAt": "2026-06-04T15:15:36.698Z"
-        }
-      ],
-      "paymentStatus": "PENDING"
-    }
-  ]
+  "tasks": [],
+  "ratings": [],
+  "votes": [],
+  "annotations": [],
+  "pages": [],
+  "assistantEarnings": []
 }

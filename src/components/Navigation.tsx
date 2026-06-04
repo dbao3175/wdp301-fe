@@ -70,7 +70,7 @@ export default function Navigation({
   return (
     <>
       {/* Mobile Top Header Ribbon */}
-      <header className="lg:hidden h-16 bg-[#E63946] text-white flex items-center justify-between px-4 fixed top-0 left-0 w-full z-40 border-b-4 border-ink-black shadow-md">
+      <header className="md:hidden h-16 bg-[#E63946] text-white flex items-center justify-between px-4 fixed top-0 left-0 w-full z-40 border-b-4 border-ink-black shadow-md">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-white rounded-xs flex items-center justify-center">
             <span className="text-[#E63946] font-black text-xl">M</span>
@@ -86,7 +86,7 @@ export default function Navigation({
       </header>
 
       {/* Main Left Desktop Sidebar */}
-      <aside className={`fixed top-0 left-0 h-full w-72 bg-white text-ink-black z-40 transition-transform duration-300 transform lg:translate-x-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} border-r-4 border-ink-black flex flex-col justify-between p-0 select-none shadow-[4px_0px_0px_rgba(20,20,20,0.15)]`}>
+      <aside className={`fixed top-0 left-0 h-full w-72 bg-white text-ink-black z-40 transition-transform duration-300 transform md:translate-x-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} border-r-4 border-ink-black flex flex-col justify-between p-0 select-none shadow-[4px_0px_0px_rgba(20,20,20,0.15)]`}>
         
         {/* Brand Header & Quick switch */}
         <div className="flex flex-col">
@@ -242,7 +242,7 @@ export default function Navigation({
       {isMobileOpen && (
         <div 
           onClick={() => setIsMobileOpen(false)}
-          className="fixed inset-0 bg-black/60 z-30 lg:hidden"
+          className="fixed inset-0 bg-black/60 z-30 md:hidden"
         />
       )}
     </>
