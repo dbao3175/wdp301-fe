@@ -1,1 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-syne: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-serif: "Playfair Display", Georgia, serif;
+  
+  --color-ink-black: #141414;
+  --color-paper-white: #FFFFFF;
+  --color-manuscript-gray: #F5F5F0;
+  --color-action-blue: #E63946;
+  --color-creative-orange: #F39C12;
+  --color-status-success: #2ECC71;
+  --color-status-error: #E63946;
+  --color-border-muted: #141414;
+}
+
+/* Custom manga halftone elements and grid backgrounds */
+.manga-grid {
+  background-image: radial-gradient(#141414 1.2px, transparent 1.2px);
+  background-size: 24px 24px;
+}
+
+.manga-shadow {
+  box-shadow: 4px 4px 0px #141414;
+}
+
+.manga-shadow-lg {
+  box-shadow: 8px 8px 0px #141414;
+}
+
+.manga-shadow-hover {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.manga-shadow-hover:hover {
+  box-shadow: 6px 6px 0px #141414;
+  transform: translate(-2px, -2px);
+}
+

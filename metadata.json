@@ -1,6 +1,6 @@
 {
   "name": "WDP301 FE",
-  "description": "Bảng điều khiển quản lý quy trình dịch và thiết kế Manga thời gian thực.",
+  "description": "Manga Creation Workflow and Publishing Management System for mangakas, assistants, editors, and editorial board members.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
