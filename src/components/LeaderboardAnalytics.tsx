@@ -58,7 +58,7 @@ export default function LeaderboardAnalytics({
     .map(s => {
       // Collect aggregate count under ratings
       const votes = ratings
-        .filter(r => r.seriesId === s._id)
+        .filter(r => r.seriesId === s._id || r.series === s._id)
         .reduce((sum, current) => sum + current.voteCount, 0);
 
       // Base default weights matching standard template output if empty

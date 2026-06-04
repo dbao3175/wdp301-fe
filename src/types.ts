@@ -34,6 +34,7 @@ export type ChapterStatus = 'IN_PROGRESS' | 'COMPLETED';
 export interface Chapter {
   _id: string;
   seriesId: string;
+  series?: string; // MongoDB ref option
   chapterNumber: number;
   status: ChapterStatus;
   deadline: string;
@@ -44,7 +45,9 @@ export type TaskStatus = 'PENDING' | 'COMPLETED';
 export interface Task {
   _id: string;
   seriesId: string;
+  series?: string; // MongoDB ref option
   chapterId: string;
+  chapter?: string; // MongoDB ref option
   assignedTo: string; // userId or assistant name
   title: string;
   status: TaskStatus;
@@ -62,6 +65,7 @@ export interface Task {
 export interface Rating {
   _id: string;
   seriesId: string;
+  series?: string; // MongoDB ref option
   voteCount: number;
   source: string;
   submittedBy: string; // user ID who submitted

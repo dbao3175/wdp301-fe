@@ -85,12 +85,35 @@ export default function App() {
       setTaskList(liveTasks);
       setRatingList(liveRatings);
 
-      // Auto assign active series elements if not set
-      if (liveSeries.length > 0 && !activeSeries) {
-        setActiveSeries(liveSeries[0]);
+      // Auto assign active series elements if not set or invalid under live backend data
+      let currentActiveSeries = activeSeries;
+      const isLive = apiClient.getConfig().useLiveBackend;
+      const isValidObjectId = (id: string) => /^[0-9a-fA-F]{24}$/.test(id);
+
+      if (liveSeries.length > 0) {
+        const seriesExists = activeSeries && liveSeries.some(s => s._id === activeSeries._id);
+        const seriesValid = activeSeries && (!isLive || isValidObjectId(activeSeries._id));
+        if (!activeSeries || !seriesExists || !seriesValid) {
+          setActiveSeries(liveSeries[0]);
+          currentActiveSeries = liveSeries[0];
+        }
       }
-      if (liveChapters.length > 0 && !activeChapter) {
-        setActiveChapter(liveChapters[0]);
+
+      if (liveChapters.length > 0) {
+        const currentSid = currentActiveSeries?._id;
+        const validChaptersForSeries = liveChapters.filter(c => c.seriesId === currentSid || c.series === currentSid);
+        const chapterExists = activeChapter && liveChapters.some(c => c._id === activeChapter._id);
+        const chapterValid = activeChapter && (!isLive || isValidObjectId(activeChapter._id));
+        
+        if (!activeChapter || !chapterExists || !chapterValid || (activeChapter && activeChapter.seriesId !== currentSid && activeChapter.series !== currentSid)) {
+          if (validChaptersForSeries.length > 0) {
+            setActiveChapter(validChaptersForSeries[0]);
+          } else {
+            setActiveChapter(liveChapters[0]);
+          }
+        }
+      } else {
+        setActiveChapter(null);
       }
     } catch (err: any) {
       console.warn('REST Synchronization failed - fallback state remains functional', err);

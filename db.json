@@ -62,9 +62,28 @@
       "password": "123456",
       "role": "MANGAKA",
       "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuCHg4AqOzqTV4dewyU1i46CaCUf4pdWEGhiU2lW3liCFs9JIde6fE9uwaRXVueKT86jIlGpymMPHJCh6-Coee4I6o2JxMGU-b-ts2Dmy6dKXtzK6RPgJ9XIL-1TYRm1JkqG8CkCx_ZgdB3cBNUUJyT9pvzu7uKesV0D55DoIMkLIv6PspHUrWtqKEj3H2tBogMUnEDiuCIIKF5mSpOCdwVfdskbQpvNQx3V_lA8OtcIk6q8LZ9AmfiRwuw0bF5K5naoU52pMuRXDiP2",
-      "__v": 0,
       "createdAt": "2026-06-04T16:58:19.090Z",
-      "updatedAt": "2026-06-04T16:58:19.090Z"
+      "updatedAt": "2026-06-04T16:58:19.090Z",
+      "__v": 0
+    },
+    {
+      "_id": "u_1780593879108",
+      "name": "duy",
+      "email": "assistantduy@test.com",
+      "password": "123456",
+      "role": "ASSISTANT",
+      "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuCHg4AqOzqTV4dewyU1i46CaCUf4pdWEGhiU2lW3liCFs9JIde6fE9uwaRXVueKT86jIlGpymMPHJCh6-Coee4I6o2JxMGU-b-ts2Dmy6dKXtzK6RPgJ9XIL-1TYRm1JkqG8CkCx_ZgdB3cBNUUJyT9pvzu7uKesV0D55DoIMkLIv6PspHUrWtqKEj3H2tBogMUnEDiuCIIKF5mSpOCdwVfdskbQpvNQx3V_lA8OtcIk6q8LZ9AmfiRwuw0bF5K5naoU52pMuRXDiP2",
+      "__v": 0,
+      "createdAt": "2026-06-04T18:04:09.613Z",
+      "updatedAt": "2026-06-04T18:04:09.613Z"
+    },
+    {
+      "_id": "u_1780596660651",
+      "name": "duy23",
+      "email": "duy1234@test.com",
+      "password": "123456",
+      "role": "ASSISTANT",
+      "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuCHg4AqOzqTV4dewyU1i46CaCUf4pdWEGhiU2lW3liCFs9JIde6fE9uwaRXVueKT86jIlGpymMPHJCh6-Coee4I6o2JxMGU-b-ts2Dmy6dKXtzK6RPgJ9XIL-1TYRm1JkqG8CkCx_ZgdB3cBNUUJyT9pvzu7uKesV0D55DoIMkLIv6PspHUrWtqKEj3H2tBogMUnEDiuCIIKF5mSpOCdwVfdskbQpvNQx3V_lA8OtcIk6q8LZ9AmfiRwuw0bF5K5naoU52pMuRXDiP2"
     }
   ],
   "series": [
@@ -101,7 +120,7 @@
       "title": "Cyber Ronin 2099",
       "synopsis": "In a cyberpunk future, a masterless samurai fights corporate tyranny with a plasma katana.",
       "mangakaId": "6a192df65f3958c587c4ed08",
-      "status": "APPROVED",
+      "status": "PUBLISHED",
       "pubSchedule": "WEEKLY",
       "reviewedBy": "6a192df65f3958c587c4ed0a",
       "reviewNote": "Great hook and fast pacing, perfect for weekly.",
@@ -109,6 +128,20 @@
       "createdAt": "2026-05-29T06:11:13.174Z",
       "updatedAt": "2026-05-29T06:11:13.174Z",
       "__v": 0
+    },
+    {
+      "_id": "s_1780593745716",
+      "title": "hhhhh",
+      "synopsis": "hhhh",
+      "mangakaId": "6a192df65f3958c587c4ed08",
+      "status": "IN_PRODUCTION",
+      "createdAt": "2026-06-04T17:22:25.717Z",
+      "__v": 0,
+      "updatedAt": "2026-06-04T18:04:09.676Z",
+      "reviewedBy": "6a192df65f3958c587c4ed0a",
+      "reviewNote": "ưerfg",
+      "reviewedAt": "2026-06-04T18:08:07.735Z",
+      "pubSchedule": "MONTHLY"
     }
   ],
   "chapters": [
@@ -116,14 +149,105 @@
       "_id": "c_1780592595684",
       "seriesId": "6a192e015f3958c587c4ed11",
       "chapterNumber": 1,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "deadline": "2026-06-25",
-      "dueAt": "2026-06-25"
+      "dueAt": "2026-06-25",
+      "createdAt": "2026-06-04T17:03:16.045Z",
+      "updatedAt": "2026-06-04T17:03:16.045Z",
+      "__v": 0
+    },
+    {
+      "_id": "c_1780596432249",
+      "seriesId": "6a192e015f3958c587c4ed11",
+      "chapterNumber": 5,
+      "status": "IN_PROGRESS",
+      "deadline": "2026-07-09",
+      "dueAt": "2026-07-09"
+    },
+    {
+      "_id": "c_1780596690799",
+      "seriesId": "s_1780593745716",
+      "chapterNumber": 1,
+      "status": "IN_PROGRESS",
+      "deadline": "2027-10-15",
+      "dueAt": "2027-10-15"
     }
   ],
-  "tasks": [],
-  "ratings": [],
-  "votes": [],
+  "tasks": [
+    {
+      "_id": "t_1780596362738",
+      "seriesId": "6a192e015f3958c587c4ed11",
+      "chapterId": "c_1780592595684",
+      "assignedTo": "6a192df65f3958c587c4ed09",
+      "assignedBy": "6a192df65f3958c587c4ed08",
+      "title": "hehe",
+      "status": "PENDING",
+      "region": null,
+      "pageIds": []
+    },
+    {
+      "_id": "t_1780596405370",
+      "seriesId": "6a192e015f3958c587c4ed11",
+      "chapterId": "c_1780592595684",
+      "assignedTo": "u_1780593879108",
+      "assignedBy": "6a192df65f3958c587c4ed08",
+      "title": "oke",
+      "status": "PENDING",
+      "region": null,
+      "pageIds": []
+    },
+    {
+      "_id": "t_1780596690806",
+      "seriesId": "s_1780593745716",
+      "chapterId": "c_1780596690799",
+      "assignedTo": "u_1780596660651",
+      "assignedBy": "6a192df65f3958c587c4ed08",
+      "title": "ngol",
+      "status": "PENDING",
+      "region": null,
+      "pageIds": []
+    }
+  ],
+  "ratings": [
+    {
+      "_id": "r_1780593764092",
+      "seriesId": "6a192e015f3958c587c4ed11",
+      "voteCount": 12800,
+      "source": "Digital Web Polling",
+      "submittedBy": "6a192df65f3958c587c4ed08",
+      "createdAt": "2026-06-04T17:22:44.092Z",
+      "__v": 0,
+      "updatedAt": "2026-06-04T18:04:09.791Z"
+    },
+    {
+      "_id": "r_1780593771834",
+      "seriesId": "6a192e015f3958c587c4ed11",
+      "voteCount": 12794,
+      "source": "Digital Web Polling",
+      "submittedBy": "6a192df65f3958c587c4ed08",
+      "createdAt": "2026-06-04T17:22:51.835Z",
+      "__v": 0,
+      "updatedAt": "2026-06-04T18:04:09.791Z"
+    },
+    {
+      "_id": "r_1780596513357",
+      "seriesId": "6a192e015f3958c587c4ed11",
+      "voteCount": 15420,
+      "source": "Weekly Shonen Jump App",
+      "submittedBy": "6a192df65f3958c587c4ed0a",
+      "createdAt": "2026-06-04T18:08:33.358Z"
+    }
+  ],
+  "votes": [
+    {
+      "_id": "v_1780596487719",
+      "submissionId": "s_1780593745716",
+      "voterId": "6a192df65f3958c587c4ed0a",
+      "decision": "ACCEPT",
+      "comment": "ưerfg",
+      "createdAt": "2026-06-04T18:08:07.719Z"
+    }
+  ],
   "annotations": [],
   "pages": [],
   "assistantEarnings": []

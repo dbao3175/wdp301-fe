@@ -141,7 +141,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, default: 'password123' },
   role: String,
   avatar: String
-}, { _id: false, timestamps: true });
+}, { timestamps: true });
 
 const seriesSchema = new mongoose.Schema({
   _id: String,
@@ -153,7 +153,7 @@ const seriesSchema = new mongoose.Schema({
   reviewedBy: String,
   reviewNote: String,
   reviewedAt: String
-}, { _id: false, timestamps: true });
+}, { timestamps: true });
 
 const chapterSchema = new mongoose.Schema({
   _id: String,
@@ -162,7 +162,7 @@ const chapterSchema = new mongoose.Schema({
   status: { type: String, default: 'IN_PROGRESS' },
   deadline: String,
   dueAt: String
-}, { _id: false, timestamps: true });
+}, { timestamps: true });
 
 const taskSchema = new mongoose.Schema({
   _id: String,
@@ -175,7 +175,7 @@ const taskSchema = new mongoose.Schema({
   completedAt: String,
   region: mongoose.Schema.Types.Mixed,
   pageIds: [String]
-}, { _id: false, timestamps: true });
+}, { timestamps: true });
 
 const ratingSchema = new mongoose.Schema({
   _id: String,
@@ -183,7 +183,7 @@ const ratingSchema = new mongoose.Schema({
   voteCount: Number,
   source: String,
   submittedBy: String
-}, { _id: false, timestamps: true });
+}, { timestamps: true });
 
 const voteSchema = new mongoose.Schema({
   _id: String,
@@ -191,7 +191,7 @@ const voteSchema = new mongoose.Schema({
   voterId: String,
   decision: String,
   comment: String
-}, { _id: false, timestamps: true });
+}, { timestamps: true });
 
 const annotationSchema = new mongoose.Schema({
   _id: String,
@@ -200,7 +200,7 @@ const annotationSchema = new mongoose.Schema({
   coords: { x: Number, y: Number },
   content: String,
   type: { type: String, default: 'CONTENT' }
-}, { _id: false, timestamps: true });
+}, { timestamps: true });
 
 const pageSchema = new mongoose.Schema({
   _id: String,
@@ -212,7 +212,7 @@ const pageSchema = new mongoose.Schema({
   resources: [mongoose.Schema.Types.Mixed],
   note: String,
   reviewNote: String
-}, { _id: false, timestamps: true });
+}, { timestamps: true });
 
 const earningSchema = new mongoose.Schema({
   _id: String,
@@ -223,7 +223,7 @@ const earningSchema = new mongoose.Schema({
   totalEarning: Number,
   approvedPages: [mongoose.Schema.Types.Mixed],
   paymentStatus: { type: String, default: 'PENDING' }
-}, { _id: false, timestamps: true });
+}, { timestamps: true });
 
 const UserModel = mongoose.models.User || mongoose.model('User', userSchema);
 const SeriesModel = mongoose.models.Series || mongoose.model('Series', seriesSchema);
@@ -285,18 +285,32 @@ async function loadStateFromMongoDB() {
     const pages = await PageModel.find().lean();
     const assistantEarnings = await EarningModel.find().lean();
 
-    // Check if initial seed is required
-    if (users.length === 0) {
-      console.log("🌱 Database is unpopulated. Seeding default data to MongoDB...");
-      await UserModel.insertMany(DEFAULT_USERS as any[]);
-      await SeriesModel.insertMany(DEFAULT_SERIES as any[]);
-      await ChapterModel.insertMany(DEFAULT_CHAPTERS as any[]);
-      await TaskModel.insertMany(DEFAULT_TASKS as any[]);
-      await RatingModel.insertMany(DEFAULT_RATINGS as any[]);
-      await VoteModel.insertMany(DEFAULT_VOTES as any[]);
-      await AnnotationModel.insertMany(DEFAULT_ANNOTATIONS as any[]);
-      await PageModel.insertMany(DEFAULT_PAGES as any[]);
-      await EarningModel.insertMany(DEFAULT_EARNINGS as any[]);
+    // Verify if database contains invalid, hex, or missing string custom IDs
+    const userWithInvalidId = users.find(u => !u._id || !u._id.startsWith('u'));
+
+    // Check if initial seed is required or repair is needed
+    if (users.length === 0 || userWithInvalidId) {
+      console.log("🌱 Database is unpopulated or has invalid custom string '_id' values. Re-seeding clean default data to MongoDB...");
+      const state = readDB();
+      await UserModel.deleteMany({});
+      await SeriesModel.deleteMany({});
+      await ChapterModel.deleteMany({});
+      await TaskModel.deleteMany({});
+      await RatingModel.deleteMany({});
+      await VoteModel.deleteMany({});
+      await AnnotationModel.deleteMany({});
+      await PageModel.deleteMany({});
+      await EarningModel.deleteMany({});
+
+      await UserModel.insertMany(state.users as any[]);
+      await SeriesModel.insertMany(state.series as any[]);
+      await ChapterModel.insertMany(state.chapters as any[]);
+      await TaskModel.insertMany(state.tasks as any[]);
+      await RatingModel.insertMany(state.ratings as any[]);
+      await VoteModel.insertMany(state.votes as any[]);
+      await AnnotationModel.insertMany(state.annotations as any[]);
+      await PageModel.insertMany(state.pages as any[]);
+      await EarningModel.insertMany(state.assistantEarnings as any[]);
     }
 
     g_dbCache = {
@@ -389,6 +403,25 @@ const authenticateToken = (req: any, res: any, next: any) => {
 // -------------------------------------------------------------------------
 // ROUTE HANDLERS: AUTH SERVICES
 // -------------------------------------------------------------------------
+app.get('/api/debug-db', (req, res) => {
+  try {
+    const db = readDB();
+    res.status(200).json({
+      success: true,
+      isMongoConnected: mongoose.connection.readyState === 1,
+      users: db.users.map(u => ({
+        _id: u._id,
+        _idType: typeof u._id,
+        name: u.name,
+        email: u.email,
+        role: u.role
+      }))
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 app.post('/api/auth/register', (req, res) => {
   try {
     const { name, email, password, role } = req.body;
@@ -453,6 +486,24 @@ app.get('/api/auth/me', authenticateToken, (req: any, res) => {
     success: true,
     data: req.user
   });
+});
+
+app.get('/api/users', authenticateToken, (req, res) => {
+  try {
+    const { role } = req.query;
+    const db = readDB();
+    let result = db.users.map(u => {
+      const copy = { ...u };
+      delete copy.password;
+      return copy;
+    });
+    if (role) {
+      result = result.filter(u => u.role === role);
+    }
+    res.status(200).json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 });
 
 // -------------------------------------------------------------------------
@@ -732,16 +783,37 @@ app.post('/api/tasks', authenticateToken, (req: any, res) => {
 
     const db = readDB();
     // Validate that assigned user is an ASSISTANT (optional, but robust)
-    const assignee = db.users.find(u => u._id === assignedTo);
+    let assignee = db.users.find(u => 
+      u._id === assignedTo || 
+      String(u._id) === String(assignedTo) || 
+      (u.email && assignedTo && u.email.toLowerCase() === assignedTo.toLowerCase()) ||
+      (u.name && assignedTo && u.name.toLowerCase().includes(assignedTo.toLowerCase()))
+    );
+
+    // Dynamic smart fallback for hardcoded frontend selector values ("u2", "u3")
     if (!assignee) {
-      return res.status(400).json({ success: false, message: 'Assigned staff user could not be mapped' });
+      if (assignedTo === 'u2') {
+        assignee = db.users.find(u => (u.email && u.email.toLowerCase() === 'assistant@example.com') || (u.name && u.name.toLowerCase().includes('kenji')));
+      } else if (assignedTo === 'u3') {
+        assignee = db.users.find(u => (u.email && u.email.toLowerCase() === 'assistant2@example.com') || (u.name && u.name.toLowerCase().includes('mei')));
+      }
     }
+
+    if (!assignee) {
+      const debugList = db.users.map(u => `${u._id} (${u.name}, ${u.email})`).join(' | ');
+      return res.status(400).json({ 
+        success: false, 
+        message: `Assigned staff user could not be mapped. Request received: "${assignedTo}". Available db users: [${debugList}]` 
+      });
+    }
+
+    const targetAssigneeId = assignee._id;
 
     const newTask = {
       _id: `t_${Date.now()}`,
       seriesId,
       chapterId,
-      assignedTo,
+      assignedTo: targetAssigneeId,
       assignedBy: req.user._id,
       title,
       status: 'PENDING',

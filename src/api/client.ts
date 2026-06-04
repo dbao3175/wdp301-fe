@@ -198,17 +198,35 @@ async function makeFetchRequest(
     }
   }
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined
-  });
+  try {
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined
+    });
 
-  const responseData = await response.json();
-  if (!response.ok) {
-    throw new Error(responseData.message || `Request failed with status ${response.status}`);
+    const responseData = await response.json();
+    if (!response.ok) {
+      throw new Error(responseData.message || `Request failed with status ${response.status}`);
+    }
+    return responseData;
+  } catch (error: any) {
+    const errText = error?.message || '';
+    if (
+      errText.toLowerCase().includes('failed to fetch') || 
+      errText.toLowerCase().includes('network error') ||
+      errText.toLowerCase().includes('fetch failed')
+    ) {
+      console.warn("⚠️ API backend unreachable, dynamically switching this operation to local emulator...");
+      // Let the client keep working by disabling useLiveBackend
+      setClientConfig({
+        baseUrl: config.baseUrl,
+        useLiveBackend: false
+      });
+      throw new Error("Mất kết nối máy chủ/Cổng không khớp! Hệ thống đã TỰ ĐỘNG CHUYỂN sang chế độ LOCAL EMULATOR (Offline) để không bị gián đoạn. Hãy bấm nút thực hiện lại một lần nữa.");
+    }
+    throw error;
   }
-  return responseData;
 }
 
 // ----------------------------------------------------
@@ -294,6 +312,22 @@ export const apiClient = {
 
     logout: () => {
       setStoredUserSession(null, null);
+    }
+  },
+
+  users: {
+    getAll: async (role?: string): Promise<User[]> => {
+      const config = getClientConfig();
+      if (config.useLiveBackend) {
+        const res = await makeFetchRequest(`/api/users${role ? `?role=${role}` : ''}`, 'GET');
+        return res.data;
+      } else {
+        const list = loadMockData<User>('m_users');
+        if (role) {
+          return list.filter(u => u.role === role);
+        }
+        return list;
+      }
     }
   },
 
@@ -483,7 +517,7 @@ export const apiClient = {
     submit: async (taskId: string): Promise<Task> => {
       const config = getClientConfig();
       if (config.useLiveBackend) {
-        const res = await makeFetchRequest(`/api/tasks/${taskId}/submit`, 'POST', {});
+        const res = await makeFetchRequest(`/api/assistant/tasks/${taskId}/submit`, 'PUT', {});
         return res.data;
       } else {
         const list = loadMockData<Task>('m_tasks');

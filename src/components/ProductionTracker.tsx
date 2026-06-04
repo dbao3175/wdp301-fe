@@ -67,7 +67,7 @@ export default function ProductionTracker({
   // Filter Chapters based on Series Selection Filter
   const filteredChapters = chapters.filter(c => {
     if (selectedSeriesFilter === 'All Series') return true;
-    const linkedSeries = series.find(s => s._id === c.seriesId);
+    const linkedSeries = series.find(s => s._id === c.seriesId || s._id === c.series);
     return linkedSeries?.title === selectedSeriesFilter;
   });
 
@@ -219,7 +219,7 @@ export default function ProductionTracker({
             <tbody className="font-sans text-xs text-ink-black divide-y-2 divide-ink-black font-bold">
               
               {filteredChapters.map((chapter) => {
-                const parentSeries = series.find(s => s._id === chapter.seriesId);
+                const parentSeries = series.find(s => s._id === chapter.seriesId || s._id === chapter.series);
                 const titleHeading = getChapterQuoteTitle(chapter);
                 const isOverdue = new Date(chapter.deadline) < new Date('2026-06-12') && chapter.status !== 'COMPLETED';
 

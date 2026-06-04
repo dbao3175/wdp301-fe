@@ -87,10 +87,24 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
 
   // Trigger tasks refresh inside parent when state changes
   const [assistantsList, setAssistantsList] = useState<User[]>([]);
+  const [canvasError, setCanvasError] = useState('');
   useEffect(() => {
-    // Collect assistant users
-    const users = JSON.parse(localStorage.getItem('m_users') || '[]');
-    setAssistantsList(users.filter((u: any) => u.role === 'ASSISTANT'));
+    const fetchAssistants = async () => {
+      try {
+        const fetched = await apiClient.users.getAll('ASSISTANT');
+        setAssistantsList(fetched);
+        if (fetched.length > 0) {
+          if (!fetched.some(a => a._id === selectedAssistant)) {
+            setSelectedAssistant(fetched[0]._id);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load assistants in WorkspaceCanvas:", err);
+        const users = JSON.parse(localStorage.getItem('m_users') || '[]');
+        setAssistantsList(users.filter((u: any) => u.role === 'ASSISTANT'));
+      }
+    };
+    fetchAssistants();
   }, []);
 
   // Handle click-and-drag mouse drawing for MANGAKA
@@ -129,41 +143,64 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
   // Create workspace task out of the drawn region
   const handleCreateRegionTask = async () => {
     if (!currentBox || !newRegionLabel) return;
+    setCanvasError('');
     
     // Assign in mock backend
     const targetSid = activeSeries?._id || 's1';
     const targetCid = activeChapter?._id || 'c1';
-    
-    const newTask = await apiClient.tasks.create(
-      targetSid,
-      targetCid,
-      selectedAssistant,
-      `Process Segment: ${newRegionLabel} (${newRegionType})`,
-      {
-        x: Math.round(currentBox.x),
-        y: Math.round(currentBox.y),
-        width: Math.round(currentBox.width),
-        height: Math.round(currentBox.height),
-        type: newRegionType
+
+    const isLive = apiClient.getConfig().useLiveBackend;
+    if (isLive) {
+      const isValidObjectId = (id: string) => /^[0-9a-fA-F]{24}$/.test(id);
+      if (!targetSid || !isValidObjectId(targetSid)) {
+        setCanvasError('❌ Chưa gán Series hợp lệ (24 ký tự Hex). Vui lòng chọn Series khác hoặc tạo mới.');
+        return;
       }
-    );
+      if (!targetCid || !isValidObjectId(targetCid)) {
+        setCanvasError('❌ Chưa có Chapter hợp lệ (24 ký tự Hex). Vui lòng tạo Chapter trước trong tab Production Tracker.');
+        return;
+      }
+      if (!selectedAssistant || !isValidObjectId(selectedAssistant)) {
+        setCanvasError('❌ Chưa có Trợ lý (ASSISTANT) thực tế. Hãy đăng xuất và đăng ký một tài khoản Assistant để gán việc!');
+        return;
+      }
+    }
+    
+    try {
+      const newTask = await apiClient.tasks.create(
+        targetSid,
+        targetCid,
+        selectedAssistant,
+        `Process Segment: ${newRegionLabel} (${newRegionType})`,
+        {
+          x: Math.round(currentBox.x),
+          y: Math.round(currentBox.y),
+          width: Math.round(currentBox.width),
+          height: Math.round(currentBox.height),
+          type: newRegionType
+        }
+      );
 
-    const newMangaRegion: MangaRegion = {
-      id: `r_${Date.now()}`,
-      x: currentBox.x,
-      y: currentBox.y,
-      width: currentBox.width,
-      height: currentBox.height,
-      type: newRegionType,
-      label: newRegionLabel,
-      assignedTo: selectedAssistant,
-      status: 'PENDING'
-    };
+      const newMangaRegion: MangaRegion = {
+        id: newTask?._id || `r_${Date.now()}`,
+        x: currentBox.x,
+        y: currentBox.y,
+        width: currentBox.width,
+        height: currentBox.height,
+        type: newRegionType,
+        label: newRegionLabel,
+        assignedTo: selectedAssistant,
+        status: 'PENDING'
+      };
 
-    setRegions([...regions, newMangaRegion]);
-    setCurrentBox(null);
-    setNewRegionLabel('');
-    onRefreshTasks();
+      setRegions([...regions, newMangaRegion]);
+      setCurrentBox(null);
+      setNewRegionLabel('');
+      setCanvasError('');
+      onRefreshTasks();
+    } catch (err: any) {
+      setCanvasError(`❌ Lỗi hệ thống: ${err.message}`);
+    }
   };
 
   // Editor clicks to place note bubble
@@ -498,6 +535,12 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 <Scissors className="text-action-blue w-4 h-4" />
                 Assign Selected Region
               </h4>
+              
+              {canvasError && (
+                <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded font-sans font-medium">
+                  {canvasError}
+                </div>
+              )}
               
               {currentBox ? (
                 <div className="space-y-4 animate-fadeIn">

@@ -53,6 +53,18 @@ export default function Navigation({
     }
   };
 
+  const handleDirectToggle = () => {
+    const nextBackendState = !useLiveBackend;
+    setUseLiveBackend(nextBackendState);
+    apiClient.updateConfig({
+      baseUrl: apiPort,
+      useLiveBackend: nextBackendState
+    });
+    if (onConfigChange) {
+      onConfigChange();
+    }
+  };
+
   const navItems = [
     { id: 'workspace', label: 'Manga Workspace', icon: Compass, roles: ['MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'] },
     { id: 'tasks', label: 'Task Delegation', icon: Layers, roles: ['MANGAKA', 'EDITOR'] },
@@ -182,15 +194,25 @@ export default function Navigation({
             </button>
 
             {useLiveBackend ? (
-              <div className="inline-flex items-center gap-1.5 bg-[#2ECC71]/10 px-2 py-1 border border-ink-black text-[#2ECC71] font-mono text-[9px] font-black uppercase rounded-xs">
+              <button
+                type="button"
+                onClick={handleDirectToggle}
+                title="Click to toggle to Local Emulator"
+                className="inline-flex items-center gap-1.5 bg-[#2ECC71]/10 px-2 py-1 border border-ink-black text-[#2ECC71] font-mono text-[9px] font-black uppercase rounded-xs cursor-pointer hover:bg-[#2ECC71]/25 transition-all text-left"
+              >
                 <CloudLightning className="w-3 h-3 animate-pulse text-[#2ECC71]" />
                 LIVE REST SYNC
-              </div>
+              </button>
             ) : (
-              <div className="inline-flex items-center gap-1.5 bg-[#FFF3B0] px-2 py-1 border border-ink-black text-black font-mono text-[9px] font-black uppercase rounded-xs">
+              <button
+                type="button"
+                onClick={handleDirectToggle}
+                title="Click to toggle to Live Backend SYNC"
+                className="inline-flex items-center gap-1.5 bg-[#FFF3B0] px-2 py-1 border border-ink-black text-black font-mono text-[9px] font-black uppercase rounded-xs cursor-pointer hover:bg-amber-100 transition-all text-left"
+              >
                 <Radio className="w-3 h-3 text-[#E63946]" />
                 LOCAL EMULATOR
-              </div>
+              </button>
             )}
 
             {showConfig && (

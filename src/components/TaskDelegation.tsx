@@ -29,17 +29,85 @@ export default function TaskDelegation({
   const [assignedAssistantId, setAssignedAssistantId] = useState('u2'); // Default to Kenji Sato
   const [dueDate, setDueDate] = useState('2026-06-15');
   const [assignStatusMsg, setAssignStatusMsg] = useState('');
+  const [dbAssistants, setDbAssistants] = useState<User[]>([]);
 
   // Series Pitching states
   const [pitchTitle, setPitchTitle] = useState('');
   const [pitchSynopsis, setPitchSynopsis] = useState('');
   const [pitchStatusMsg, setPitchStatusMsg] = useState('');
 
-  // Load chapters when series changes
-  const filteredChapters = chapters.filter(c => c.seriesId === selectedSeriesId);
+  // Load assistants from database dynamically
+  useEffect(() => {
+    let active = true;
+    const fetchAssistants = async () => {
+      try {
+        const fetched = await apiClient.users.getAll('ASSISTANT');
+        if (active) {
+          setDbAssistants(fetched);
+          if (fetched.length > 0) {
+            // If the current assignedAssistantId is not in the list, set to the first one available
+            if (!fetched.some(a => a._id === assignedAssistantId)) {
+              setAssignedAssistantId(fetched[0]._id);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load assistants dynamically:', err);
+      }
+    };
+    fetchAssistants();
+    return () => {
+      active = false;
+    };
+  }, [tasks]);
 
-  // Assistants metadata
-  const assistants = [
+  // Load chapters when series changes
+  const filteredChapters = chapters.filter(c => c.seriesId === selectedSeriesId || c.series === selectedSeriesId);
+
+  // Compute dynamic assistants metadata list
+  const computedDbAssistants = dbAssistants.map(a => {
+    const defaultAvatars: Record<string, string> = {
+      'u2': 'https://lh3.googleusercontent.com/aida-public/AB6AXuByWi6Zl9Aq5qImGVzCM9dhGi2im5oNDHcYKm7_gdy-y_OSg-Pknn0o2Seu12-bt1ZlvW5mUwYsHbUzshmDVAh9HLeU2zsF4S5qvBZcASl2N4mHoV4QkyO3oaBVVg5I3WsU787UzwLfvdhrTVpYwQpRHM10fQ67X_0IXkIfhdkBbM5hGfouxY6d_0YEaDvNbGo2xqh8PeDhZhx73aSK3GLz-B8_C9WMamYLJXcYZShKrPQs9cA-qJJWPqKe3zVBhGuEz1CkezmEZARm',
+      'u3': 'https://lh3.googleusercontent.com/aida-public/AB6AXuDb75LL8ZWct7hOj_Lpk8YxqEv5BjlWa2mgnocgPm9ezXoHO2Eo7INteNIxv3zb59h68u5MrIsX4qE02NGXmancNIhDRjuLuw8cxldllyVXH8ZRRLi01owyzX7zHvC-NGEEnQuQDiF5_9C8BO2AJvtFze4KTeSuHEeW4eoMhlvbPbvZtfDUx1qbYDwAmHMmL2Wnf9Ue9jyCn5WnL98U1dHFJYXetVyECwx5fpaqDoerU6KxLWjbM5TxO2vJ4bceFRnggczcCiKg-8R0'
+    };
+    const defaultRoles: Record<string, string> = {
+      'u2': 'Backgrounds & Tones',
+      'u3': 'Inking & Details'
+    };
+
+    let avatar = a.avatar || defaultAvatars[a._id];
+    if (!avatar) {
+      if (a.name.toLowerCase().includes('kenji')) {
+        avatar = defaultAvatars['u2'];
+      } else if (a.name.toLowerCase().includes('mei')) {
+        avatar = defaultAvatars['u3'];
+      } else {
+        avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(a.name)}`;
+      }
+    }
+
+    let role = defaultRoles[a._id];
+    if (!role) {
+      if (a.name.toLowerCase().includes('kenji')) {
+        role = 'Backgrounds & Tones';
+      } else if (a.name.toLowerCase().includes('mei')) {
+        role = 'Inking & Details';
+      } else {
+        role = 'Assistant Illustrator';
+      }
+    }
+
+    return {
+      id: a._id,
+      name: a.name,
+      role: role,
+      avatar: avatar,
+      activeCount: tasks.filter(t => t.assignedTo === a._id && t.status === 'PENDING').length
+    };
+  });
+
+  // Fallback to defaults to protect UI during initial offline load or if collection is empty
+  const assistants = computedDbAssistants.length > 0 ? computedDbAssistants : [
     {
       id: 'u2',
       name: 'Kenji Sato',
@@ -65,9 +133,19 @@ export default function TaskDelegation({
     }
 
     try {
+      let finalChapterId = selectedChapterId;
+      if (selectedChapterId === 'temp_c1') {
+        const isLive = apiClient.getConfig().useLiveBackend;
+        if (isLive) {
+          setAssignStatusMsg('💡 Creating a new Chapter in MongoDB first...');
+          const newChapter = await apiClient.chapters.create(selectedSeriesId, 1, dueDate);
+          finalChapterId = newChapter._id;
+        }
+      }
+
       await apiClient.tasks.create(
         selectedSeriesId,
-        selectedChapterId,
+        finalChapterId,
         assignedAssistantId,
         taskTitle
       );
@@ -126,8 +204,34 @@ export default function TaskDelegation({
             </h2>
 
             {assignStatusMsg && (
-              <div className={`p-4 border-2 rounded-none mb-5 text-xs font-mono font-bold uppercase select-none ${assignStatusMsg.startsWith('✅') ? 'bg-[#2ECC71]/10 border-[#2ECC71] text-[#2ECC71]' : 'bg-[#E63946]/10 border-[#E63946] text-[#E63946]'}`}>
-                {assignStatusMsg}
+              <div className={`p-4 border-2 rounded-none mb-5 text-xs font-mono font-bold uppercase select-none ${
+                assignStatusMsg.startsWith('✅') || assignStatusMsg.startsWith('💡')
+                  ? 'bg-[#2ECC71]/10 border-[#2ECC71] text-[#2ECC71]' 
+                  : 'bg-[#E63946]/10 border-[#E63946] text-[#E63946]'
+              }`}>
+                <div className="flex flex-col gap-2">
+                  <span>{assignStatusMsg}</span>
+                  {(assignStatusMsg.toUpperCase().includes('FAILED TO FETCH') || assignStatusMsg.includes('Mất kết nối')) && (
+                    <div className="mt-1 border-t border-dashed border-[#E63946]/30 pt-2 text-[10.5px] text-neutral-600 normal-case font-sans leading-relaxed">
+                      <p className="font-bold text-[#E63946]">LƯU Ý: Máy chủ backend không phản hồi hoặc sai Port kết nối.</p>
+                      <p className="mt-0.5">Bạn có thể click nút dưới đây để đổi ngay sang chế độ giả lập offline để hoạt động không bị gián đoạn:</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          apiClient.updateConfig({
+                            baseUrl: '',
+                            useLiveBackend: false
+                          });
+                          onRefreshAll();
+                          setAssignStatusMsg('💡 ĐÃ CHUYỂN SANG LOCAL EMULATOR (OFFLINE)! Hãy bấm nút ASSIGN TASK một lần nữa.');
+                        }}
+                        className="mt-2 bg-neutral-900 border-2 border-ink-black hover:bg-neutral-800 text-white font-mono text-[9px] uppercase px-3 py-1.5 font-bold cursor-pointer inline-block"
+                      >
+                        ⚡ XỬ LÝ NHANH: CHUYỂN SANG LOCAL OFFLINE EMULATOR
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -284,8 +388,33 @@ export default function TaskDelegation({
             </h3>
 
             {pitchStatusMsg && (
-              <div className={`p-3 rounded-none mb-3 text-xs font-mono select-none leading-normal border-2 font-bold ${pitchStatusMsg.startsWith('🎉') ? 'bg-[#2ECC71]/10 text-[#2ECC71] border-[#2ECC71]' : 'bg-[#E63946]/10 text-[#E63946] border-[#E63946]'}`}>
-                {pitchStatusMsg}
+              <div className={`p-3 rounded-none mb-3 text-xs font-mono select-none leading-normal border-2 font-bold ${
+                pitchStatusMsg.startsWith('🎉') || pitchStatusMsg.startsWith('💡')
+                  ? 'bg-[#2ECC71]/10 text-[#2ECC71] border-[#2ECC71]' 
+                  : 'bg-[#E63946]/10 text-[#E63946] border-[#E63946]'
+              }`}>
+                <div className="flex flex-col gap-2">
+                  <span>{pitchStatusMsg}</span>
+                  {(pitchStatusMsg.toUpperCase().includes('FAILED TO FETCH') || pitchStatusMsg.includes('Mất kết nối')) && (
+                    <div className="mt-1 border-t border-dashed border-[#E63946]/30 pt-2 text-[10px] text-neutral-600 normal-case font-sans leading-relaxed">
+                      <p className="font-bold text-[#E63946]">LƯU Ý: Máy chủ backend không phản hồi hoặc sai Port.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          apiClient.updateConfig({
+                            baseUrl: '',
+                            useLiveBackend: false
+                          });
+                          onRefreshAll();
+                          setPitchStatusMsg('💡 ĐÃ CHUYỂN SANG OFFLINE EMULATOR! Hãy bấm SUBMIT PROPOSAL IDEA một lần nữa.');
+                        }}
+                        className="mt-1.5 bg-neutral-900 border border-black hover:bg-neutral-800 text-white font-mono text-[8px] uppercase px-2 py-1 font-bold cursor-pointer inline-block"
+                      >
+                        Chuyển sang Local Emulator (Offline)
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
