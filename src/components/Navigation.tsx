@@ -67,10 +67,10 @@ export default function Navigation({
 
   const navItems = [
     { id: 'workspace', label: 'Manga Workspace', icon: Compass, roles: ['MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'] },
-    { id: 'tasks', label: 'Task Delegation', icon: Layers, roles: ['MANGAKA', 'EDITOR'] },
-    { id: 'production', label: 'Production Tracker', icon: FileText, roles: ['MANGAKA', 'EDITOR', 'BOARD_MEMBER'] },
+    { id: 'tasks', label: 'Series Proposals', icon: Layers, roles: ['MANGAKA', 'EDITOR'] },
+    { id: 'production', label: 'Production Tracker', icon: FileText, roles: ['EDITOR', 'BOARD_MEMBER'] },
     { id: 'board', label: 'Editorial Board', icon: CheckSquare, roles: ['EDITOR', 'BOARD_MEMBER'] },
-    { id: 'analytics', label: 'Leaderboard & Analytics', icon: TrendingUp, roles: ['MANGAKA', 'EDITOR', 'BOARD_MEMBER'] }
+    { id: 'analytics', label: 'Rankings Dashboard', icon: TrendingUp, roles: ['BOARD_MEMBER', 'MANGAKA'] }
   ];
 
   // Filtering tabs representing only items the current role has clearance for

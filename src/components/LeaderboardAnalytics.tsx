@@ -1,7 +1,354 @@
-import React, { useState } from 'react';
+/**
+ * LeaderboardAnalytics.tsx  —  Series Rankings & Editorial Board Dashboard
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Strict role-based rendering — view is DERIVED from user.role, never toggled
+ * manually by the user themselves.
+ *
+ *   currentUser.role === 'MANGAKA'      → Read-only Mangaka perspective
+ *   currentUser.role === 'BOARD_MEMBER' → Full admin Editorial Board controls
+ *   Any other role                      → Access-denied screen
+ *
+ * Color tokens (matches platform dark theme)
+ *   Matte Black  #121214   bg-[#121214]
+ *   Dark Slate   #1e1e24   bg-[#1e1e24]
+ *   Divider      #2d2d34   border-[#2d2d34]
+ *   Brand Red    #dc2626   red-600
+ *   White        #ffffff
+ *
+ * Business rules (max 20 slots)
+ *   Rank 1–5    HIGH    — 🔥 TOP COMPETING
+ *   Rank 6–12   NORMAL  — standard slate row
+ *   Rank 13–20  LOW     — bg-red-950/20 border-l-4 border-red-600  🚨 AXE RISK
+ *
+ * Axios placeholders are marked with:  // ← API:
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+import React, { useState, useRef, useEffect } from 'react';
 import { User, Series, Rating } from '../types';
-import { apiClient } from '../api/client';
-import { TrendingUp, ArrowUpRight, ArrowDownRight, FileSpreadsheet, Percent, BarChart3, Clock, Milestone } from 'lucide-react';
+import {
+  BarChart3,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Flame,
+  AlertTriangle,
+  ChevronDown,
+  Zap,
+  Shield,
+  Download,
+  Lock,
+  Edit3,
+  RefreshCw,
+} from 'lucide-react';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Domain types
+// ─────────────────────────────────────────────────────────────────────────────
+
+type RankPeriod      = 'weekly' | 'monthly';
+type Trend           = 'up' | 'down' | 'stable';
+type DirectiveStatus = 'active' | 'axed' | 'digital';
+type Tier            = 'high' | 'normal' | 'low';
+
+// The view is derived from role — never toggled in UI
+type DerivedView = 'mangaka' | 'board';
+
+interface RankEntry {
+  id: string;
+  rank: number;         // live rank 1–20 (re-sorted on vote edit)
+  prevRank: number;     // previous cycle for trend delta
+  title: string;
+  author: string;
+  genre: string;
+  votes: number;        // editable by BOARD_MEMBER only
+  trend: Trend;
+  directive: DirectiveStatus;
+  isCurrentUser?: boolean; // the logged-in mangaka's own series
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 20 seed entries  (replace with GET /api/rankings?type=weekly in production)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SEED_WEEKLY: RankEntry[] = [
+  { id: 'r01', rank:  1, prevRank:  2, title: 'Demon Blade Chronicles', author: 'Taro Yamamoto',  genre: 'Shonen',   votes: 98420, trend: 'up',     directive: 'active' },
+  { id: 'r02', rank:  2, prevRank:  1, title: 'Neon Ronin 2099',        author: 'Kenji Sato',     genre: 'Sci-Fi',   votes: 94380, trend: 'down',   directive: 'active' },
+  { id: 'r03', rank:  3, prevRank:  3, title: 'Sakura Apocalypse',      author: 'Mei Lin',        genre: 'Horror',   votes: 89200, trend: 'stable', directive: 'active' },
+  { id: 'r04', rank:  4, prevRank:  6, title: 'Dragon Soul Rising',     author: 'Hiroshi Tanaka', genre: 'Fantasy',  votes: 82100, trend: 'up',     directive: 'active' },
+  { id: 'r05', rank:  5, prevRank:  4, title: 'Mech Empire Zero',       author: 'Ryu Park',       genre: 'Sci-Fi',   votes: 77650, trend: 'down',   directive: 'active' },
+  { id: 'r06', rank:  6, prevRank:  7, title: 'Ghost Academy',          author: 'Sakura Ito',     genre: 'Thriller', votes: 71200, trend: 'up',     directive: 'active' },
+  { id: 'r07', rank:  7, prevRank:  5, title: 'Infinite Katana',        author: 'Naomi Suzuki',   genre: 'Action',   votes: 66500, trend: 'down',   directive: 'active' },
+  { id: 'r08', rank:  8, prevRank:  8, title: 'Solar Empress',          author: 'Yuki Hana',      genre: 'Fantasy',  votes: 60800, trend: 'stable', directive: 'active' },
+  { id: 'r09', rank:  9, prevRank: 10, title: 'Code Phantom',           author: 'Daisuke Nishida',genre: 'Thriller', votes: 55400, trend: 'up',     directive: 'active' },
+  { id: 'r10', rank: 10, prevRank:  9, title: 'Chainsaw Boy',           author: 'Minh Tuấn',      genre: 'Horror',   votes: 50200, trend: 'down',   directive: 'active', isCurrentUser: true },
+  { id: 'r11', rank: 11, prevRank: 11, title: 'Idol Uprising',          author: 'Akira Kondo',    genre: 'Shojo',    votes: 44600, trend: 'stable', directive: 'active' },
+  { id: 'r12', rank: 12, prevRank: 13, title: 'Last Samurai Beta',      author: 'Fumiko Mori',    genre: 'Seinen',   votes: 39800, trend: 'up',     directive: 'active' },
+  { id: 'r13', rank: 13, prevRank: 12, title: 'Cursed Compass',         author: 'Shin Watanabe',  genre: 'Mystery',  votes: 33200, trend: 'down',   directive: 'active' },
+  { id: 'r14', rank: 14, prevRank: 15, title: 'Paper Crane Militia',    author: 'Tomoko Iida',    genre: 'Action',   votes: 28700, trend: 'up',     directive: 'active' },
+  { id: 'r15', rank: 15, prevRank: 14, title: 'Pixel Warriors DX',      author: 'Keisuke Abe',    genre: 'Sci-Fi',   votes: 23400, trend: 'down',   directive: 'active' },
+  { id: 'r16', rank: 16, prevRank: 16, title: 'Hollow Moon Sect',       author: 'Reika Fujii',    genre: 'Horror',   votes: 18900, trend: 'stable', directive: 'active' },
+  { id: 'r17', rank: 17, prevRank: 18, title: 'Tanuki Outlaws',         author: 'Masato Hayashi', genre: 'Comedy',   votes: 14200, trend: 'up',     directive: 'active' },
+  { id: 'r18', rank: 18, prevRank: 17, title: 'Starfall Protocol',      author: 'Chiaki Nakamura',genre: 'Sci-Fi',   votes: 9800,  trend: 'down',   directive: 'active' },
+  { id: 'r19', rank: 19, prevRank: 19, title: 'Binary Temple',          author: 'Yusei Goto',     genre: 'Mystery',  votes: 6100,  trend: 'stable', directive: 'active' },
+  { id: 'r20', rank: 20, prevRank: 20, title: 'Echo Fist',              author: 'Hana Shimizu',   genre: 'Shonen',   votes: 3200,  trend: 'stable', directive: 'active' },
+];
+
+// Monthly seed: multiply votes, shift prevRanks slightly
+const SEED_MONTHLY: RankEntry[] = SEED_WEEKLY.map((e, i) => ({
+  ...e,
+  votes:    Math.round(e.votes * 4.3),
+  prevRank: Math.max(1, Math.min(20, e.rank + (i % 3 === 0 ? 1 : i % 3 === 1 ? -1 : 0))),
+}));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getTier(rank: number): Tier {
+  if (rank <= 5)  return 'high';
+  if (rank <= 12) return 'normal';
+  return 'low';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TrendIcon
+// ─────────────────────────────────────────────────────────────────────────────
+
+function TrendIcon({ trend, prevRank, rank }: { trend: Trend; prevRank: number; rank: number }) {
+  const delta = Math.abs(prevRank - rank) || 1;
+  if (trend === 'up')
+    return (
+      <span className="flex items-center gap-0.5 text-green-400 text-[10px] font-bold">
+        <TrendingUp className="w-3 h-3" />+{delta}
+      </span>
+    );
+  if (trend === 'down')
+    return (
+      <span className="flex items-center gap-0.5 text-red-400 text-[10px] font-bold">
+        <TrendingDown className="w-3 h-3" />-{delta}
+      </span>
+    );
+  return <Minus className="w-3.5 h-3.5 text-slate-600" />;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DirectiveMenu  — BOARD_MEMBER only, shown on low-tier rows
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DirectiveMenu({
+  entry,
+  onDirective,
+}: {
+  entry: RankEntry;
+  onDirective: (id: string, action: 'axed' | 'digital') => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // Only show for still-active rows
+  if (entry.directive !== 'active') return null;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-red-600/10 border border-red-600/25 text-red-400 text-[10px] font-bold uppercase tracking-wide hover:bg-red-600/20 transition-all cursor-pointer whitespace-nowrap"
+      >
+        <Zap className="w-3 h-3 shrink-0" />
+        Board Directive
+        <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1.5 w-64 bg-[#1e1e24] border border-[#2d2d34] rounded-md shadow-2xl shadow-black z-50 overflow-hidden">
+          {/* ── AXE SERIES ── */}
+          <button
+            onClick={() => { onDirective(entry.id, 'axed'); setOpen(false); }}
+            className="w-full flex items-start gap-3 px-4 py-3 hover:bg-red-950/40 transition-colors cursor-pointer text-left border-b border-[#2d2d34]"
+          >
+            <div className="w-6 h-6 rounded-md bg-red-600 flex items-center justify-center shrink-0 mt-0.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-white" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-red-400 uppercase tracking-wide">
+                Axe Series (Terminate)
+              </p>
+              <p className="text-[9px] text-slate-600 mt-0.5 leading-relaxed">
+                Permanently terminates publication. Row turns pitch-black with red strike-through.
+              </p>
+            </div>
+          </button>
+
+          {/* ── SHIFT TO DIGITAL ── */}
+          <button
+            onClick={() => { onDirective(entry.id, 'digital'); setOpen(false); }}
+            className="w-full flex items-start gap-3 px-4 py-3 hover:bg-[#26262e] transition-colors cursor-pointer text-left"
+          >
+            <div className="w-6 h-6 rounded-md bg-white flex items-center justify-center shrink-0 mt-0.5">
+              <Download className="w-3.5 h-3.5 text-black" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-white uppercase tracking-wide">
+                Shift to Digital
+              </p>
+              <p className="text-[9px] text-slate-600 mt-0.5 leading-relaxed">
+                App release only — removed from print. White "DIGITAL ONLY" badge applied.
+              </p>
+            </div>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RankRow — renders differently based on derived view
+// ─────────────────────────────────────────────────────────────────────────────
+
+function RankRow({
+  entry,
+  view,
+  onVoteChange,
+  onDirective,
+}: {
+  entry: RankEntry;
+  view: DerivedView;
+  onVoteChange: (id: string, val: number) => void;
+  onDirective:  (id: string, action: 'axed' | 'digital') => void;
+}) {
+  const tier   = getTier(entry.rank);
+  const isHigh = tier === 'high';
+  const isLow  = tier === 'low';
+
+  // ── AXED row — pitch black, red strike-through ──
+  if (entry.directive === 'axed') {
+    return (
+      <div className="flex items-center gap-4 px-4 py-3 bg-black border-b border-[#2d2d34]">
+        <span className="w-7 shrink-0 text-[11px] font-black text-slate-700 text-center">
+          {entry.rank}
+        </span>
+        <span className="flex-1 text-sm font-bold text-slate-700 line-through decoration-red-600 decoration-2 truncate">
+          {entry.title}
+        </span>
+        <span className="text-[9px] font-bold text-red-700 uppercase tracking-widest shrink-0">
+          TERMINATED
+        </span>
+      </div>
+    );
+  }
+
+  // ── Row container style ──
+  const rowBase = isLow
+    ? 'bg-red-950/20 border-l-4 border-red-600'
+    : (entry.isCurrentUser
+        ? 'bg-[#1e1e24] border-l-4 border-red-500'  // Mangaka's own series
+        : 'bg-[#1e1e24]');
+
+  const rowHover = isLow ? 'hover:bg-red-950/30' : 'hover:bg-[#23232c]';
+
+  return (
+    <div className={`flex items-center gap-3 px-4 py-3 border-b border-[#2d2d34] transition-colors ${rowBase} ${rowHover}`}>
+
+      {/* ── Rank number ── */}
+      <div className="w-7 shrink-0 text-center">
+        <span className={`text-[13px] font-black leading-none ${
+          isHigh ? 'text-white' : isLow ? 'text-red-400' : 'text-slate-400'
+        }`}>
+          {entry.rank}
+        </span>
+      </div>
+
+      {/* ── Tier badge ── */}
+      <div className="w-[108px] shrink-0">
+        {isHigh && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-red-600/10 border border-red-600/20 text-red-400 text-[8px] font-bold uppercase tracking-wide">
+            <Flame className="w-2.5 h-2.5" />TOP COMPETING
+          </span>
+        )}
+        {isLow && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-red-950/50 border border-red-600/30 text-red-400 text-[8px] font-bold uppercase tracking-wide animate-pulse">
+            🚨 AXE RISK
+          </span>
+        )}
+      </div>
+
+      {/* ── Title + author ── */}
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-semibold leading-snug truncate ${isHigh ? 'text-white' : 'text-slate-200'}`}>
+          {entry.title}
+          {/* "YOUR SERIES" badge — always visible regardless of view, no button attached */}
+          {entry.isCurrentUser && (
+            <span className="ml-2 text-[8px] font-bold text-red-400 border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 rounded-sm uppercase align-middle">
+              YOUR SERIES
+            </span>
+          )}
+        </p>
+        <p className="text-[10px] text-slate-600 truncate">{entry.author} · {entry.genre}</p>
+      </div>
+
+      {/* ── Digital-only badge (overrides normal state display) ── */}
+      {entry.directive === 'digital' && (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white text-black text-[9px] font-black uppercase tracking-wide shrink-0">
+          🔄 DIGITAL ONLY
+        </span>
+      )}
+
+      {/* ── VOTES ──
+           MANGAKA  → read-only number (no input)
+           BOARD    → editable input that triggers live re-sort
+      */}
+      <div className="w-28 shrink-0 text-right">
+        {view === 'board' ? (
+          <input
+            type="number"
+            value={entry.votes}
+            min={0}
+            onChange={e => {
+              // ← API: PUT /api/rankings/scores  Body: { id: entry.id, votes: val }
+              onVoteChange(entry.id, Number(e.target.value));
+            }}
+            className="w-24 bg-[#121214] border border-[#2d2d34] rounded-md px-2 py-1 text-[11px] text-white font-mono text-right focus:outline-none focus:border-slate-500 transition-colors"
+          />
+        ) : (
+          // MANGAKA: strictly read-only, no input element rendered
+          <span className={`text-[12px] font-bold font-mono ${isHigh ? 'text-white' : 'text-slate-400'}`}>
+            {entry.votes.toLocaleString()}
+          </span>
+        )}
+      </div>
+
+      {/* ── Trend ── */}
+      <div className="w-12 shrink-0 flex justify-center">
+        <TrendIcon trend={entry.trend} prevRank={entry.prevRank} rank={entry.rank} />
+      </div>
+
+      {/* ── Board Directive — BOARD_MEMBER only, low-tier rows only ──
+           MANGAKA view: this column is completely absent — not rendered at all
+      */}
+      {view === 'board' && isLow && (
+        <div className="w-40 shrink-0 flex justify-end">
+          <DirectiveMenu entry={entry} onDirective={onDirective} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Props — identical to what App.tsx already passes
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface LeaderboardAnalyticsProps {
   currentUser: User;
@@ -10,359 +357,294 @@ interface LeaderboardAnalyticsProps {
   onRefreshAll: () => void;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Main export
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function LeaderboardAnalytics({
   currentUser,
   series,
   ratings,
-  onRefreshAll
+  onRefreshAll,
 }: LeaderboardAnalyticsProps) {
-  // Filters
-  const [timeFilter, setTimeFilter] = useState<'month' | 'quarter' | 'ytd'>('month');
 
-  // Manual Ingestion state
-  const [targetSeriesId, setTargetSeriesId] = useState('');
-  const [ingestVotes, setIngestVotes] = useState(12800);
-  const [ingestSource, setIngestSource] = useState('Digital Web Polling');
-  const [statusMsg, setStatusMsg] = useState('');
+  // ── Derive view from role — NO toggle button exposed to the user ──────────
+  //   MANGAKA      → 'mangaka'  (read-only)
+  //   BOARD_MEMBER → 'board'    (full admin)
+  const view: DerivedView =
+    currentUser.role === 'BOARD_MEMBER' ? 'board' : 'mangaka';
 
-  // Status adjustment dropdown mapping
-  const handleScaleStatus = async (seriesId: string, statusText: any) => {
-    try {
-      await apiClient.series.updateStatus(seriesId, statusText);
-      onRefreshAll();
-    } catch (err: any) {
-      alert(`Could not process status operation: ${err.message}`);
-    }
-  };
+  // ── Filter state (period tab) ─────────────────────────────────────────────
+  const [period, setPeriod] = useState<RankPeriod>('weekly');
 
-  const handleManualIngest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!targetSeriesId) {
-      setStatusMsg('❌ Target series required.');
-      return;
-    }
-    try {
-      await apiClient.ratings.submit(targetSeriesId, ingestVotes, ingestSource);
-      setStatusMsg('🚀 Recalculating popular ranks. Data recorded.');
-      onRefreshAll();
-      setTimeout(() => setStatusMsg(''), 5000);
-    } catch (err: any) {
-      setStatusMsg(`❌ Error: ${err.message}`);
-    }
-  };
+  // ── Board cycle label ─────────────────────────────────────────────────────
+  const [cycle, setCycle] = useState('Week 24 — 2026');
 
-  // Build current Leaderboard scores
-  // Calculate aggregated ratings per series
-  const activeSeriesWithScores = series
-    .filter(s => s.status !== 'PENDING')
-    .map(s => {
-      // Collect aggregate count under ratings
-      const votes = ratings
-        .filter(r => r.seriesId === s._id || r.series === s._id)
-        .reduce((sum, current) => sum + current.voteCount, 0);
+  // ── Rankings data — separate state per period ─────────────────────────────
+  //   ← API: GET /api/rankings?type=weekly   (replace useState initialiser)
+  //   ← API: GET /api/rankings?type=monthly  (replace useState initialiser)
+  const [weeklyData,  setWeeklyData]  = useState<RankEntry[]>(() =>
+    SEED_WEEKLY.map(e => ({ ...e }))
+  );
+  const [monthlyData, setMonthlyData] = useState<RankEntry[]>(() =>
+    SEED_MONTHLY.map(e => ({ ...e }))
+  );
 
-      // Base default weights matching standard template output if empty
-      const baseWeight = 
-        s.title === "Neon Genesis" ? 224500 :
-        s.title === "Cyberpunk Drifter" ? 180120 :
-        s.title === "Dragon's Ascent" ? 120050 :
-        s.title === "Neon Samurai" ? 92450 :
-        s.title === "Whispering Petals" ? 85120 : 
-        s.title === "Cyber Core" ? 8020 :
-        45000;
+  const entries    = period === 'weekly' ? weeklyData  : monthlyData;
+  const setEntries = period === 'weekly' ? setWeeklyData : setMonthlyData;
 
-      return {
-        ...s,
-        totalVotes: baseWeight + votes,
-        trend: s.title === "Neon Genesis" ? "up" : s.title === "Cyber Core" ? "down" : "stable"
-      };
-    })
-    // Sort descending by votes
-    .sort((a, b) => b.totalVotes - a.totalVotes);
-
-  // Simulated Weekly stats for trend charts (W1 to W5)
-  const chartWeeks = ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5"];
-  // We'll draw a beautifully styled SVG line graph representing the top 3 series
-  const top3Series = activeSeriesWithScores.slice(0, 3);
-  
-  // Custom mock coordinate path vectors representing dynamic scores for top 3 series
-  const getPathCoords = (index: number) => {
-    // Generate paths coordinate inside box (width 500, height 200)
-    if (index === 0) return "M 30,150 Q 120,40 250,70 T 470,25"; // Neon Genesis
-    if (index === 1) return "M 30,170 Q 110,130 220,110 T 470,60"; // Cyberpunk Drifter
-    return "M 30,165 Q 120,150 250,140 T 470,120"; // Dragon's Ascent or other
-  };
-
-  const getSeriesColorHex = (index: number) => {
-    if (index === 0) return "#3B82F6"; // Action blue
-    if (index === 1) return "#F59E0B"; // Creative Orange
-    return "#25C2A0"; // Status success
-  };
-
-  return (
-    <div className="space-y-6">
-      
-      {/* Header section */}
-      <header className="mb-8 pb-5 border-b-4 border-ink-black flex flex-col md:flex-row md:items-end justify-between gap-4">
+  // ── Access guard — only BOARD_MEMBER and MANGAKA can reach this tab ───────
+  if (currentUser.role !== 'BOARD_MEMBER' && currentUser.role !== 'MANGAKA') {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-5 text-center">
+        <div className="w-16 h-16 rounded-full bg-[#1e1e24] border border-[#2d2d34] flex items-center justify-center">
+          <Lock className="w-7 h-7 text-slate-600" />
+        </div>
         <div>
-          <h1 className="font-syne text-3xl font-black text-ink-black uppercase italic tracking-tight">Leaderboard &amp; Analytics</h1>
-          <p className="font-sans text-xs text-neutral-600 font-bold uppercase tracking-wider mt-1.5 flex items-center gap-2">
-            <span className="inline-block w-2.5 h-2.5 bg-[#E63946]"></span>
-            Review series reader performance tracker metrics, manual polling ingest, and serialization states.
+          <p className="text-base font-bold text-white mb-1">Access Restricted</p>
+          <p className="text-sm text-slate-500">
+            This dashboard is available to Mangaka and Editorial Board members only.
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Derived display values ────────────────────────────────────────────────
+  const userSeries  = entries.find(e => e.isCurrentUser);
+  const userTier    = userSeries ? getTier(userSeries.rank) : null;
+
+  // Critical banner: only for MANGAKA whose own series is in the AXE RISK zone
+  const showCriticalBanner = view === 'mangaka' && userTier === 'low';
+
+  // Stat counts for Board header chips
+  const highCount   = entries.filter(e => getTier(e.rank) === 'high').length;
+  const normalCount = entries.filter(e => getTier(e.rank) === 'normal').length;
+  const lowCount    = entries.filter(e => getTier(e.rank) === 'low').length;
+  const axedCount   = entries.filter(e => e.directive === 'axed').length;
+
+  // ── Handler: edit votes and re-sort live (BOARD_MEMBER only) ─────────────
+  const handleVoteChange = (id: string, val: number) => {
+    // ← API: PUT /api/rankings/scores  Body: { entries: [{ id, votes: val }] }
+    const resorted = entries
+      .map(e => (e.id === id ? { ...e, votes: val } : e))
+      .sort((a, b) => b.votes - a.votes)
+      .map((e, i) => ({ ...e, prevRank: e.rank, rank: i + 1 }));
+    setEntries(resorted);
+  };
+
+  // ── Handler: board directive (BOARD_MEMBER only) ──────────────────────────
+  const handleDirective = (id: string, action: 'axed' | 'digital') => {
+    // ← API: POST /api/rankings/directive  Body: { id, action, cycle }
+    setEntries(prev =>
+      prev.map(e => (e.id === id ? { ...e, directive: action } : e))
+    );
+  };
+
+  // ── Handler: refresh from API ─────────────────────────────────────────────
+  const handleRefresh = () => {
+    // ← API: GET /api/rankings?type=${period}  then setEntries(res.data)
+    onRefreshAll();
+  };
+
+  // ── Column header — directive column only rendered in board view ──────────
+  const showDirectiveCol = view === 'board';
+
+  // ─────────────────────────────────────────────────────────────────────────
+  return (
+    <div className="min-h-[calc(100vh-8rem)] bg-[#121214] rounded-md border border-[#2d2d34] shadow-2xl shadow-black overflow-hidden flex flex-col">
+
+      {/* ════ HEADER ════ */}
+      <header className="flex items-center justify-between gap-4 px-6 py-4 bg-[#181820] border-b border-[#2d2d34] shrink-0 flex-wrap">
+
+        {/* Title block */}
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 rounded-md bg-red-600 flex items-center justify-center shrink-0">
+            <BarChart3 className="w-3.5 h-3.5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-[13px] font-bold text-white leading-none uppercase tracking-wide">
+              Series Rankings Dashboard
+            </h1>
+            {/*
+              Sub-heading changes per role — matching screenshot specs:
+              MANGAKA      → read-only indicator
+              BOARD_MEMBER → "Editorial Board — 20/20 active slots"
+            */}
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              {view === 'board'
+                ? <>Editorial Board · <span className="text-slate-400 font-semibold">{entries.length}/20 active slots</span></>
+                : <>Mangaka View · <span className="text-slate-600">Read-only — rankings update each {period} cycle</span></>
+              }
+            </p>
+          </div>
+        </div>
+
+        {/* Right controls */}
+        <div className="flex items-center gap-3 flex-wrap">
+
+          {/* ── Period tab switcher (available to BOTH roles) ── */}
+          <div className="flex border border-[#2d2d34] rounded-md overflow-hidden">
+            {(['weekly', 'monthly'] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-colors cursor-pointer ${
+                  period === p
+                    ? 'bg-[#2d2d34] text-white'
+                    : 'bg-transparent text-slate-600 hover:text-slate-400'
+                }`}
+              >
+                {p === 'weekly' ? '📅 Weekly' : '📆 Monthly'}
+              </button>
+            ))}
+          </div>
+
+          {/*
+            ── Role indicator badge (DISPLAY ONLY — no toggle functionality) ──
+            MANGAKA sees a muted slate badge.
+            BOARD_MEMBER sees a red-accented shield badge.
+            Neither badge is clickable — it is purely informational.
+          */}
+          {view === 'board' ? (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600/10 border border-red-600/25 text-red-400 text-[10px] font-bold uppercase tracking-wide select-none">
+              <Shield className="w-3.5 h-3.5" />
+              Editorial Board
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#2d2d34] border border-[#3a3a44] text-slate-400 text-[10px] font-bold uppercase tracking-wide select-none">
+              ✏ Mangaka View
+            </div>
+          )}
+
+          {/* Refresh */}
+          <button
+            onClick={handleRefresh}
+            title="Refresh data from API"
+            className="p-1.5 rounded-md border border-[#2d2d34] text-slate-600 hover:text-white hover:border-slate-500 transition-all cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
         </div>
       </header>
 
-      {/* Grid wrapper */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-        
-        {/* Left: Popularity Chart card */}
-        <section className="xl:col-span-8 space-y-6">
-          <div className="bg-white border-4 border-ink-black rounded-none p-6 shadow-[8px_8px_0px_#141414]">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-ink-black pb-4 mb-6 gap-4">
-              <div>
-                <h2 className="font-syne text-lg font-black uppercase text-ink-black flex items-center gap-2 select-none">
-                  <BarChart3 className="text-[#E63946] w-5 h-5" />
-                  Reader Popularity Trends
-                </h2>
-                <p className="font-mono text-[9px] text-neutral-500 font-extrabold uppercase tracking-widest mt-0.5">Top performing active series trends</p>
-              </div>
+      {/* ════ BODY ════ */}
+      <div className="flex-1 overflow-y-auto">
 
-              {/* Time Filters */}
-              <div className="flex border-2 border-ink-black rounded-none overflow-hidden select-none">
-                {(['month', 'quarter', 'ytd'] as const).map((filter) => (
-                  <button
-                    key={filter}
-                    onClick={() => setTimeFilter(filter)}
-                    className={`px-4 py-1.5 font-mono text-[10px] font-black uppercase transition-colors cursor-pointer ${
-                      timeFilter === filter 
-                        ? 'bg-ink-black text-white' 
-                        : 'bg-[#F5F5F0] text-ink-black hover:bg-neutral-100'
-                    }`}
-                  >
-                    {filter === 'month' ? 'This Month' : filter === 'quarter' ? 'Last Quarter' : 'YTD'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Curvaceous Interactive SVG Chart */}
-            <div className="relative bg-[#F5F5F0] border-2 border-ink-black rounded-none p-4 select-none leading-none overflow-hidden h-[240px] flex flex-col justify-between">
-              
-              {/* Horizontal Help lines */}
-              <div className="absolute inset-x-0 inset-y-12 flex flex-col justify-between pointer-events-none opacity-40">
-                <div className="border-b border-neutral-300 w-full h-0"></div>
-                <div className="border-b border-neutral-300 w-full h-0"></div>
-                <div className="border-b border-neutral-300 w-full h-0"></div>
-              </div>
-
-              {/* Responsive SVG */}
-              <div className="flex-1 w-full h-full relative">
-                <svg className="w-full h-full" viewBox="0 0 500 180" preserveAspectRatio="none">
-                  {/* Neon active lines plotted dynamically */}
-                  {top3Series.map((s, idx) => (
-                    <path
-                      key={s._id}
-                      d={getPathCoords(idx)}
-                      fill="none"
-                      stroke={getSeriesColorHex(idx)}
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      className="transition-all duration-1000 ease-in-out"
-                    />
-                  ))}
-                </svg>
-
-                {/* Point overlay markers */}
-                <div className="absolute top-[25px] right-[20px] w-3 h-3 rounded-full bg-[#E63946] border-2 border-white ring-2 ring-[#E63946] ring-offset-1 animate-pulse"></div>
-                <div className="absolute top-[60px] right-[20px] w-3 h-3 rounded-full bg-black border-2 border-white ring-2 ring-black ring-offset-1"></div>
-              </div>
-
-              {/* Grid Legend Horizontal Footers (W1 to W5 labels) */}
-              <div className="border-t border-neutral-200 pt-3 flex justify-between font-mono text-[9px] text-neutral-400">
-                <span>Week 1</span>
-                <span>Week 2</span>
-                <span>Week 3</span>
-                <span>Week 4</span>
-                <span>Week 5 (Latest)</span>
-              </div>
-            </div>
-
-            {/* Custom Interactive Legend markers */}
-            <div className="flex flex-wrap items-center mt-4 gap-6 select-none font-mono text-[10px]">
-              {top3Series.map((s, idx) => (
-                <div key={s._id} className="flex items-center gap-2">
-                  <div className="w-3.5 h-1.5 rounded-none" style={{ backgroundColor: getSeriesColorHex(idx) }} />
-                  <span className="font-semibold text-ink-black">{s.title}</span>
-                  <span className="text-neutral-400 font-medium">({s.totalVotes.toLocaleString()} votes)</span>
-                </div>
-              ))}
+        {/* ── CRITICAL ALERT BANNER — Mangaka only, fires when own series hits AXE RISK ── */}
+        {showCriticalBanner && (
+          <div className="mx-6 mt-5 flex items-start gap-3 px-4 py-3.5 rounded-md bg-red-950/40 border border-red-600/50">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse mt-1 shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-red-300 leading-snug">
+                ⚠️ CRITICAL SYSTEM NOTICE: Your series has spent consecutive periods in the bottom tier.
+                Cancellation risk is HIGH.
+              </p>
+              <p className="text-[11px] text-red-400/70 mt-1 leading-relaxed">
+                Immediately optimize your story panels and engagement strategies to recover rank before
+                the next {period} review cycle.
+              </p>
             </div>
           </div>
+        )}
 
-          {/* Table representing actual ranks, stats and status shifts */}
-          <div className="bg-white border-4 border-ink-black rounded-none p-6 shadow-[8px_8px_0px_#141414]">
-            <h3 className="font-syne text-md font-black uppercase text-ink-black mb-4 select-none">Executive Decision Directory</h3>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b-2 border-ink-black font-mono text-[10px] text-neutral-500 font-black uppercase tracking-wider">
-                    <th className="py-3 px-2 text-center">Rank</th>
-                    <th className="py-3 px-3 animate-pulse">Series Title</th>
-                    <th className="py-3 px-3">Artist / Creator</th>
-                    <th className="py-3 px-3 text-right">Popularity Rating</th>
-                    <th className="py-3 px-3 text-center">Trend</th>
-                    <th className="py-3 px-3 text-right">Publication Status</th>
-                  </tr>
-                </thead>
-                <tbody className="font-sans text-xs text-ink-black divide-y divide-neutral-200 font-bold">
-                  {activeSeriesWithScores.map((s, index) => {
-                    return (
-                      <tr key={s._id} className="hover:bg-manuscript-gray transition-all">
-                        <td className="py-3.5 px-2 text-center font-mono font-black text-md text-neutral-500">
-                          #{index + 1}
-                        </td>
+        {/* ── BOARD-ONLY: Cycle input + stat chips ── */}
+        {view === 'board' && (
+          <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-[#2d2d34]">
+            {/* Cycle label editor */}
+            <div className="flex items-center gap-2">
+              <Edit3 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
+                Cycle:
+              </label>
+              <input
+                type="text"
+                value={cycle}
+                onChange={e => setCycle(e.target.value)}
+                className="bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-slate-500 transition-colors w-52"
+              />
+            </div>
 
-                        <td className="py-3.5 px-3 font-syne text-sm uppercase font-black text-ink-black">
-                          {s.title}
-                          {s.pubSchedule && (
-                            <span className="ml-2 font-mono text-[8px] font-black border-2 border-ink-black rounded-none px-1.5 py-0.5 bg-[#FFF3B0] uppercase tracking-tighter text-ink-black">
-                              {s.pubSchedule}
-                            </span>
-                          )}
-                        </td>
-
-                        <td className="py-3.5 px-3 text-neutral-600 font-black uppercase">
-                          {typeof s.mangakaId === 'object' ? s.mangakaId.name : s.mangakaId}
-                        </td>
-
-                        <td className="py-3.5 px-3 text-right font-mono font-black text-slate-800">
-                          {s.totalVotes.toLocaleString()} vote(s)
-                        </td>
-
-                        <td className="py-3.5 px-3">
-                          <div className="flex justify-center select-none">
-                            {s.trend === 'up' && (
-                              <span className="text-white bg-[#2ECC71] p-1 border-2 border-ink-black flex items-center justify-center">
-                                <ArrowUpRight className="w-4 h-4" />
-                              </span>
-                            )}
-                            {s.trend === 'down' && (
-                              <span className="text-white bg-[#E63946] p-1 border-2 border-ink-black flex items-center justify-center">
-                                <ArrowDownRight className="w-4 h-4" />
-                              </span>
-                            )}
-                            {s.trend === 'stable' && (
-                              <span className="text-ink-black bg-neutral-100 border-2 border-ink-black px-2 py-0.5 font-mono text-[9px] font-black leading-none select-none uppercase">
-                                STABLE
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        <td className="py-3.5 px-3 text-right">
-                          <select
-                            className="bg-[#F5F5F0] border-2 border-ink-black hover:border-[#E63946] focus:border-[#E63946] focus:bg-white rounded-none p-1.5 text-[10px] text-ink-black font-extrabold uppercase focus:outline-none cursor-pointer"
-                            value={s.status}
-                            onChange={(e) => handleScaleStatus(s._id, e.target.value as any)}
-                          >
-                            <option value="IN_PRODUCTION">IN_PRODUCTION</option>
-                            <option value="PUBLISHED">PUBLISHED</option>
-                            <option value="CANCELLED">CANCELLED</option>
-                            <option value="APPROVED">APPROVED</option>
-                          </select>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            {/* Tier distribution chips */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-600/10 border border-red-600/20 text-red-400 text-[10px] font-bold">
+                🔥 {highCount} Top Tier
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#2d2d34] border border-[#3a3a44] text-slate-400 text-[10px] font-bold">
+                {normalCount} Normal
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-950/40 border border-red-600/25 text-red-400 text-[10px] font-bold">
+                🚨 {lowCount} Axe Risk
+              </span>
+              {axedCount > 0 && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-black border border-[#2d2d34] text-slate-600 text-[10px] font-bold">
+                  {axedCount} Terminated
+                </span>
+              )}
             </div>
           </div>
-        </section>
+        )}
 
-        {/* Right Manual Data ingestion Column */}
-        <div className="xl:col-span-4 space-y-6">
-          <section className="bg-white border-4 border-ink-black rounded-none p-6 relative overflow-hidden shadow-[4px_4px_0px_#141414]">
-            
-            <h3 className="font-syne text-md font-black uppercase text-ink-black mb-4 flex items-center gap-2 select-none">
-              <FileSpreadsheet className="text-[#2ECC71] w-5 h-5" />
-              Manual Data Ingestion
-            </h3>
-
-            {statusMsg && (
-              <div className={`p-4 border-2 rounded-none mb-4 text-xs font-mono font-bold uppercase select-none leading-normal ${statusMsg.startsWith('🚀') ? 'bg-[#2ECC71]/15 text-[#2ECC71] border-[#2ECC71]' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
-                {statusMsg}
-              </div>
-            )}
-
-            <form onSubmit={handleManualIngest} className="space-y-4">
-              <div>
-                <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase animate-pulse" htmlFor="targetS">Target Series</label>
-                <select 
-                  id="targetS"
-                  value={targetSeriesId}
-                  onChange={(e) => setTargetSeriesId(e.target.value)}
-                  className="w-full bg-[#F5F5F0] border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black focus:outline-none focus:bg-white cursor-pointer"
-                  required
-                >
-                  <option value="">Choose Series...</option>
-                  {series.filter(s => s.status !== 'PENDING').map(s => (
-                    <option key={s._id} value={s._id}>{s.title}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase" htmlFor="ratingV">New Raw Votes</label>
-                <input 
-                  id="ratingV"
-                  type="number"
-                  value={ingestVotes}
-                  onChange={(e) => setIngestVotes(Number(e.target.value))}
-                  className="w-full bg-[#F5F5F0] border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black focus:outline-none focus:bg-white font-mono"
-                  min={1}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase" htmlFor="ingestS">Data Source Segment</label>
-                <input 
-                  id="ingestS"
-                  type="text"
-                  value={ingestSource}
-                  onChange={(e) => setIngestSource(e.target.value)}
-                  className="w-full bg-[#F5F5F0] border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black focus:outline-none focus:bg-white"
-                  placeholder="e.g. MangaPlus Weekly Poll"
-                  required
-                />
-              </div>
-
-              <button 
-                type="submit"
-                className="w-full bg-[#E63946] border-2 border-ink-black hover:bg-red-600 text-white font-syne text-xs uppercase font-extrabold py-3.5 rounded-none shadow-[2px_2px_0px_#141414] transition-all cursor-pointer"
-              >
-                Update Data metrics
-              </button>
-            </form>
-          </section>
-
-          {/* Quick Info Box */}
-          <div className="bg-[#FFF3B0] border-4 border-ink-black rounded-none p-5 leading-relaxed font-sans text-xs text-ink-black flex flex-col gap-3 font-bold uppercase select-none shadow-[4px_4px_0px_#141414]">
-            <div className="flex gap-2.5">
-              <Clock className="w-5 h-5 text-ink-black flex-shrink-0 animate-spin" />
-              <span>
-                <strong>Manual data synchronization:</strong> Changes committed here adjust ranks instantly descending on the primary executive decision matrix!
-              </span>
+        {/* ── MANGAKA-ONLY: own series summary row ── */}
+        {view === 'mangaka' && userSeries && (
+          <div className="mx-6 mt-5 flex items-center gap-4 px-4 py-3 rounded-md bg-[#1e1e24] border border-red-600/30">
+            <div className="w-2 h-8 rounded-sm bg-red-600 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-white truncate">{userSeries.title}</p>
+              <p className="text-[9px] text-slate-500 mt-0.5">
+                Current rank: <span className="text-white font-bold">#{userSeries.rank}</span>
+                {' · '}
+                {userTier === 'high'   && <span className="text-red-400">🔥 Top Competing</span>}
+                {userTier === 'normal' && <span className="text-slate-400">Stable — Normal Tier</span>}
+                {userTier === 'low'    && <span className="text-red-400 animate-pulse">🚨 Axe Risk Zone</span>}
+              </p>
             </div>
-            <div className="flex gap-2.5">
-              <Milestone className="w-5 h-5 text-ink-black flex-shrink-0" />
-              <span>
-                <strong>Cancellation warnings:</strong> Series hovering with fewer than 15,000 cumulative votes (such as Cyber Core) trigger canceling warnings!
-              </span>
+            <span className="text-[11px] font-bold font-mono text-slate-400 shrink-0">
+              {userSeries.votes.toLocaleString()} votes
+            </span>
+          </div>
+        )}
+
+        {/* ── Table column header ── */}
+        <div className={`flex items-center gap-3 px-4 py-2 mt-4 bg-[#181820] border-y border-[#2d2d34] select-none`}>
+          <div className="w-7 shrink-0 text-[8px] font-bold text-slate-600 uppercase tracking-widest text-center">#</div>
+          <div className="w-[108px] shrink-0 text-[8px] font-bold text-slate-600 uppercase tracking-widest">Tier</div>
+          <div className="flex-1 text-[8px] font-bold text-slate-600 uppercase tracking-widest">Series / Author</div>
+          <div className="w-28 shrink-0 text-[8px] font-bold text-slate-600 uppercase tracking-widest text-right">
+            {view === 'board' ? 'Edit Votes ↑↓' : 'Votes'}
+          </div>
+          <div className="w-12 shrink-0 text-[8px] font-bold text-slate-600 uppercase tracking-widest text-center">Trend</div>
+          {/* Directive column header — only in board view */}
+          {showDirectiveCol && (
+            <div className="w-40 shrink-0 text-[8px] font-bold text-slate-600 uppercase tracking-widest text-right">
+              Directive
             </div>
+          )}
+        </div>
+
+        {/* ── Rank rows ── */}
+        <div>
+          {entries.map(entry => (
+            <RankRow
+              key={entry.id}
+              entry={entry}
+              view={view}
+              onVoteChange={handleVoteChange}
+              onDirective={handleDirective}
+            />
+          ))}
+        </div>
+
+        {/* ── Footer ── */}
+        <div className="px-6 py-5 border-t border-[#2d2d34]">
+          <div className="flex items-center justify-between text-[9px] text-slate-700 font-mono flex-wrap gap-2">
+            <span>
+              {/* ← API: GET /api/rankings?type={period} */}
+              Source: {period === 'weekly' ? 'Weekly Vote Cycle' : 'Monthly Aggregate'} · {cycle}
+            </span>
+            <span>
+              {entries.filter(e => e.directive === 'active').length} active series / 20 max slots
+            </span>
           </div>
         </div>
 

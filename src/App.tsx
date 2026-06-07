@@ -328,23 +328,10 @@ export default function App() {
           />
 
           {/* Core Content canvas viewports */}
-          <main className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto block">
+          <main className="block">
             
             {activeTab === 'workspace' && (
-              <div className="space-y-6">
-                <header className="mb-8 pb-5 border-b-4 border-ink-black flex flex-col md:flex-row md:items-end justify-between gap-4">
-                  <div>
-                    <h1 className="font-syne text-3xl font-black text-ink-black uppercase italic tracking-tight">Manga Creation Workspace</h1>
-                    <p className="font-sans text-xs text-neutral-600 font-bold uppercase tracking-wider mt-1.5 flex items-center gap-2">
-                      <span className="inline-block w-2.5 h-2.5 bg-[#E63946]"></span>
-                      Manage panel positions, allocate assistant tasks, and direct draft commentary.
-                    </p>
-                  </div>
-                  <div className="px-3 py-1 bg-[#2ECC71] text-white text-[10px] font-bold uppercase border-2 border-ink-black shadow-[2px_2px_0px_#141414] max-w-max">
-                    In Production Unit
-                  </div>
-                </header>
-
+              <div className="p-4 md:p-6">
                 <WorkspaceCanvas 
                   currentUser={currentUser}
                   activeSeries={activeSeries}
@@ -353,6 +340,9 @@ export default function App() {
                 />
               </div>
             )}
+
+            {activeTab !== 'workspace' && (
+              <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto">
 
             {activeTab === 'tasks' && (
               <TaskDelegation 
@@ -366,7 +356,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'production' && (
+            {activeTab === 'production' && currentUser.role === 'EDITOR' &&  (
               <ProductionTracker 
                 currentUser={currentUser}
                 series={seriesList}
@@ -400,6 +390,9 @@ export default function App() {
                 ratings={ratingList}
                 onRefreshAll={refreshAllModelCaches}
               />
+            )}
+
+              </div>
             )}
 
           </main>

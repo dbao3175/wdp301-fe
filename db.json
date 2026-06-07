@@ -73,9 +73,9 @@
       "password": "123456",
       "role": "ASSISTANT",
       "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuCHg4AqOzqTV4dewyU1i46CaCUf4pdWEGhiU2lW3liCFs9JIde6fE9uwaRXVueKT86jIlGpymMPHJCh6-Coee4I6o2JxMGU-b-ts2Dmy6dKXtzK6RPgJ9XIL-1TYRm1JkqG8CkCx_ZgdB3cBNUUJyT9pvzu7uKesV0D55DoIMkLIv6PspHUrWtqKEj3H2tBogMUnEDiuCIIKF5mSpOCdwVfdskbQpvNQx3V_lA8OtcIk6q8LZ9AmfiRwuw0bF5K5naoU52pMuRXDiP2",
-      "__v": 0,
       "createdAt": "2026-06-04T18:04:09.613Z",
-      "updatedAt": "2026-06-04T18:04:09.613Z"
+      "updatedAt": "2026-06-04T18:04:09.613Z",
+      "__v": 0
     },
     {
       "_id": "u_1780596660651",
@@ -83,6 +83,41 @@
       "email": "duy1234@test.com",
       "password": "123456",
       "role": "ASSISTANT",
+      "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuCHg4AqOzqTV4dewyU1i46CaCUf4pdWEGhiU2lW3liCFs9JIde6fE9uwaRXVueKT86jIlGpymMPHJCh6-Coee4I6o2JxMGU-b-ts2Dmy6dKXtzK6RPgJ9XIL-1TYRm1JkqG8CkCx_ZgdB3cBNUUJyT9pvzu7uKesV0D55DoIMkLIv6PspHUrWtqKEj3H2tBogMUnEDiuCIIKF5mSpOCdwVfdskbQpvNQx3V_lA8OtcIk6q8LZ9AmfiRwuw0bF5K5naoU52pMuRXDiP2",
+      "__v": 0,
+      "createdAt": "2026-06-07T07:54:04.073Z",
+      "updatedAt": "2026-06-07T07:54:04.073Z"
+    },
+    {
+      "_id": "u_1780818874285",
+      "name": "haule",
+      "email": "haule@gmail.com",
+      "password": "123456",
+      "role": "MANGAKA",
+      "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuCHg4AqOzqTV4dewyU1i46CaCUf4pdWEGhiU2lW3liCFs9JIde6fE9uwaRXVueKT86jIlGpymMPHJCh6-Coee4I6o2JxMGU-b-ts2Dmy6dKXtzK6RPgJ9XIL-1TYRm1JkqG8CkCx_ZgdB3cBNUUJyT9pvzu7uKesV0D55DoIMkLIv6PspHUrWtqKEj3H2tBogMUnEDiuCIIKF5mSpOCdwVfdskbQpvNQx3V_lA8OtcIk6q8LZ9AmfiRwuw0bF5K5naoU52pMuRXDiP2"
+    },
+    {
+      "_id": "u_1780819502189",
+      "name": "Kevin Lee",
+      "email": "devtest3@gmail.com",
+      "password": "123456",
+      "role": "EDITOR",
+      "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuCHg4AqOzqTV4dewyU1i46CaCUf4pdWEGhiU2lW3liCFs9JIde6fE9uwaRXVueKT86jIlGpymMPHJCh6-Coee4I6o2JxMGU-b-ts2Dmy6dKXtzK6RPgJ9XIL-1TYRm1JkqG8CkCx_ZgdB3cBNUUJyT9pvzu7uKesV0D55DoIMkLIv6PspHUrWtqKEj3H2tBogMUnEDiuCIIKF5mSpOCdwVfdskbQpvNQx3V_lA8OtcIk6q8LZ9AmfiRwuw0bF5K5naoU52pMuRXDiP2"
+    },
+    {
+      "_id": "u_1780822221311",
+      "name": "mangaka1",
+      "email": "mangaka1@gmail.com",
+      "password": "123456",
+      "role": "MANGAKA",
+      "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuCHg4AqOzqTV4dewyU1i46CaCUf4pdWEGhiU2lW3liCFs9JIde6fE9uwaRXVueKT86jIlGpymMPHJCh6-Coee4I6o2JxMGU-b-ts2Dmy6dKXtzK6RPgJ9XIL-1TYRm1JkqG8CkCx_ZgdB3cBNUUJyT9pvzu7uKesV0D55DoIMkLIv6PspHUrWtqKEj3H2tBogMUnEDiuCIIKF5mSpOCdwVfdskbQpvNQx3V_lA8OtcIk6q8LZ9AmfiRwuw0bF5K5naoU52pMuRXDiP2"
+    },
+    {
+      "_id": "u_1780824798814",
+      "name": "boardmember",
+      "email": "boardmember@gmail.com",
+      "password": "123456",
+      "role": "BOARD_MEMBER",
       "avatar": "https://lh3.googleusercontent.com/aida-public/AB6AXuCHg4AqOzqTV4dewyU1i46CaCUf4pdWEGhiU2lW3liCFs9JIde6fE9uwaRXVueKT86jIlGpymMPHJCh6-Coee4I6o2JxMGU-b-ts2Dmy6dKXtzK6RPgJ9XIL-1TYRm1JkqG8CkCx_ZgdB3cBNUUJyT9pvzu7uKesV0D55DoIMkLIv6PspHUrWtqKEj3H2tBogMUnEDiuCIIKF5mSpOCdwVfdskbQpvNQx3V_lA8OtcIk6q8LZ9AmfiRwuw0bF5K5naoU52pMuRXDiP2"
     }
   ],
@@ -135,13 +170,13 @@
       "synopsis": "hhhh",
       "mangakaId": "6a192df65f3958c587c4ed08",
       "status": "IN_PRODUCTION",
-      "createdAt": "2026-06-04T17:22:25.717Z",
-      "__v": 0,
-      "updatedAt": "2026-06-04T18:04:09.676Z",
+      "pubSchedule": "MONTHLY",
       "reviewedBy": "6a192df65f3958c587c4ed0a",
       "reviewNote": "ưerfg",
       "reviewedAt": "2026-06-04T18:08:07.735Z",
-      "pubSchedule": "MONTHLY"
+      "createdAt": "2026-06-04T17:22:25.717Z",
+      "updatedAt": "2026-06-04T18:04:09.676Z",
+      "__v": 0
     }
   ],
   "chapters": [
@@ -162,7 +197,10 @@
       "chapterNumber": 5,
       "status": "IN_PROGRESS",
       "deadline": "2026-07-09",
-      "dueAt": "2026-07-09"
+      "dueAt": "2026-07-09",
+      "__v": 0,
+      "createdAt": "2026-06-07T07:54:04.198Z",
+      "updatedAt": "2026-06-07T07:54:04.198Z"
     },
     {
       "_id": "c_1780596690799",
@@ -170,7 +208,10 @@
       "chapterNumber": 1,
       "status": "IN_PROGRESS",
       "deadline": "2027-10-15",
-      "dueAt": "2027-10-15"
+      "dueAt": "2027-10-15",
+      "__v": 0,
+      "createdAt": "2026-06-07T07:54:04.198Z",
+      "updatedAt": "2026-06-07T07:54:04.198Z"
     }
   ],
   "tasks": [
@@ -183,7 +224,10 @@
       "title": "hehe",
       "status": "PENDING",
       "region": null,
-      "pageIds": []
+      "pageIds": [],
+      "__v": 0,
+      "createdAt": "2026-06-07T07:54:04.260Z",
+      "updatedAt": "2026-06-07T07:54:04.260Z"
     },
     {
       "_id": "t_1780596405370",
@@ -194,7 +238,10 @@
       "title": "oke",
       "status": "PENDING",
       "region": null,
-      "pageIds": []
+      "pageIds": [],
+      "__v": 0,
+      "createdAt": "2026-06-07T07:54:04.260Z",
+      "updatedAt": "2026-06-07T07:54:04.260Z"
     },
     {
       "_id": "t_1780596690806",
@@ -205,7 +252,10 @@
       "title": "ngol",
       "status": "PENDING",
       "region": null,
-      "pageIds": []
+      "pageIds": [],
+      "__v": 0,
+      "createdAt": "2026-06-07T07:54:04.260Z",
+      "updatedAt": "2026-06-07T07:54:04.260Z"
     }
   ],
   "ratings": [
@@ -216,8 +266,8 @@
       "source": "Digital Web Polling",
       "submittedBy": "6a192df65f3958c587c4ed08",
       "createdAt": "2026-06-04T17:22:44.092Z",
-      "__v": 0,
-      "updatedAt": "2026-06-04T18:04:09.791Z"
+      "updatedAt": "2026-06-04T18:04:09.791Z",
+      "__v": 0
     },
     {
       "_id": "r_1780593771834",
@@ -226,8 +276,8 @@
       "source": "Digital Web Polling",
       "submittedBy": "6a192df65f3958c587c4ed08",
       "createdAt": "2026-06-04T17:22:51.835Z",
-      "__v": 0,
-      "updatedAt": "2026-06-04T18:04:09.791Z"
+      "updatedAt": "2026-06-04T18:04:09.791Z",
+      "__v": 0
     },
     {
       "_id": "r_1780596513357",
@@ -235,7 +285,9 @@
       "voteCount": 15420,
       "source": "Weekly Shonen Jump App",
       "submittedBy": "6a192df65f3958c587c4ed0a",
-      "createdAt": "2026-06-04T18:08:33.358Z"
+      "createdAt": "2026-06-04T18:08:33.358Z",
+      "__v": 0,
+      "updatedAt": "2026-06-07T07:54:04.320Z"
     }
   ],
   "votes": [
@@ -245,7 +297,9 @@
       "voterId": "6a192df65f3958c587c4ed0a",
       "decision": "ACCEPT",
       "comment": "ưerfg",
-      "createdAt": "2026-06-04T18:08:07.719Z"
+      "createdAt": "2026-06-04T18:08:07.719Z",
+      "__v": 0,
+      "updatedAt": "2026-06-07T07:54:04.378Z"
     }
   ],
   "annotations": [],
