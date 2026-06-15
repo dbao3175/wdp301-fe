@@ -66,7 +66,7 @@ export default function Navigation({
   };
 
   const navItems = [
-    { id: 'workspace', label: 'Manga Workspace', icon: Compass, roles: ['MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'] },
+    { id: 'workspace', label: 'Manga Workspace', icon: Compass, roles: ['MANGAKA', 'EDITOR', 'BOARD_MEMBER'] },
     { id: 'tasks', label: 'Series Proposals', icon: Layers, roles: ['MANGAKA', 'EDITOR'] },
     { id: 'production', label: 'Production Tracker', icon: FileText, roles: ['EDITOR', 'BOARD_MEMBER'] },
     { id: 'board', label: 'Editorial Board', icon: CheckSquare, roles: ['EDITOR', 'BOARD_MEMBER'] },

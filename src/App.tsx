@@ -6,6 +6,7 @@ import TaskDelegation from './components/TaskDelegation';
 import ProductionTracker from './components/ProductionTracker';
 import EditorialBoard from './components/EditorialBoard';
 import LeaderboardAnalytics from './components/LeaderboardAnalytics';
+import AssistantApp from './components/assistant/AssistantApp';
 import Navigation from './components/Navigation';
 import LoginBackground from './components/LoginBackground';
 import { Sparkles, Key, Radio, Layers, CloudLightning } from 'lucide-react';
@@ -142,7 +143,9 @@ export default function App() {
         setCurrentUser(res.data);
         
         // Auto-focus default appropriate dashboard tab according to role selection
-        if (authRole === 'ASSISTANT' || authRole === 'MANGAKA') {
+        if (authRole === 'ASSISTANT') {
+          setActiveTab('assistant-tasks');
+        } else if (authRole === 'MANGAKA') {
           setActiveTab('workspace');
         } else if (authRole === 'EDITOR') {
           setActiveTab('production');
@@ -155,7 +158,9 @@ export default function App() {
         
         // Auto-focus default appropriate dashboard tab according to role selection
         const role = res.data.role;
-        if (role === 'ASSISTANT' || role === 'MANGAKA') {
+        if (role === 'ASSISTANT') {
+          setActiveTab('assistant-tasks');
+        } else if (role === 'MANGAKA') {
           setActiveTab('workspace');
         } else if (role === 'EDITOR') {
           setActiveTab('production');
@@ -314,6 +319,13 @@ export default function App() {
 
           </div>
         </div>
+      ) : currentUser.role === 'ASSISTANT' ? (
+        <AssistantApp
+          currentUser={currentUser}
+          activeTab={activeTab}
+          onChangeTab={setActiveTab}
+          onLogout={handleLogout}
+        />
       ) : (
         /* ======================== MAIN APPLICATION WORKSPACE ======================== */
         <div className="min-h-screen pt-16 md:pt-0 md:pl-72">
