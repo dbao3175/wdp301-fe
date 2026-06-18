@@ -7,6 +7,7 @@ import { User } from '../../types';
 import AssistantLayout from './AssistantLayout';
 import AssistantTaskManagement from './AssistantTaskManagement';
 import AssistantWorkspace from './AssistantWorkspace';
+import AssistantIncome from './AssistantIncome';
 import { AssistantTask, AssistantNotification } from './assistantTypes';
 import { ASSIGNED_TASKS } from './assistantMockData';
 
@@ -38,7 +39,7 @@ export default function AssistantApp({
         ({ ...ASSIGNED_TASKS[0], _id: n.taskId, title: n.message } as AssistantTask);
       handleOpenWorkspace(task);
     } else if (n.type === 'payment') {
-      onChangeTab('assistant-tasks');
+      onChangeTab('assistant-income');
     }
   };
 
@@ -60,6 +61,9 @@ export default function AssistantApp({
       )}
       {activeTab === 'assistant-workspace' && (
         <AssistantWorkspace activeTask={workspaceTask} />
+      )}
+      {activeTab === 'assistant-income' && (
+        <AssistantIncome />
       )}
     </AssistantLayout>
   );

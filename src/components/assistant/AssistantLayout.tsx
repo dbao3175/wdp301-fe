@@ -11,7 +11,8 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
+  Sparkles,
+  Wallet,
 } from 'lucide-react';
 import { AssistantNotification } from './assistantTypes';
 import { MOCK_NOTIFICATIONS } from './assistantMockData';
@@ -30,7 +31,8 @@ interface AssistantLayoutProps {
 
 const NAV_ITEMS = [
   { id: 'assistant-tasks', label: 'Task Management', icon: LayoutList },
-  { id: 'assistant-workspace', label: 'Workspace', icon: PenTool },
+  { id: 'assistant-workspace', label: 'Workspace', icon: PenTool },
+  { id: 'assistant-income', label: 'Income & Earnings', icon: Wallet },
 ];
 
 export default function AssistantLayout({
