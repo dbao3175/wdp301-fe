@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { User, Series, Chapter, Task, Rating, UserRole } from './types';
 import { apiClient, getStoredUser, setStoredUserSession } from './api/client';
 import WorkspaceCanvas from './components/WorkspaceCanvas';
 import TaskDelegation from './components/TaskDelegation';
-import ProductionTracker from './components/ProductionTracker';
 import EditorialBoard from './components/EditorialBoard';
 import LeaderboardAnalytics from './components/LeaderboardAnalytics';
 import AssistantApp from './components/assistant/AssistantApp';
 import Navigation from './components/Navigation';
 import LoginBackground from './components/LoginBackground';
+import { EditorApp } from './features/editor/EditorApp.tsx';
 import { Sparkles, Key, Radio, Layers, CloudLightning } from 'lucide-react';
 
 export default function App() {
@@ -148,7 +149,7 @@ export default function App() {
         } else if (authRole === 'MANGAKA') {
           setActiveTab('workspace');
         } else if (authRole === 'EDITOR') {
-          setActiveTab('production');
+          setActiveTab('workspace');
         } else {
           setActiveTab('board');
         }
@@ -163,7 +164,7 @@ export default function App() {
         } else if (role === 'MANGAKA') {
           setActiveTab('workspace');
         } else if (role === 'EDITOR') {
-          setActiveTab('production');
+          setActiveTab('workspace');
         } else {
           setActiveTab('board');
         }
@@ -326,6 +327,12 @@ export default function App() {
           onChangeTab={setActiveTab}
           onLogout={handleLogout}
         />
+      ) : currentUser.role === 'EDITOR' ? (
+        /* ======================== EDITOR ROLE — NEW EDITOR SPA ======================== */
+        <Routes>
+          <Route path="/editor/*" element={<EditorApp onLogout={handleLogout} />} />
+          <Route path="*" element={<Navigate to="/editor/dashboard" replace />} />
+        </Routes>
       ) : (
         /* ======================== MAIN APPLICATION WORKSPACE ======================== */
         <div className="min-h-screen pt-16 md:pt-0 md:pl-72">
@@ -342,7 +349,7 @@ export default function App() {
           {/* Core Content canvas viewports */}
           <main className="block">
             
-            {activeTab === 'workspace' && (
+            {activeTab === 'workspace' && currentUser.role !== 'BOARD_MEMBER' && (
               <div className="p-4 md:p-6">
                 <WorkspaceCanvas 
                   currentUser={currentUser}
@@ -353,7 +360,7 @@ export default function App() {
               </div>
             )}
 
-            {activeTab !== 'workspace' && (
+            {(activeTab !== 'workspace' || currentUser.role === 'BOARD_MEMBER') && (
               <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto">
 
             {activeTab === 'tasks' && (
@@ -365,24 +372,6 @@ export default function App() {
                 onRefreshAll={refreshAllModelCaches}
                 onSelectSeries={setActiveSeries}
                 onSelectChapter={setActiveChapter}
-              />
-            )}
-
-            {activeTab === 'production' && currentUser.role === 'EDITOR' &&  (
-              <ProductionTracker 
-                currentUser={currentUser}
-                series={seriesList}
-                chapters={chapterList}
-                tasks={taskList}
-                onRefreshAll={refreshAllModelCaches}
-                onSelectSeries={(s) => {
-                  setActiveSeries(s);
-                  setActiveTab('workspace');
-                }}
-                onSelectChapter={(c) => {
-                  setActiveChapter(c);
-                  setActiveTab('workspace');
-                }}
               />
             )}
 

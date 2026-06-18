@@ -4,7 +4,6 @@ import { apiClient } from '../api/client';
 import { 
   Compass, 
   Layers, 
-  FileText, 
   CheckSquare, 
   TrendingUp, 
   LogOut, 
@@ -66,9 +65,8 @@ export default function Navigation({
   };
 
   const navItems = [
-    { id: 'workspace', label: 'Manga Workspace', icon: Compass, roles: ['MANGAKA', 'EDITOR', 'BOARD_MEMBER'] },
+    { id: 'workspace', label: 'Manga Workspace', icon: Compass, roles: ['MANGAKA', 'EDITOR'] },
     { id: 'tasks', label: 'Series Proposals', icon: Layers, roles: ['MANGAKA', 'EDITOR'] },
-    { id: 'production', label: 'Production Tracker', icon: FileText, roles: ['EDITOR', 'BOARD_MEMBER'] },
     { id: 'board', label: 'Editorial Board', icon: CheckSquare, roles: ['EDITOR', 'BOARD_MEMBER'] },
     { id: 'analytics', label: 'Rankings Dashboard', icon: TrendingUp, roles: ['BOARD_MEMBER', 'MANGAKA'] }
   ];

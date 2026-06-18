@@ -20,6 +20,7 @@ export interface Series {
   _id: string;
   title: string;
   synopsis: string;
+  coverImage?: string;
   mangakaId: string | { _id: string; name: string; email: string };
   status: SeriesStatus;
   pubSchedule?: PubSchedule | null;
@@ -77,7 +78,34 @@ export interface Vote {
   submissionId: string; // series proposal ID
   voterId: string;
   decision: 'ACCEPT' | 'REJECT';
+  schedule?: 'WEEKLY' | 'MONTHLY' | null;
   comment?: string;
+  createdAt?: string;
+}
+
+export type DirectiveAction = 'CANCEL' | 'CHANGE_FORMAT';
+export type DirectiveStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface DirectiveVote {
+  _id: string;
+  voterId: string;
+  voterName?: string;
+  decision: 'ACCEPT' | 'REJECT';
+  comment?: string;
+  createdAt?: string;
+}
+
+export interface Directive {
+  _id: string;
+  seriesId: string;
+  seriesTitle?: string;
+  actionType: DirectiveAction;
+  newSchedule?: 'WEEKLY' | 'MONTHLY' | null;
+  reason: string;
+  status: DirectiveStatus;
+  proposedBy: string;
+  proposedByName?: string;
+  votes: DirectiveVote[];
   createdAt?: string;
 }
 

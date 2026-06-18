@@ -24,6 +24,7 @@ interface DBState {
   tasks: any[];
   ratings: any[];
   votes: any[];
+  directives: any[];
   annotations: any[];
   pages: any[];
   assistantEarnings: any[];
@@ -116,6 +117,8 @@ const DEFAULT_ANNOTATIONS = [
   { _id: "a1", pageId: "p1", annotatorId: "u4", coords: { x: 240, y: 140 }, content: "Pacing feels a bit rushed in this panel. Add more action line markers.", type: "CONTENT", createdAt: new Date().toISOString() }
 ];
 
+const DEFAULT_DIRECTIVES: any[] = [];
+
 const DEFAULT_EARNINGS = [
   {
     _id: "e1",
@@ -190,6 +193,7 @@ const voteSchema = new mongoose.Schema({
   submissionId: String,
   voterId: String,
   decision: String,
+  schedule: String,
   comment: String
 }, { timestamps: true });
 
@@ -352,6 +356,7 @@ function readDB(): DBState {
     tasks: DEFAULT_TASKS,
     ratings: DEFAULT_RATINGS,
     votes: DEFAULT_VOTES,
+    directives: DEFAULT_DIRECTIVES,
     annotations: DEFAULT_ANNOTATIONS,
     pages: DEFAULT_PAGES,
     assistantEarnings: DEFAULT_EARNINGS
@@ -971,6 +976,278 @@ app.post('/api/ratings', authenticateToken, (req: any, res) => {
     writeDB(db);
 
     res.status(201).json({ success: true, data: newRating });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// -------------------------------------------------------------------------
+// ROUTE HANDLERS: BOARD VOTING (Majority Vote System)
+// -------------------------------------------------------------------------
+app.post('/api/votes', authenticateToken, (req: any, res) => {
+  try {
+    const { submissionId, decision, comment, schedule } = req.body;
+
+    if (!submissionId || !decision) {
+      return res.status(400).json({ success: false, message: 'submissionId and decision are required' });
+    }
+
+    const db = readDB();
+
+    // Validate series exists and is still PENDING
+    const seriesIndex = db.series.findIndex(s => s._id === submissionId);
+    if (seriesIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Series not found' });
+    }
+
+    const series = db.series[seriesIndex];
+    if (series.status !== 'PENDING') {
+      return res.status(400).json({ success: false, message: 'Series has already been reviewed — no longer accepting votes.' });
+    }
+
+    // Prevent duplicate votes from the same user
+    const existingVote = db.votes.find(v => v.submissionId === submissionId && v.voterId === req.user._id);
+    if (existingVote) {
+      return res.status(400).json({ success: false, message: 'You have already voted on this proposal.' });
+    }
+
+    // Record the vote
+    const newVote = {
+      _id: `v_${Date.now()}`,
+      submissionId,
+      voterId: req.user._id,
+      decision,
+      schedule: schedule || null,
+      comment: comment || '',
+      createdAt: new Date().toISOString()
+    };
+    db.votes.push(newVote);
+
+    // Count votes for this submission
+    const submissionVotes = db.votes.filter(v => v.submissionId === submissionId);
+    const totalBoardMembers = db.users.filter(u => u.role === 'BOARD_MEMBER').length;
+    const majorityThreshold = Math.floor(totalBoardMembers / 2) + 1;
+
+    const acceptVotes = submissionVotes.filter(v => v.decision === 'ACCEPT');
+    const rejectVotes = submissionVotes.filter(v => v.decision === 'REJECT');
+
+    let seriesDecision: string | null = null;
+
+    if (acceptVotes.length >= majorityThreshold) {
+      seriesDecision = 'APPROVED';
+
+      // Aggregate schedule: majority of ACCEPT voters
+      const weeklyCount = acceptVotes.filter(v => v.schedule === 'WEEKLY').length;
+      const monthlyCount = acceptVotes.filter(v => v.schedule === 'MONTHLY').length;
+      series.pubSchedule = weeklyCount >= monthlyCount ? 'WEEKLY' : 'MONTHLY';
+
+    } else if (rejectVotes.length >= majorityThreshold) {
+      seriesDecision = 'REJECTED';
+    }
+
+    // Apply decision if majority reached
+    if (seriesDecision) {
+      series.status = seriesDecision;
+      series.reviewedBy = req.user._id;
+      series.reviewNote = submissionVotes.map(v => `[${v.decision}] ${v.comment}`).join(' | ');
+      series.reviewedAt = new Date().toISOString();
+      db.series[seriesIndex] = series;
+    }
+
+    writeDB(db);
+
+    res.status(201).json({
+      success: true,
+      data: newVote,
+      decision: seriesDecision,
+      voteCount: {
+        accept: acceptVotes.length,
+        reject: rejectVotes.length,
+        total: submissionVotes.length,
+        boardSize: totalBoardMembers,
+        threshold: majorityThreshold
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.get('/api/votes/submission/:id', authenticateToken, (req, res) => {
+  try {
+    const db = readDB();
+    const votes = db.votes.filter(v => v.submissionId === req.params.id);
+    res.status(200).json({ success: true, data: votes });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// -------------------------------------------------------------------------
+// ROUTE HANDLERS: BOARD DIRECTIVE PROPOSALS (Cancel / Change Format)
+// -------------------------------------------------------------------------
+app.get('/api/directives', authenticateToken, (req, res) => {
+  try {
+    const db = readDB();
+    if (!db.directives) db.directives = [];
+    const active = db.directives.filter((d: any) => d.status === 'PENDING');
+    res.status(200).json({ success: true, count: active.length, data: active });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.post('/api/directives', authenticateToken, (req: any, res) => {
+  try {
+    const { seriesId, actionType, newSchedule, reason } = req.body;
+
+    if (!seriesId || !actionType || !reason) {
+      return res.status(400).json({ success: false, message: 'seriesId, actionType (CANCEL or CHANGE_FORMAT), and reason are required' });
+    }
+
+    const db = readDB();
+    if (!db.directives) db.directives = [];
+
+    const seriesIndex = db.series.findIndex(s => s._id === seriesId);
+    if (seriesIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Series not found' });
+    }
+
+    const series = db.series[seriesIndex];
+    if (series.status === 'CANCELLED') {
+      return res.status(400).json({ success: false, message: 'Series is already cancelled.' });
+    }
+    if (series.status === 'PENDING') {
+      return res.status(400).json({ success: false, message: 'Pending series cannot have directives. Use the proposal voting panel.' });
+    }
+
+    // Check for duplicate pending directive for same series + same action
+    const duplicate = db.directives.find((d: any) => d.seriesId === seriesId && d.actionType === actionType && d.status === 'PENDING');
+    if (duplicate) {
+      return res.status(400).json({ success: false, message: `A pending ${actionType} directive already exists for this series.` });
+    }
+
+    const newDirective = {
+      _id: `dir_${Date.now()}`,
+      seriesId,
+      seriesTitle: series.title,
+      actionType, // 'CANCEL' | 'CHANGE_FORMAT'
+      newSchedule: actionType === 'CHANGE_FORMAT' ? (newSchedule || 'MONTHLY') : null,
+      reason,
+      status: 'PENDING',
+      proposedBy: req.user._id,
+      proposedByName: req.user.name,
+      votes: [],
+      createdAt: new Date().toISOString()
+    };
+
+    db.directives.push(newDirective);
+    writeDB(db);
+
+    res.status(201).json({ success: true, data: newDirective });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.post('/api/directives/:id/vote', authenticateToken, (req: any, res) => {
+  try {
+    const { decision, comment } = req.body;
+    const directiveId = req.params.id;
+
+    if (!decision) {
+      return res.status(400).json({ success: false, message: 'decision (ACCEPT or REJECT) is required' });
+    }
+
+    const db = readDB();
+    if (!db.directives) db.directives = [];
+
+    const dirIndex = db.directives.findIndex((d: any) => d._id === directiveId);
+    if (dirIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Directive proposal not found' });
+    }
+
+    const directive = db.directives[dirIndex];
+    if (directive.status !== 'PENDING') {
+      return res.status(400).json({ success: false, message: 'Directive is no longer open for voting.' });
+    }
+
+    // Prevent duplicate vote
+    const existingVote = (directive.votes || []).find((v: any) => v.voterId === req.user._id);
+    if (existingVote) {
+      return res.status(400).json({ success: false, message: 'You have already voted on this directive.' });
+    }
+
+    // Record vote
+    if (!directive.votes) directive.votes = [];
+    directive.votes.push({
+      _id: `dv_${Date.now()}`,
+      voterId: req.user._id,
+      voterName: req.user.name,
+      decision,
+      comment: comment || '',
+      createdAt: new Date().toISOString()
+    });
+
+    // Count votes
+    const totalBoardMembers = db.users.filter(u => u.role === 'BOARD_MEMBER').length;
+    const majorityThreshold = Math.floor(totalBoardMembers / 2) + 1;
+
+    const acceptVotes = directive.votes.filter((v: any) => v.decision === 'ACCEPT');
+    const rejectVotes = directive.votes.filter((v: any) => v.decision === 'REJECT');
+
+    let directiveDecision: string | null = null;
+
+    if (acceptVotes.length >= majorityThreshold) {
+      directiveDecision = 'APPROVED';
+    } else if (rejectVotes.length >= majorityThreshold) {
+      directiveDecision = 'REJECTED';
+    }
+
+    if (directiveDecision === 'APPROVED') {
+      directive.status = 'APPROVED';
+      // Apply action
+      const seriesIndex = db.series.findIndex(s => s._id === directive.seriesId);
+      if (seriesIndex !== -1) {
+        if (directive.actionType === 'CANCEL') {
+          db.series[seriesIndex].status = 'CANCELLED';
+          db.series[seriesIndex].pubSchedule = null;
+        } else if (directive.actionType === 'CHANGE_FORMAT') {
+          db.series[seriesIndex].pubSchedule = directive.newSchedule || 'MONTHLY';
+        }
+      }
+    } else if (directiveDecision === 'REJECTED') {
+      directive.status = 'REJECTED';
+    }
+
+    db.directives[dirIndex] = directive;
+    writeDB(db);
+
+    res.status(200).json({
+      success: true,
+      data: directive,
+      decision: directiveDecision,
+      voteCount: {
+        accept: acceptVotes.length,
+        reject: rejectVotes.length,
+        total: directive.votes.length,
+        boardSize: totalBoardMembers,
+        threshold: majorityThreshold
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.get('/api/directives/:id', authenticateToken, (req, res) => {
+  try {
+    const db = readDB();
+    const directive = (db.directives || []).find((d: any) => d._id === req.params.id);
+    if (!directive) {
+      return res.status(404).json({ success: false, message: 'Directive not found' });
+    }
+    res.status(200).json({ success: true, data: directive });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

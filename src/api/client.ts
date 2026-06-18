@@ -5,6 +5,8 @@ import {
   Task, 
   Rating, 
   Vote, 
+  Directive,
+  DirectiveAction,
   UserRole,
   SeriesStatus,
   PubSchedule
@@ -578,7 +580,7 @@ export const apiClient = {
 
   // BOARD VOTING ON SERIES PROPOSALS
   votes: {
-    submit: async (submissionId: string, decision: 'ACCEPT' | 'REJECT', comment: string): Promise<Vote> => {
+    submit: async (submissionId: string, decision: 'ACCEPT' | 'REJECT', comment: string, schedule?: string): Promise<Vote> => {
       const config = getClientConfig();
       const currentUser = getStoredUser();
       
@@ -587,7 +589,8 @@ export const apiClient = {
           submissionId, 
           voterId: currentUser?._id, 
           decision, 
-          comment 
+          comment,
+          schedule
         });
         return res.data;
       } else {
@@ -597,6 +600,7 @@ export const apiClient = {
           submissionId,
           voterId: currentUser?._id || 'u5',
           decision,
+          schedule: (schedule as 'WEEKLY' | 'MONTHLY') || null,
           comment,
           createdAt: new Date().toISOString()
         };
@@ -614,6 +618,73 @@ export const apiClient = {
       } else {
         const list = loadMockData<Vote>('m_votes');
         return list.filter(v => v.submissionId === submissionId);
+      }
+    }
+  },
+
+  // BOARD DIRECTIVE PROPOSALS (Cancel series / Change publication format)
+  directives: {
+    getAll: async (): Promise<Directive[]> => {
+      const config = getClientConfig();
+      if (config.useLiveBackend) {
+        const res = await makeFetchRequest('/api/directives', 'GET');
+        return res.data;
+      } else {
+        const list = JSON.parse(localStorage.getItem('m_directives') || '[]');
+        return list.filter((d: Directive) => d.status === 'PENDING');
+      }
+    },
+
+    create: async (seriesId: string, actionType: DirectiveAction, reason: string, newSchedule?: 'WEEKLY' | 'MONTHLY'): Promise<Directive> => {
+      const config = getClientConfig();
+      const currentUser = getStoredUser();
+      if (config.useLiveBackend) {
+        const res = await makeFetchRequest('/api/directives', 'POST', { seriesId, actionType, reason, newSchedule });
+        return res.data;
+      } else {
+        const list: Directive[] = JSON.parse(localStorage.getItem('m_directives') || '[]');
+        const newDir: Directive = {
+          _id: `dir_${Date.now()}`,
+          seriesId,
+          seriesTitle: '',
+          actionType,
+          newSchedule: actionType === 'CHANGE_FORMAT' ? (newSchedule || 'MONTHLY') : null,
+          reason,
+          status: 'PENDING',
+          proposedBy: currentUser?._id || 'u5',
+          proposedByName: currentUser?.name || 'Board Member',
+          votes: [],
+          createdAt: new Date().toISOString()
+        };
+        list.push(newDir);
+        localStorage.setItem('m_directives', JSON.stringify(list));
+        return newDir;
+      }
+    },
+
+    vote: async (directiveId: string, decision: 'ACCEPT' | 'REJECT', comment: string): Promise<Directive> => {
+      const config = getClientConfig();
+      if (config.useLiveBackend) {
+        const res = await makeFetchRequest(`/api/directives/${directiveId}/vote`, 'POST', { decision, comment });
+        return res.data;
+      } else {
+        const list: Directive[] = JSON.parse(localStorage.getItem('m_directives') || '[]');
+        const idx = list.findIndex(d => d._id === directiveId);
+        if (idx === -1) throw new Error('Directive not found');
+        if (!list[idx].votes) list[idx].votes = [];
+        const currentUser = getStoredUser();
+        const existing = list[idx].votes.find(v => v.voterId === currentUser?._id);
+        if (existing) throw new Error('You have already voted on this directive.');
+        list[idx].votes.push({
+          _id: `dv_${Date.now()}`,
+          voterId: currentUser?._id || 'u5',
+          voterName: currentUser?.name || 'Board Member',
+          decision,
+          comment,
+          createdAt: new Date().toISOString()
+        });
+        localStorage.setItem('m_directives', JSON.stringify(list));
+        return list[idx];
       }
     }
   },

@@ -24,22 +24,21 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { User, Series, Rating } from '../types';
+import { apiClient } from '../api/client';
 import {
   BarChart3,
   TrendingUp,
   TrendingDown,
   Minus,
   Flame,
-  AlertTriangle,
-  ChevronDown,
-  Zap,
   Shield,
-  Download,
   Lock,
   Edit3,
   RefreshCw,
+  Database,
+  X,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -133,87 +132,6 @@ function TrendIcon({ trend, prevRank, rank }: { trend: Trend; prevRank: number; 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DirectiveMenu  — BOARD_MEMBER only, shown on low-tier rows
-// ─────────────────────────────────────────────────────────────────────────────
-
-function DirectiveMenu({
-  entry,
-  onDirective,
-}: {
-  entry: RankEntry;
-  onDirective: (id: string, action: 'axed' | 'digital') => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  // Only show for still-active rows
-  if (entry.directive !== 'active') return null;
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-red-600/10 border border-red-600/25 text-red-400 text-[10px] font-bold uppercase tracking-wide hover:bg-red-600/20 transition-all cursor-pointer whitespace-nowrap"
-      >
-        <Zap className="w-3 h-3 shrink-0" />
-        Board Directive
-        <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div className="absolute right-0 top-full mt-1.5 w-64 bg-[#1e1e24] border border-[#2d2d34] rounded-md shadow-2xl shadow-black z-50 overflow-hidden">
-          {/* ── AXE SERIES ── */}
-          <button
-            onClick={() => { onDirective(entry.id, 'axed'); setOpen(false); }}
-            className="w-full flex items-start gap-3 px-4 py-3 hover:bg-red-950/40 transition-colors cursor-pointer text-left border-b border-[#2d2d34]"
-          >
-            <div className="w-6 h-6 rounded-md bg-red-600 flex items-center justify-center shrink-0 mt-0.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-white" />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold text-red-400 uppercase tracking-wide">
-                Axe Series (Terminate)
-              </p>
-              <p className="text-[9px] text-slate-600 mt-0.5 leading-relaxed">
-                Permanently terminates publication. Row turns pitch-black with red strike-through.
-              </p>
-            </div>
-          </button>
-
-          {/* ── SHIFT TO DIGITAL ── */}
-          <button
-            onClick={() => { onDirective(entry.id, 'digital'); setOpen(false); }}
-            className="w-full flex items-start gap-3 px-4 py-3 hover:bg-[#26262e] transition-colors cursor-pointer text-left"
-          >
-            <div className="w-6 h-6 rounded-md bg-white flex items-center justify-center shrink-0 mt-0.5">
-              <Download className="w-3.5 h-3.5 text-black" />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold text-white uppercase tracking-wide">
-                Shift to Digital
-              </p>
-              <p className="text-[9px] text-slate-600 mt-0.5 leading-relaxed">
-                App release only — removed from print. White "DIGITAL ONLY" badge applied.
-              </p>
-            </div>
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // RankRow — renders differently based on derived view
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -221,33 +139,14 @@ function RankRow({
   entry,
   view,
   onVoteChange,
-  onDirective,
 }: {
   entry: RankEntry;
   view: DerivedView;
   onVoteChange: (id: string, val: number) => void;
-  onDirective:  (id: string, action: 'axed' | 'digital') => void;
 }) {
   const tier   = getTier(entry.rank);
   const isHigh = tier === 'high';
   const isLow  = tier === 'low';
-
-  // ── AXED row — pitch black, red strike-through ──
-  if (entry.directive === 'axed') {
-    return (
-      <div className="flex items-center gap-4 px-4 py-3 bg-black border-b border-[#2d2d34]">
-        <span className="w-7 shrink-0 text-[11px] font-black text-slate-700 text-center">
-          {entry.rank}
-        </span>
-        <span className="flex-1 text-sm font-bold text-slate-700 line-through decoration-red-600 decoration-2 truncate">
-          {entry.title}
-        </span>
-        <span className="text-[9px] font-bold text-red-700 uppercase tracking-widest shrink-0">
-          TERMINATED
-        </span>
-      </div>
-    );
-  }
 
   // ── Row container style ──
   const rowBase = isLow
@@ -298,13 +197,6 @@ function RankRow({
         <p className="text-[10px] text-slate-600 truncate">{entry.author} · {entry.genre}</p>
       </div>
 
-      {/* ── Digital-only badge (overrides normal state display) ── */}
-      {entry.directive === 'digital' && (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white text-black text-[9px] font-black uppercase tracking-wide shrink-0">
-          🔄 DIGITAL ONLY
-        </span>
-      )}
-
       {/* ── VOTES ──
            MANGAKA  → read-only number (no input)
            BOARD    → editable input that triggers live re-sort
@@ -333,15 +225,6 @@ function RankRow({
       <div className="w-12 shrink-0 flex justify-center">
         <TrendIcon trend={entry.trend} prevRank={entry.prevRank} rank={entry.rank} />
       </div>
-
-      {/* ── Board Directive — BOARD_MEMBER only, low-tier rows only ──
-           MANGAKA view: this column is completely absent — not rendered at all
-      */}
-      {view === 'board' && isLow && (
-        <div className="w-40 shrink-0 flex justify-end">
-          <DirectiveMenu entry={entry} onDirective={onDirective} />
-        </div>
-      )}
     </div>
   );
 }
@@ -389,6 +272,14 @@ export default function LeaderboardAnalytics({
   const [monthlyData, setMonthlyData] = useState<RankEntry[]>(() =>
     SEED_MONTHLY.map(e => ({ ...e }))
   );
+
+  // Ingest modal state
+  const [showIngestModal, setShowIngestModal] = useState(false);
+  const [ingestSeriesId, setIngestSeriesId] = useState('');
+  const [ingestVoteCount, setIngestVoteCount] = useState(15000);
+  const [ingestSource, setIngestSource] = useState('Weekly');
+  const [ingestMsg, setIngestMsg] = useState('');
+  const [ingestSubmitting, setIngestSubmitting] = useState(false);
 
   const entries    = period === 'weekly' ? weeklyData  : monthlyData;
   const setEntries = period === 'weekly' ? setWeeklyData : setMonthlyData;
@@ -445,6 +336,52 @@ export default function LeaderboardAnalytics({
   const handleRefresh = () => {
     // ← API: GET /api/rankings?type=${period}  then setEntries(res.data)
     onRefreshAll();
+  };
+
+  // ── Handler: ingest reader ratings and recalculate rankings ──────────────
+  const handleIngest = async () => {
+    if (!ingestSeriesId) {
+      setIngestMsg('❌ Select a series.');
+      return;
+    }
+    setIngestSubmitting(true);
+    try {
+      await apiClient.ratings.submit(ingestSeriesId, ingestVoteCount, ingestSource);
+      setIngestMsg('🚀 Ratings data ingested! Rankings updated.');
+
+      // Recalculate rankings: aggregate all ratings per series and re-sort
+      const allRatings = await apiClient.ratings.getAll();
+      const ratingsList = Array.isArray(allRatings) ? allRatings : (allRatings as any)?.data || [];
+      const voteTotals: Record<string, number> = {};
+      for (const r of ratingsList) {
+        voteTotals[r.seriesId] = (voteTotals[r.seriesId] || 0) + (r.voteCount || 0);
+      }
+
+      const seriesMap: Record<string, Series> = {};
+      for (const s of series) seriesMap[s._id] = s;
+
+      const updated = entries.map(e => {
+        const matchId = Object.keys(voteTotals).find(id => {
+          const s = seriesMap[id];
+          return s && s.title.toLowerCase() === e.title.toLowerCase();
+        });
+        if (matchId) return { ...e, votes: voteTotals[matchId] };
+        return e;
+      });
+
+      const resorted = updated
+        .sort((a, b) => b.votes - a.votes)
+        .map((e, i) => ({ ...e, prevRank: e.rank, rank: i + 1 }));
+
+      if (period === 'weekly') setWeeklyData(resorted);
+      else setMonthlyData(resorted);
+
+      onRefreshAll();
+    } catch (err: any) {
+      setIngestMsg(`❌ Failed: ${err.message}`);
+    } finally {
+      setIngestSubmitting(false);
+    }
   };
 
   // ── Column header — directive column only rendered in board view ──────────
@@ -515,6 +452,17 @@ export default function LeaderboardAnalytics({
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#2d2d34] border border-[#3a3a44] text-slate-400 text-[10px] font-bold uppercase tracking-wide select-none">
               ✏ Mangaka View
             </div>
+          )}
+
+          {/* Reader Voting Form — BOARD_MEMBER only */}
+          {view === 'board' && (
+            <button
+              onClick={() => { setShowIngestModal(true); setIngestMsg(''); setIngestSeriesId(''); setIngestVoteCount(15000); setIngestSource('Weekly'); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 text-white text-[10px] font-bold uppercase tracking-wide hover:bg-red-700 transition-colors cursor-pointer"
+            >
+              <Database className="w-3.5 h-3.5" />
+              Reader Voting Form
+            </button>
           )}
 
           {/* Refresh */}
@@ -630,7 +578,6 @@ export default function LeaderboardAnalytics({
               entry={entry}
               view={view}
               onVoteChange={handleVoteChange}
-              onDirective={handleDirective}
             />
           ))}
         </div>
@@ -649,6 +596,87 @@ export default function LeaderboardAnalytics({
         </div>
 
       </div>
+
+      {/* ── Reader Voting Form Modal ── */}
+      {showIngestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80" onClick={() => setShowIngestModal(false)}></div>
+          <div className="relative bg-[#1e1e24] border border-[#2d2d34] rounded-md shadow-2xl shadow-black w-full max-w-md overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#2d2d34]">
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-red-400" />
+                <h3 className="text-sm font-bold text-white uppercase tracking-wide">Reader Voting Form</h3>
+              </div>
+              <button onClick={() => setShowIngestModal(false)} className="p-1 rounded-md hover:bg-[#2d2d34] transition-colors cursor-pointer">
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {ingestMsg && (
+                <div className={`px-4 py-2.5 rounded-md border text-[11px] font-bold ${ingestMsg.startsWith('🚀') ? 'bg-green-600/10 border-green-600/30 text-green-400' : 'bg-red-600/10 border-red-600/30 text-red-400'}`}>
+                  {ingestMsg}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Series</label>
+                <select
+                  value={ingestSeriesId}
+                  onChange={e => setIngestSeriesId(e.target.value)}
+                  className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-slate-500 cursor-pointer"
+                  required
+                >
+                  <option value="">Select series...</option>
+                  {series.filter(s => s.status !== 'PENDING').map(s => (
+                    <option key={s._id} value={s._id}>{s.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Reader Vote Count</label>
+                <input
+                  type="number"
+                  value={ingestVoteCount}
+                  onChange={e => setIngestVoteCount(Number(e.target.value))}
+                  className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-slate-500"
+                  min={1}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Period Source</label>
+                <select
+                  value={ingestSource}
+                  onChange={e => setIngestSource(e.target.value)}
+                  className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-slate-500 cursor-pointer"
+                >
+                  <option value="Weekly">Weekly</option>
+                  <option value="Monthly">Monthly</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowIngestModal(false)}
+                  className="flex-1 px-4 py-2.5 rounded-md border border-[#2d2d34] text-slate-400 text-[11px] font-bold uppercase tracking-wide hover:bg-[#2d2d34] transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleIngest}
+                  disabled={ingestSubmitting}
+                  className="flex-1 px-4 py-2.5 rounded-md bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {ingestSubmitting ? 'Submitting...' : 'Ingest & Update'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
