@@ -61,6 +61,8 @@ export interface Task {
     type: 'panel' | 'bubble' | 'character';
   } | null;
   completedAt?: string;
+  reviewNote?: string;
+  reviewedAt?: string;
 }
 
 export interface Rating {

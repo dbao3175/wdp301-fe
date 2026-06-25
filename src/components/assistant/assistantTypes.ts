@@ -24,6 +24,13 @@ export interface AssistantTask {
   earnings?: number;
   submittedAt?: string;
   approvedAt?: string;
+  region?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    type: string;
+  } | null;
 }
 
 export type AIToolId = 'sam' | 'yolo';

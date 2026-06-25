@@ -16,8 +16,9 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { User, Series, Chapter } from '../types';
+import { apiClient } from '../api/client';
 import {
   Plus,
   CheckCircle2,
@@ -58,6 +59,7 @@ interface WTask {
   assistant: string;
   assistantInitials: string;
   submittedAt: string;
+  rawTask?: any;
 }
 
 /** Percentage-based bounding box — stays accurate at any viewport size */
@@ -361,8 +363,8 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
   const [mode, setMode] = useState<'REVIEW' | 'CREATION'>('REVIEW');
 
   // ── Review mode state ──────────────────────────────────────────────────────
-  const [tasks,        setTasks]       = useState<WTask[]>(SEED_TASKS);
-  const [activeTaskId, setActiveTaskId] = useState('t1');
+  const [tasks,        setTasks]       = useState<WTask[]>([]);
+  const [activeTaskId, setActiveTaskId] = useState('');
   const [reviewBoxes,  setReviewBoxes]  = useState<BBox[]>([]);
   const [activeBoxId,  setActiveBoxId]  = useState<string | null>(null);
   const [reviewComment, setReviewComment] = useState('');
@@ -377,9 +379,11 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
   const [activeCreateBoxId, setActiveCreateBoxId] = useState<string | null>(null);
   const [cTitle,        setCTitle]        = useState('');
   const [cType,         setCType]         = useState('Background');
-  const [cAssistant,    setCAssistant]    = useState('Kenji Sato');
+  const [cAssistant,    setCAssistant]    = useState('');
   const [cInstructions, setCInstructions] = useState('');
   const [deployToast,   setDeployToast]   = useState<string | null>(null);
+
+  const [assistantsList, setAssistantsList] = useState<any[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -397,27 +401,117 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleApprove = () => {
-    if (!activeTask) return;
-    setTasks(p => p.map(t => t.id === activeTask.id ? { ...t, status: 'APPROVED' } : t));
-    showToast(`"${activeTask.title}" approved.`, 'success');
-  };
+  const fetchWorkspaceData = useCallback(async () => {
+    try {
+      const asts = await apiClient.users.getAll('ASSISTANT');
+      setAssistantsList(asts);
 
-  const handleSendBack = () => {
-    if (!activeTask || !reviewComment.trim()) return;
-    if (activeBoxId) {
-      setReviewBoxes(p => p.map(b => b.id === activeBoxId ? { ...b, comment: reviewComment.trim() } : b));
+      const live = await apiClient.tasks.getAll();
+      const localTasksRaw = localStorage.getItem('m_tasks_local');
+      const localTasks = localTasksRaw ? JSON.parse(localTasksRaw) : [];
+
+      const allRawTasks = [...localTasks, ...live];
+      const uniqueRawTasks = allRawTasks.filter((value, index, self) =>
+        self.findIndex(t => t._id === value._id) === index
+      );
+
+      const mapped = uniqueRawTasks.map((t: any) => {
+        const ast = asts.find(a => a._id === t.assignedTo || a._id === t.assignedTo?._id);
+        const astName = ast ? ast.name : (t.assignedTo?.name || 'Assistant');
+        const initials = astName.split(' ').map((w: string) => w[0]).join('').toUpperCase().substring(0, 2);
+        
+        let uiStatus: WTaskStatus = 'ASSIGNED';
+        if (t.status === 'SUBMITTED') uiStatus = 'PENDING_REVIEW';
+        else if (t.status === 'APPROVED') uiStatus = 'APPROVED';
+        else if (t.status === 'REVISION_REQUESTED') uiStatus = 'REVISING';
+
+        return {
+          id: t._id,
+          title: t.title,
+          type: t.type || t.region?.type || 'Background',
+          status: uiStatus,
+          assistant: astName,
+          assistantInitials: initials,
+          submittedAt: t.submittedAt ? new Date(t.submittedAt).toLocaleDateString() : 'Not submitted',
+          rawTask: t
+        };
+      });
+
+      setTasks(mapped);
+      if (mapped.length > 0 && !mapped.some(t => t.id === activeTaskId)) {
+        setActiveTaskId(mapped[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to fetch workspace data:', err);
     }
-    setTasks(p => p.map(t => t.id === activeTask.id ? { ...t, status: 'REVISING' } : t));
-    showToast(`Revision sent to ${activeTask.assistant}.`, 'warn');
-    setReviewComment('');
+  }, [activeTaskId]);
+
+  useEffect(() => {
+    fetchWorkspaceData();
+  }, []);
+
+  useEffect(() => {
+    if (activeTask && activeTask.rawTask?.region) {
+      const r = activeTask.rawTask.region;
+      setReviewBoxes([
+        {
+          id: `rb_${activeTask.id}`,
+          leftPct: r.x,
+          topPct: r.y,
+          widthPct: r.width,
+          heightPct: r.height,
+          comment: activeTask.rawTask.reviewNote || ''
+        }
+      ]);
+    } else {
+      setReviewBoxes([]);
+    }
+  }, [activeTaskId, activeTask]);
+
+  const handleApprove = async () => {
+    if (!activeTask) return;
+    try {
+      await apiClient.tasks.review(activeTask.id, 'APPROVE', 'Approved by author');
+      const localTasksRaw = localStorage.getItem('m_tasks_local');
+      if (localTasksRaw) {
+        const localTasks = JSON.parse(localTasksRaw);
+        const idx = localTasks.findIndex((t: any) => t._id === activeTask.id);
+        if (idx !== -1) {
+          localTasks[idx].status = 'APPROVED';
+          localStorage.setItem('m_tasks_local', JSON.stringify(localTasks));
+        }
+      }
+      showToast(`"${activeTask.title}" approved.`, 'success');
+      fetchWorkspaceData();
+    } catch (err: any) {
+      showToast(err.message, 'warn');
+    }
   };
 
-  // ── Creation mode helpers ──────────────────────────────────────────────────
+  const handleSendBack = async () => {
+    if (!activeTask || !reviewComment.trim()) return;
+    try {
+      await apiClient.tasks.review(activeTask.id, 'REVISION_REQUESTED', reviewComment.trim());
+      const localTasksRaw = localStorage.getItem('m_tasks_local');
+      if (localTasksRaw) {
+        const localTasks = JSON.parse(localTasksRaw);
+        const idx = localTasks.findIndex((t: any) => t._id === activeTask.id);
+        if (idx !== -1) {
+          localTasks[idx].status = 'REVISION_REQUESTED';
+          localTasks[idx].reviewNote = reviewComment.trim();
+          localStorage.setItem('m_tasks_local', JSON.stringify(localTasks));
+        }
+      }
+      showToast(`Revision sent to ${activeTask.assistant}.`, 'warn');
+      setReviewComment('');
+      fetchWorkspaceData();
+    } catch (err: any) {
+      showToast(err.message, 'warn');
+    }
+  };
 
   /** Enter creation mode — reset all creation state */
   const enterCreationMode = () => {
-    // clear previous creation state
     if (sketchPreview) URL.revokeObjectURL(sketchPreview);
     setSketchFile(null);
     setSketchPreview(null);
@@ -425,7 +519,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
     setActiveCreateBoxId(null);
     setCTitle('');
     setCType('Background');
-    setCAssistant('Kenji Sato');
+    setCAssistant(assistantsList[0]?._id || '');
     setCInstructions('');
     setDeployToast(null);
     setMode('CREATION');
@@ -464,55 +558,67 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
     if (f) handleSketchFile(f);
   };
 
-  /** Deploy — build FormData, add task to list, exit creation mode */
-  const handleDeploy = () => {
+  /** Deploy — build FormData, upload sketch, create task via API, exit creation mode */
+  const handleDeploy = async () => {
     if (!cTitle.trim()) return;
-
-    const initials = cAssistant.split(' ').map(w => w[0]).join('').toUpperCase().substring(0, 2);
-    const primaryBox = activeCreateBox ?? createBoxes[0] ?? null;
-
-    // Build FormData (ready for real multipart POST)
-    const fd = new FormData();
-    fd.append('title',        cTitle.trim());
-    fd.append('type',         cType);
-    fd.append('assignedTo',   cAssistant);
-    fd.append('instructions', cInstructions);
-    if (sketchFile) fd.append('roughSketch', sketchFile, sketchFile.name);
-    if (primaryBox) {
-      fd.append('zone_topPct',    primaryBox.topPct.toFixed(2));
-      fd.append('zone_leftPct',   primaryBox.leftPct.toFixed(2));
-      fd.append('zone_widthPct',  primaryBox.widthPct.toFixed(2));
-      fd.append('zone_heightPct', primaryBox.heightPct.toFixed(2));
+    if (!activeSeries || !activeChapter) {
+      showToast("Vui lòng chọn Series và Chapter trước khi giao việc.", "warn");
+      return;
     }
 
-    // Log for demo inspection
-    console.log('[Deploy Task] FormData payload:');
-    fd.forEach((v, k) => {
-      if (v instanceof File)
-        console.log(`  ${k}: File(${v.name}, ${(v.size/1024).toFixed(1)} KB)`);
-      else
-        console.log(`  ${k}: ${v}`);
-    });
+    try {
+      setDeployToast("Đang tải ảnh thô lên server...");
 
-    // Optimistic local update
-    const newTask: WTask = {
-      id:                `t_${Date.now()}`,
-      title:             cTitle.trim(),
-      type:              cType,
-      status:            'ASSIGNED',
-      assistant:         cAssistant,
-      assistantInitials: initials,
-      submittedAt:       'Just now',
-    };
-    setTasks(p => [newTask, ...p]);
-    setActiveTaskId(newTask.id);
+      let fileId = "";
+      if (sketchFile) {
+        const fileRes = await apiClient.files.upload(sketchFile, activeChapter._id);
+        fileId = fileRes.data._id;
+      }
 
-    // Brief success flash, then exit
-    setDeployToast(`"${cTitle.trim()}" deployed to ${cAssistant}!`);
-    setTimeout(() => {
-      exitCreationMode();
-    }, 1400);
+      setDeployToast("Đang tạo và phân công nhiệm vụ...");
+
+      const primaryBox = activeCreateBox ?? createBoxes[0] ?? null;
+      const region = primaryBox
+        ? {
+            x: Number(primaryBox.leftPct.toFixed(2)),
+            y: Number(primaryBox.topPct.toFixed(2)),
+            width: Number(primaryBox.widthPct.toFixed(2)),
+            height: Number(primaryBox.heightPct.toFixed(2)),
+            type: 'TASK_ZONE',
+          }
+        : null;
+
+      const description = fileId
+        ? `[IMAGE_URL:api/files/download/${fileId}] ${cInstructions.trim()}`
+        : cInstructions.trim();
+
+      const createdTask = await apiClient.tasks.create(
+        activeSeries._id,
+        activeChapter._id,
+        cAssistant,
+        cTitle.trim(),
+        region,
+        description
+      );
+
+      // Save to local storage for Mangaka view persistence
+      const localTasksRaw = localStorage.getItem('m_tasks_local');
+      const localTasks = localTasksRaw ? JSON.parse(localTasksRaw) : [];
+      localTasks.unshift(createdTask);
+      localStorage.setItem('m_tasks_local', JSON.stringify(localTasks));
+
+      setDeployToast(`"${cTitle.trim()}" đã được phân công thành công!`);
+      setTimeout(() => {
+        exitCreationMode();
+        fetchWorkspaceData();
+      }, 1400);
+    } catch (err: any) {
+      setDeployToast(null);
+      showToast(err.message || "Tạo task thất bại", "warn");
+    }
   };
+
+
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
@@ -649,6 +755,11 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                   style={{ width: '100%', maxWidth: '360px', aspectRatio: '3/4' }}
                 >
                   <DrawableCanvas
+                    sketchSrc={
+                      activeTask?.rawTask?.description && activeTask.rawTask.description.startsWith('[IMAGE_URL:')
+                        ? activeTask.rawTask.description.match(/^\[IMAGE_URL:([^\]]+)\]/)?.[1]
+                        : null
+                    }
                     boxes={reviewBoxes}
                     activeBoxId={activeBoxId}
                     onBoxCreated={b => {
@@ -932,27 +1043,31 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                     Assign To
                   </label>
                   <div className="space-y-1.5">
-                    {ASSISTANTS.map(a => {
-                      const init = a.split(' ').map(w => w[0]).join('').toUpperCase().substring(0, 2);
-                      return (
-                        <button
-                          key={a}
-                          type="button"
-                          onClick={() => setCAssistant(a)}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md border text-xs font-medium transition-all cursor-pointer ${
-                            cAssistant === a
-                              ? 'bg-white/10 border-white/20 text-white'
-                              : 'bg-[#121214] border-[#2d2d34] text-slate-400 hover:border-slate-600 hover:text-slate-300'
-                          }`}
-                        >
-                          <div className="w-6 h-6 rounded-md bg-[#2d2d34] border border-[#3a3a44] text-slate-300 flex items-center justify-center text-[9px] font-black shrink-0">
-                            {init}
-                          </div>
-                          <span className="flex-1 text-left">{a}</span>
-                          {cAssistant === a && <Check className="w-3 h-3 text-white/60 shrink-0" />}
-                        </button>
-                      );
-                    })}
+                    {assistantsList.length > 0 ? (
+                      assistantsList.map(a => {
+                        const init = a.name.split(' ').map((w: string) => w[0]).join('').toUpperCase().substring(0, 2);
+                        return (
+                          <button
+                            key={a._id}
+                            type="button"
+                            onClick={() => setCAssistant(a._id)}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md border text-xs font-medium transition-all cursor-pointer ${
+                              cAssistant === a._id
+                                ? 'bg-white/10 border-white/20 text-white'
+                                : 'bg-[#121214] border-[#2d2d34] text-slate-400 hover:border-slate-600 hover:text-slate-300'
+                            }`}
+                          >
+                            <div className="w-6 h-6 rounded-md bg-[#2d2d34] border border-[#3a3a44] text-slate-300 flex items-center justify-center text-[9px] font-black shrink-0">
+                              {init}
+                            </div>
+                            <span className="flex-1 text-left">{a.name}</span>
+                            {cAssistant === a._id && <Check className="w-3 h-3 text-white/60 shrink-0" />}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <p className="text-[10px] text-slate-600">Đang tải danh sách Assistant...</p>
+                    )}
                   </div>
                 </div>
 

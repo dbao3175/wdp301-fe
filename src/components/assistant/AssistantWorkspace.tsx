@@ -18,8 +18,11 @@ import { AssistantTask, AIToolId } from './assistantTypes';
 import { AI_TOOLS, ASSIGNED_TASKS } from './assistantMockData';
 import MangaPageCanvas from './MangaPageCanvas';
 
+import { apiClient } from '../../api/client';
+
 interface AssistantWorkspaceProps {
   activeTask: AssistantTask | null;
+  onRefresh?: () => void;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -32,7 +35,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const APPLY_TO_OPTIONS = ['Full Page', 'Active Panel', 'Selected Region', 'Background Only'];
 
-export default function AssistantWorkspace({ activeTask }: AssistantWorkspaceProps) {
+export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantWorkspaceProps) {
   const task = activeTask ?? ASSIGNED_TASKS[0];
 
   const [zoom, setZoom] = useState(1);
@@ -65,9 +68,17 @@ export default function AssistantWorkspace({ activeTask }: AssistantWorkspacePro
     }, 1800);
   };
 
-  const handleSubmit = () => {
-    setSubmitToast(`Task "${task.title}" submitted for review`);
-    setTimeout(() => setSubmitToast(null), 2500);
+  const handleSubmit = async () => {
+    if (!task) return;
+    try {
+      await apiClient.tasks.submit(task._id);
+      setSubmitToast(`Task "${task.title}" submitted for review`);
+      setTimeout(() => setSubmitToast(null), 2500);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      setSubmitToast(`Submission failed: ${err.message}`);
+      setTimeout(() => setSubmitToast(null), 3000);
+    }
   };
 
   const onFileDrop = (e: React.DragEvent) => {
@@ -113,7 +124,11 @@ export default function AssistantWorkspace({ activeTask }: AssistantWorkspacePro
 
             <div>
               <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">Description</p>
-              <p className="text-[11px] text-slate-400 leading-relaxed">{task.description}</p>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                {task.description && task.description.startsWith('[IMAGE_URL:')
+                  ? task.description.replace(/^\[IMAGE_URL:[^\]]+\]\s*/, '')
+                  : task.description}
+              </p>
             </div>
 
             <div>
@@ -145,6 +160,12 @@ export default function AssistantWorkspace({ activeTask }: AssistantWorkspacePro
             onZoomOut={zoomOut}
             onZoomReset={zoomReset}
             episodeLabel={`${task.chapter} · ${task.series}`}
+            imageUrl={
+              task.description && task.description.startsWith('[IMAGE_URL:')
+                ? task.description.match(/^\[IMAGE_URL:([^\]]+)\]/)?.[1]
+                : undefined
+            }
+            region={task.region}
           />
         </main>
 

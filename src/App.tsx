@@ -83,9 +83,24 @@ export default function App() {
       const liveRatings = await apiClient.ratings.getAll();
 
       setSeriesList(liveSeries);
-      setChapterList(liveChapters);
       setTaskList(liveTasks);
       setRatingList(liveRatings);
+
+      let currentChapters = liveChapters;
+      if (apiClient.getConfig().useLiveBackend && liveSeries.length > 0 && liveChapters.length === 0) {
+        console.log("No chapters found in DB. Auto-creating default Chapter 1 for each series...");
+        for (const s of liveSeries) {
+          try {
+            await apiClient.chapters.create(s._id, 1, new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().split('T')[0]);
+          } catch (e) {
+            console.error(`Failed to auto-create chapter for series ${s.title}:`, e);
+          }
+        }
+        currentChapters = await apiClient.chapters.getAll();
+      }
+      setChapterList(currentChapters);
+
+      const liveChaptersList = currentChapters;
 
       // Auto assign active series elements if not set or invalid under live backend data
       let currentActiveSeries = activeSeries;
@@ -101,17 +116,17 @@ export default function App() {
         }
       }
 
-      if (liveChapters.length > 0) {
+      if (liveChaptersList.length > 0) {
         const currentSid = currentActiveSeries?._id;
-        const validChaptersForSeries = liveChapters.filter(c => c.seriesId === currentSid || c.series === currentSid);
-        const chapterExists = activeChapter && liveChapters.some(c => c._id === activeChapter._id);
+        const validChaptersForSeries = liveChaptersList.filter(c => c.seriesId === currentSid || c.series === currentSid);
+        const chapterExists = activeChapter && liveChaptersList.some(c => c._id === activeChapter._id);
         const chapterValid = activeChapter && (!isLive || isValidObjectId(activeChapter._id));
         
         if (!activeChapter || !chapterExists || !chapterValid || (activeChapter && activeChapter.seriesId !== currentSid && activeChapter.series !== currentSid)) {
           if (validChaptersForSeries.length > 0) {
             setActiveChapter(validChaptersForSeries[0]);
           } else {
-            setActiveChapter(liveChapters[0]);
+            setActiveChapter(liveChaptersList[0]);
           }
         }
       } else {

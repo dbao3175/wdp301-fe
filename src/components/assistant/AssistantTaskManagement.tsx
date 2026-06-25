@@ -11,6 +11,8 @@ import { ASSIGNED_TASKS, APPROVED_TASKS } from './assistantMockData';
 interface AssistantTaskManagementProps {
   searchQuery: string;
   onOpenWorkspace: (task: AssistantTask) => void;
+  tasks?: AssistantTask[];
+  isLoading?: boolean;
 }
 
 type TabId = 'assigned' | 'approved';
@@ -82,6 +84,8 @@ function StatusBadge({ status }: { status: AssistantTaskStatus }) {
 export default function AssistantTaskManagement({
   searchQuery,
   onOpenWorkspace,
+  tasks,
+  isLoading = false,
 }: AssistantTaskManagementProps) {
   const [activeTab, setActiveTab] = useState<TabId>('assigned');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
@@ -89,15 +93,26 @@ export default function AssistantTaskManagement({
   const [filterDeadline, setFilterDeadline] = useState<string>('ALL');
   const [inlineSearch, setInlineSearch] = useState('');
 
+  const allTasks = useMemo(() => {
+    return tasks || [...ASSIGNED_TASKS, ...APPROVED_TASKS];
+  }, [tasks]);
+
+  const assignedTasks = useMemo(() => {
+    return allTasks.filter(t => t.status !== 'APPROVED');
+  }, [allTasks]);
+
+  const approvedTasks = useMemo(() => {
+    return allTasks.filter(t => t.status === 'APPROVED');
+  }, [allTasks]);
+
   const chapters = useMemo(() => {
-    const all = [...ASSIGNED_TASKS, ...APPROVED_TASKS];
-    return [...new Set(all.map((t) => t.chapter))].sort();
-  }, []);
+    return [...new Set(allTasks.map((t) => t.chapter))].sort();
+  }, [allTasks]);
 
   const combinedSearch = (inlineSearch || searchQuery).toLowerCase();
 
-  const filterTasks = (tasks: AssistantTask[]) =>
-    tasks.filter((t) => {
+  const filterTasks = (taskList: AssistantTask[]) =>
+    taskList.filter((t) => {
       if (combinedSearch) {
         const hay = `${t._id} ${t.title} ${t.series} ${t.chapter} ${t.type}`.toLowerCase();
         if (!hay.includes(combinedSearch)) return false;
@@ -113,16 +128,22 @@ export default function AssistantTaskManagement({
       return true;
     });
 
-  const assignedFiltered = filterTasks(ASSIGNED_TASKS);
-  const approvedFiltered = filterTasks(APPROVED_TASKS);
+  const assignedFiltered = filterTasks(assignedTasks);
+  const approvedFiltered = filterTasks(approvedTasks);
 
   const totalEarnings = approvedFiltered.reduce((s, t) => s + (t.earnings ?? 0), 0);
   const totalPages = approvedFiltered.reduce((s, t) => s + (t.pageCount ?? 0), 0);
 
   return (
     <div className="h-full overflow-y-auto p-5 space-y-5">
-      {/* Tabs */}
-      <div className="flex items-center gap-2">
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-500">
+          <span className="text-xs">Đang tải danh sách nhiệm vụ từ server...</span>
+        </div>
+      ) : (
+        <>
+          {/* Tabs */}
+          <div className="flex items-center gap-2">
         {(['assigned', 'approved'] as TabId[]).map((tab) => {
           const count = tab === 'assigned' ? assignedFiltered.length : approvedFiltered.length;
           const isActive = activeTab === tab;
@@ -322,6 +343,8 @@ export default function AssistantTaskManagement({
               <p className="text-xl font-bold text-[#2ECC71] font-mono">¥{totalEarnings.toLocaleString()}</p>
             </div>
           </div>
+        </>
+      )}
         </>
       )}
     </div>
