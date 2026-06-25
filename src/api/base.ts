@@ -11,7 +11,7 @@ export interface ClientConfig {
 }
 
 const DEFAULT_CONFIG: ClientConfig = {
-  baseUrl: '',
+  baseUrl: 'http://localhost:5000',
   useLiveBackend: true
 };
 
@@ -76,7 +76,14 @@ export async function makeFetchRequest(
     body: body ? JSON.stringify(body) : undefined
   });
 
-  const responseData = await response.json();
+  const responseText = await response.text();
+  let responseData;
+  try {
+    responseData = responseText ? JSON.parse(responseText) : {};
+  } catch (e) {
+    responseData = { message: responseText || `Request failed with status ${response.status}` };
+  }
+
   if (!response.ok) {
     throw new Error(responseData.message || `Request failed with status ${response.status}`);
   }

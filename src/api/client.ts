@@ -272,7 +272,14 @@ export const apiClient = {
         body: fd
       });
       
-      const responseData = await response.json();
+      const responseText = await response.text();
+      let responseData;
+      try {
+        responseData = responseText ? JSON.parse(responseText) : {};
+      } catch (e) {
+        responseData = { message: responseText || `Upload failed with status ${response.status}` };
+      }
+
       if (!response.ok) {
         throw new Error(responseData.message || `Upload failed with status ${response.status}`);
       }

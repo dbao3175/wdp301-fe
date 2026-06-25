@@ -401,17 +401,18 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
     setTimeout(() => setToast(null), 3000);
   };
 
+  const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
+
   const fetchWorkspaceData = useCallback(async () => {
     try {
+      setIsWorkspaceLoading(true);
       const asts = await apiClient.users.getAll('ASSISTANT');
       setAssistantsList(asts);
 
       const live = await apiClient.tasks.getAll();
-      const localTasksRaw = localStorage.getItem('m_tasks_local');
-      const localTasks = localTasksRaw ? JSON.parse(localTasksRaw) : [];
 
-      const allRawTasks = [...localTasks, ...live];
-      const uniqueRawTasks = allRawTasks.filter((value, index, self) =>
+      // Deduplicate if needed (though backend should return unique tasks)
+      const uniqueRawTasks = live.filter((value, index, self) =>
         self.findIndex(t => t._id === value._id) === index
       );
 
@@ -443,6 +444,8 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
       }
     } catch (err) {
       console.error('Failed to fetch workspace data:', err);
+    } finally {
+      setIsWorkspaceLoading(false);
     }
   }, [activeTaskId]);
 
@@ -600,12 +603,6 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
         region,
         description
       );
-
-      // Save to local storage for Mangaka view persistence
-      const localTasksRaw = localStorage.getItem('m_tasks_local');
-      const localTasks = localTasksRaw ? JSON.parse(localTasksRaw) : [];
-      localTasks.unshift(createdTask);
-      localStorage.setItem('m_tasks_local', JSON.stringify(localTasks));
 
       setDeployToast(`"${cTitle.trim()}" đã được phân công thành công!`);
       setTimeout(() => {
@@ -1066,7 +1063,9 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                         );
                       })
                     ) : (
-                      <p className="text-[10px] text-slate-600">Đang tải danh sách Assistant...</p>
+                      <p className="text-[10px] text-slate-600">
+                        {isWorkspaceLoading ? 'Đang tải danh sách Assistant...' : 'Không có Assistant nào trong hệ thống.'}
+                      </p>
                     )}
                   </div>
                 </div>
