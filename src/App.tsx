@@ -6,6 +6,7 @@ import WorkspaceCanvas from './components/WorkspaceCanvas';
 import TaskDelegation from './components/TaskDelegation';
 import EditorialBoard from './components/EditorialBoard';
 import LeaderboardAnalytics from './components/LeaderboardAnalytics';
+import ChapterManagement from './components/ChapterManagement';
 import AssistantApp from './components/assistant/AssistantApp';
 import Navigation from './components/Navigation';
 import LoginBackground from './components/LoginBackground';
@@ -87,17 +88,6 @@ export default function App() {
       setRatingList(liveRatings);
 
       let currentChapters = liveChapters;
-      if (apiClient.getConfig().useLiveBackend && liveSeries.length > 0 && liveChapters.length === 0) {
-        console.log("No chapters found in DB. Auto-creating default Chapter 1 for each series...");
-        for (const s of liveSeries) {
-          try {
-            await apiClient.chapters.create(s._id, 1, new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().split('T')[0]);
-          } catch (e) {
-            console.error(`Failed to auto-create chapter for series ${s.title}:`, e);
-          }
-        }
-        currentChapters = await apiClient.chapters.getAll();
-      }
       setChapterList(currentChapters);
 
       const liveChaptersList = currentChapters;
@@ -377,6 +367,19 @@ export default function App() {
 
             {(activeTab !== 'workspace' || currentUser.role === 'BOARD_MEMBER') && (
               <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto">
+
+            {activeTab === 'chapters' && (
+              <ChapterManagement 
+                currentUser={currentUser!}
+                series={seriesList}
+                chapters={chapterList}
+                activeSeries={activeSeries}
+                onRefreshAll={refreshAllModelCaches}
+                onSelectSeries={setActiveSeries}
+                onSelectChapter={setActiveChapter}
+                onChangeTab={setActiveTab}
+              />
+            )}
 
             {activeTab === 'tasks' && (
               <TaskDelegation 

@@ -13,7 +13,8 @@ import {
   Radio, 
   CloudLightning,
   ChevronDown,
-  Sparkles
+  Sparkles,
+  BookOpen
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -66,6 +67,7 @@ export default function Navigation({
 
   const navItems = [
     { id: 'workspace', label: 'Manga Workspace', icon: Compass, roles: ['MANGAKA', 'EDITOR'] },
+    { id: 'chapters', label: 'Chapter Management', icon: BookOpen, roles: ['MANGAKA', 'EDITOR'] },
     { id: 'tasks', label: 'Series Proposals', icon: Layers, roles: ['MANGAKA', 'EDITOR'] },
     { id: 'board', label: 'Editorial Board', icon: CheckSquare, roles: ['EDITOR', 'BOARD_MEMBER'] },
     { id: 'analytics', label: 'Rankings Dashboard', icon: TrendingUp, roles: ['BOARD_MEMBER', 'MANGAKA'] }

@@ -106,6 +106,15 @@ export const apiClient = {
       return res.data;
     },
     
+    update: async (chapterId: string, payload: { chapterNumber?: number; title?: string; deadline?: string }): Promise<Chapter> => {
+      const res = await makeFetchRequest(`/api/chapters/${chapterId}`, 'PUT', payload);
+      return res.data;
+    },
+
+    delete: async (chapterId: string): Promise<void> => {
+      await makeFetchRequest(`/api/chapters/${chapterId}`, 'DELETE');
+    },
+
     toggleStatus: async (chapterId: string): Promise<Chapter> => {
       const resList = await makeFetchRequest('/api/chapters', 'GET');
       const list: Chapter[] = resList.data;
