@@ -94,7 +94,6 @@ export default function ChapterManagement({
     setCNumber('');
     setCDeadline('');
     setEditingChapterId(null);
-    setIsCreating(false);
   };
 
   const goToWorkspace = (c: Chapter) => {
@@ -206,7 +205,7 @@ export default function ChapterManagement({
                       <Save className="w-3.5 h-3.5" /> Save Chapter
                     </button>
                     <button 
-                      onClick={resetForm}
+                      onClick={() => { setIsCreating(false); resetForm(); }}
                       className="flex items-center gap-1.5 px-4 py-2 bg-transparent border border-[#2d2d34] hover:bg-[#2d2d34] text-slate-300 text-xs font-bold rounded-md transition-all"
                     >
                       <X className="w-3.5 h-3.5" /> Cancel
