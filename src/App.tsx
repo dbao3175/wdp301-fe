@@ -97,13 +97,17 @@ export default function App() {
       const isLive = apiClient.getConfig().useLiveBackend;
       const isValidObjectId = (id: string) => /^[0-9a-fA-F]{24}$/.test(id);
 
-      if (liveSeries.length > 0) {
-        const seriesExists = activeSeries && liveSeries.some(s => s._id === activeSeries._id);
+      const approvedSeries = liveSeries.filter(s => s.status !== 'PENDING' && s.status !== 'REJECTED');
+      if (approvedSeries.length > 0) {
+        const seriesExists = activeSeries && approvedSeries.some(s => s._id === activeSeries._id);
         const seriesValid = activeSeries && (!isLive || isValidObjectId(activeSeries._id));
         if (!activeSeries || !seriesExists || !seriesValid) {
-          setActiveSeries(liveSeries[0]);
-          currentActiveSeries = liveSeries[0];
+          setActiveSeries(approvedSeries[0]);
+          currentActiveSeries = approvedSeries[0];
         }
+      } else {
+        setActiveSeries(null);
+        currentActiveSeries = null;
       }
 
       if (liveChaptersList.length > 0) {

@@ -258,6 +258,9 @@ export const apiClient = {
     },
     markAllRead: async (userId: string): Promise<any> => {
       return await makeFetchRequest(`/api/notifications/${userId}/read-all`, 'PATCH');
+    },
+    create: async (userId: string, title: string, content: string, type: 'INFO' | 'WARNING' | 'ERROR'): Promise<any> => {
+      return await makeFetchRequest('/api/notifications', 'POST', { userId, title, content, type });
     }
   },
   

@@ -37,6 +37,7 @@ export interface Chapter {
   seriesId: string;
   series?: string; // MongoDB ref option
   chapterNumber: number;
+  title?: string;
   status: ChapterStatus;
   deadline: string;
 }

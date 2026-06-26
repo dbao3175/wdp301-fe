@@ -596,11 +596,23 @@ export default function TaskDelegation({
   onSelectChapter,
 }: TaskDelegationProps) {
 
+  // Toast status
+  const [toast, setToast] = useState<{ msg: string, type: 'success' | 'warn' } | null>(null);
+  const showToast = (msg: string, type: 'success' | 'warn' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   // Which view is active:
   //   null     = initial / pick a role
   //   'submit' = mangaka has submitted; editor is reviewing
   const [submittedProposal, setSubmittedProposal] = useState<ProposalDraft | null>(null);
   const [finalStatus, setFinalStatus] = useState<'forwarded' | 'rejected' | null>(null);
+
+  // Real backend pending list for Editor
+  const pendingSeriesList = series.filter(s => s.status === 'PENDING');
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
+  const selectedSeries = pendingSeriesList.find(s => s._id === selectedSeriesId) || pendingSeriesList[0] || null;
 
   // Role-based view selection — MANGAKA defaults to submission form,
   // EDITOR defaults to the review view (if a proposal exists).
@@ -620,30 +632,83 @@ export default function TaskDelegation({
     }).catch(() => {});
   };
 
-  const handleForward = (comment: string) => {
-    setFinalStatus('forwarded');
-    console.log('[Editor] Forwarded to Board. Comment:', comment);
-    // await axios.put(`/api/series/proposal/${proposalId}/forward`, { comment });
+  const handleForward = async (comment: string) => {
+    if (!selectedSeries) return;
+    try {
+      // Call actual BE review API
+      await apiClient.series.review(selectedSeries._id, 'APPROVED', comment, 'WEEKLY');
+      
+      // Call actual BE notification API to notify Mangaka
+      const mangakaIdStr = typeof selectedSeries.mangakaId === 'object' && selectedSeries.mangakaId !== null 
+        ? (selectedSeries.mangakaId as any)._id 
+        : selectedSeries.mangakaId;
+      
+      await apiClient.notifications.create(
+        mangakaIdStr,
+        'Đề xuất Series mới đã được duyệt!',
+        `Biên tập viên ${currentUser.name} đã duyệt đề xuất Series "${selectedSeries.title}" của bạn. Trạng thái series hiện là APPROVED.`,
+        'INFO'
+      );
+
+      showToast('Đã phê duyệt series và gửi thông báo cho tác giả.', 'success');
+      onRefreshAll();
+      handleReset();
+    } catch (err: any) {
+      showToast(err.message || 'Phê duyệt thất bại', 'warn');
+    }
   };
 
-  const handleReject = (comment: string) => {
-    setFinalStatus('rejected');
-    console.log('[Editor] Rejected / revision requested. Comment:', comment);
-    // await axios.put(`/api/series/proposal/${proposalId}/reject`, { comment });
+  const handleReject = async (comment: string) => {
+    if (!selectedSeries) return;
+    try {
+      // Call actual BE review API
+      await apiClient.series.review(selectedSeries._id, 'REJECTED', comment);
+      
+      // Call actual BE notification API to notify Mangaka
+      const mangakaIdStr = typeof selectedSeries.mangakaId === 'object' && selectedSeries.mangakaId !== null 
+        ? (selectedSeries.mangakaId as any)._id 
+        : selectedSeries.mangakaId;
+      
+      await apiClient.notifications.create(
+        mangakaIdStr,
+        'Yêu cầu chỉnh sửa đề xuất Series mới',
+        `Biên tập viên ${currentUser.name} yêu cầu chỉnh sửa đề xuất Series "${selectedSeries.title}". Nhận xét: ${comment}`,
+        'WARNING'
+      );
+
+      showToast('Đã gửi yêu cầu chỉnh sửa và thông báo cho tác giả.', 'warn');
+      onRefreshAll();
+      handleReset();
+    } catch (err: any) {
+      showToast(err.message || 'Gửi yêu cầu chỉnh sửa thất bại', 'warn');
+    }
   };
 
   const handleReset = () => {
     setSubmittedProposal(null);
     setFinalStatus(null);
+    setSelectedSeriesId(null);
   };
+
+  // Map backend selectedSeries to EditorView proposal input
+  const activeProposal = selectedSeries ? {
+    title: selectedSeries.title,
+    genre: (selectedSeries as any).genre || 'Shonen',
+    synopsis: selectedSeries.synopsis,
+    storyboardFile: null,
+    storyboardPreviewName: selectedSeries.coverImage ? selectedSeries.coverImage.split('/').pop() || 'storyboard.pdf' : 'storyboard.zip',
+    storyboardPreviewSize: 'N/A',
+    submittedAt: selectedSeries.createdAt ? new Date(selectedSeries.createdAt).toLocaleString() : new Date().toLocaleString(),
+    submittedBy: typeof selectedSeries.mangakaId === 'object' && selectedSeries.mangakaId !== null ? (selectedSeries.mangakaId as any).name : 'Unknown Mangaka',
+  } : null;
 
   // ── Determine which content to show ───────────────────────────────────────
   // MANGAKA: always shows their own submission form (until submitted)
   // EDITOR:  shows review view if a proposal is queued, otherwise empty state
   const showMangakaForm    = isMangaka && !submittedProposal;
   const showMangakaSuccess = isMangaka && !!submittedProposal;
-  const showEditorReview   = isEditor  && !!submittedProposal;
-  const showEditorEmpty    = isEditor  && !submittedProposal;
+  const showEditorReview   = isEditor  && pendingSeriesList.length > 0;
+  const showEditorEmpty    = isEditor  && pendingSeriesList.length === 0;
 
   return (
     /* Outer container — dark matte black shell, matching WorkspaceCanvas */
@@ -664,6 +729,17 @@ export default function TaskDelegation({
             </p>
           </div>
         </div>
+
+        {/* Toast status banner */}
+        {toast && (
+          <div className={`px-3 py-1.5 rounded-md text-xs font-semibold ${
+            toast.type === 'success'
+              ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+              : 'bg-red-500/10 text-red-400 border border-red-500/20'
+          }`}>
+            {toast.msg}
+          </div>
+        )}
 
         {/* Role indicator badge */}
         <div className={`px-2.5 py-1 rounded-md border text-[10px] font-bold uppercase tracking-wider ${
@@ -730,14 +806,40 @@ export default function TaskDelegation({
           </div>
         )}
 
-        {/* EDITOR: Review layout */}
-        {showEditorReview && (
-          <EditorView
-            proposal={submittedProposal!}
-            onForward={handleForward}
-            onReject={handleReject}
-            onReset={handleReset}
-          />
+        {/* EDITOR: Review layout with real proposals */}
+        {showEditorReview && activeProposal && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
+            {/* Sidebar list of pending proposals */}
+            <div className="lg:col-span-3 bg-[#1e1e24] border border-[#2d2d34] rounded-md p-4 space-y-2 max-h-[500px] overflow-y-auto">
+              <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Pending Proposals</h3>
+              {pendingSeriesList.map(s => (
+                <button
+                  key={s._id}
+                  onClick={() => setSelectedSeriesId(s._id)}
+                  className={`w-full text-left px-3 py-2.5 rounded border transition-all ${
+                    (selectedSeriesId === s._id || (!selectedSeriesId && pendingSeriesList[0]?._id === s._id))
+                      ? 'bg-red-600/10 border-red-600/50 text-red-400 font-bold'
+                      : 'bg-[#121214] border-[#2d2d34] text-slate-400 hover:border-slate-500'
+                  }`}
+                >
+                  <p className="text-xs truncate">{s.title}</p>
+                  <p className="text-[9px] text-slate-500 mt-1 uppercase">
+                    By {typeof s.mangakaId === 'object' && s.mangakaId !== null ? (s.mangakaId as any).name : 'Author'}
+                  </p>
+                </button>
+              ))}
+            </div>
+
+            {/* Review detail panel */}
+            <div className="lg:col-span-9">
+              <EditorView
+                proposal={activeProposal}
+                onForward={handleForward}
+                onReject={handleReject}
+                onReset={handleReset}
+              />
+            </div>
+          </div>
         )}
 
         {/* EDITOR: Empty state (no proposal in queue) */}

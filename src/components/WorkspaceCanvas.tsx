@@ -175,6 +175,37 @@ function TaskCard({ task, isActive, muted, onClick }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// AuthImage — handles loading protected images with JWT token
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AuthImage({ src, alt, className, draggable }: { src: string; alt?: string; className?: string; draggable?: boolean }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!src) return;
+    let objectUrl: string | null = null;
+    if (src.includes('/api/')) {
+      const token = localStorage.getItem('mangaflow_token');
+      fetch(src, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.blob() : Promise.reject('Failed to load image'))
+        .then(b => {
+          objectUrl = URL.createObjectURL(b);
+          setBlobUrl(objectUrl);
+        })
+        .catch(console.error);
+    } else {
+      setBlobUrl(src);
+    }
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [src]);
+
+  if (!blobUrl) return null;
+  return <img src={blobUrl} alt={alt} className={className} draggable={draggable} />;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DrawableCanvas — shared bounding-box engine
 // Used in both REVIEW mode (over mock manga) and CREATION mode (over sketch)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -241,7 +272,7 @@ function DrawableCanvas({
     >
       {/* Background — real sketch image OR mock manga panels */}
       {sketchSrc ? (
-        <img
+        <AuthImage
           src={sketchSrc}
           alt="Rough sketch"
           draggable={false}
@@ -454,7 +485,17 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
   }, []);
 
   useEffect(() => {
-    if (activeTask && activeTask.rawTask?.region) {
+    if (activeTask && activeTask.rawTask?.regions && activeTask.rawTask.regions.length > 0) {
+      const mapped = activeTask.rawTask.regions.map((r: any, idx: number) => ({
+        id: `rb_${activeTask.id}_${idx}`,
+        leftPct: r.x,
+        topPct: r.y,
+        widthPct: r.width,
+        heightPct: r.height,
+        comment: r.comment || activeTask.rawTask.reviewNote || ''
+      }));
+      setReviewBoxes(mapped);
+    } else if (activeTask && activeTask.rawTask?.region) {
       const r = activeTask.rawTask.region;
       setReviewBoxes([
         {
@@ -752,11 +793,13 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                   style={{ width: '100%', maxWidth: '360px', aspectRatio: '3/4' }}
                 >
                   <DrawableCanvas
-                    sketchSrc={
-                      activeTask?.rawTask?.description && activeTask.rawTask.description.startsWith('[IMAGE_URL:')
-                        ? activeTask.rawTask.description.match(/^\[IMAGE_URL:([^\]]+)\]/)?.[1]
-                        : null
-                    }
+                    sketchSrc={(() => {
+                      if (!activeTask?.rawTask?.description || !activeTask.rawTask.description.startsWith('[IMAGE_URL:')) return null;
+                      const match = activeTask.rawTask.description.match(/^\[IMAGE_URL:([^\]]+)\]/);
+                      if (!match) return null;
+                      const rawUrl = match[1];
+                      return rawUrl.startsWith('http') ? rawUrl : `${apiClient.getConfig().baseUrl}/${rawUrl.startsWith('/') ? rawUrl.slice(1) : rawUrl}`;
+                    })()}
                     boxes={reviewBoxes}
                     activeBoxId={activeBoxId}
                     onBoxCreated={b => {

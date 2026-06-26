@@ -133,7 +133,7 @@ export default function ChapterManagement({
         <aside className="w-1/3 min-w-[250px] border-r border-[#2d2d34] bg-[#1e1e24] flex flex-col p-4">
           <h2 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Your Series</h2>
           <div className="space-y-2 overflow-y-auto">
-            {series.map(s => (
+            {series.filter(s => s.status !== 'PENDING' && s.status !== 'REJECTED').map(s => (
               <button
                 key={s._id}
                 onClick={() => onSelectSeries(s)}
@@ -147,7 +147,7 @@ export default function ChapterManagement({
                 <div className="text-[10px] text-slate-500 mt-1 uppercase">{s.status}</div>
               </button>
             ))}
-            {series.length === 0 && (
+            {series.filter(s => s.status !== 'PENDING' && s.status !== 'REJECTED').length === 0 && (
               <p className="text-xs text-slate-500 text-center py-4">No series found.</p>
             )}
           </div>
