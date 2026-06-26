@@ -101,8 +101,10 @@ export const apiClient = {
       return res.data;
     },
 
-    create: async (seriesId: string, chapterNumber: number, deadline: string): Promise<Chapter> => {
-      const res = await makeFetchRequest('/api/chapters', 'POST', { seriesId, chapterNumber, deadline });
+    create: async (seriesId: string, chapterNumber: number, deadline: string, title?: string): Promise<Chapter> => {
+      const payload: any = { seriesId, chapterNumber, deadline };
+      if (title) payload.title = title;
+      const res = await makeFetchRequest('/api/chapters', 'POST', payload);
       return res.data;
     },
     

@@ -35,7 +35,11 @@ export default function ChapterManagement({
   };
 
   const currentSeriesChapters = activeSeries 
-    ? chapters.filter(c => c.seriesId === activeSeries._id || c.series === activeSeries._id)
+    ? chapters.filter(c => {
+        const sid = typeof c.seriesId === 'object' && c.seriesId !== null ? (c.seriesId as any)._id : c.seriesId;
+        const fallbackSid = typeof c.series === 'object' && c.series !== null ? (c.series as any)._id : c.series;
+        return sid === activeSeries._id || fallbackSid === activeSeries._id;
+      })
     : [];
 
   const handleCreate = async () => {
@@ -44,8 +48,7 @@ export default function ChapterManagement({
     if (!cDeadline) return showToast('Deadline is required', 'error');
 
     try {
-      await apiClient.chapters.create(activeSeries._id, Number(cNumber), cDeadline);
-      // Currently API doesn't take title, but we send what it accepts
+      await apiClient.chapters.create(activeSeries._id, Number(cNumber), cDeadline, cTitle.trim());
       showToast(`Chapter ${cNumber} created successfully!`);
       setIsCreating(false);
       resetForm();
@@ -61,6 +64,7 @@ export default function ChapterManagement({
     try {
       await apiClient.chapters.update(chapterId, { 
         chapterNumber: Number(cNumber),
+        title: cTitle.trim(),
         deadline: cDeadline
       });
       showToast(`Chapter updated successfully!`);
@@ -86,12 +90,14 @@ export default function ChapterManagement({
   const startEdit = (c: Chapter) => {
     setEditingChapterId(c._id);
     setCNumber(c.chapterNumber);
+    setCTitle(c.title || '');
     setCDeadline(c.deadline ? new Date(c.deadline).toISOString().split('T')[0] : '');
     setIsCreating(false);
   };
 
   const resetForm = () => {
     setCNumber('');
+    setCTitle('');
     setCDeadline('');
     setEditingChapterId(null);
   };
@@ -188,14 +194,24 @@ export default function ChapterManagement({
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Deadline</label>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Chapter Title (Optional)</label>
                       <input 
-                        type="date"
-                        value={cDeadline}
-                        onChange={e => setCDeadline(e.target.value)}
-                        className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 transition-colors [&::-webkit-calendar-picker-indicator]:invert"
+                        type="text"
+                        value={cTitle}
+                        onChange={e => setCTitle(e.target.value)}
+                        className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 transition-colors"
+                        placeholder="e.g. The Beginning"
                       />
                     </div>
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Deadline</label>
+                    <input 
+                      type="date"
+                      value={cDeadline}
+                      onChange={e => setCDeadline(e.target.value)}
+                      className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 transition-colors [&::-webkit-calendar-picker-indicator]:invert"
+                    />
                   </div>
                   <div className="flex items-center gap-2">
                     <button 
@@ -230,7 +246,7 @@ export default function ChapterManagement({
                         </div>
                         <div>
                           <div className="text-sm font-bold text-white flex items-center gap-2">
-                            Chapter {c.chapterNumber}
+                            Chapter {c.chapterNumber} {c.title && <span className="text-slate-400 font-medium">- {c.title}</span>}
                             <span className="px-2 py-0.5 rounded bg-[#121214] border border-[#2d2d34] text-[9px] text-slate-500 font-mono">
                               {c.status}
                             </span>
