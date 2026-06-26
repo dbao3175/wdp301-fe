@@ -139,7 +139,7 @@ export default function ChapterManagement({
                 }`}
               >
                 <div className="font-bold text-sm">{s.title}</div>
-                <div className="text-[10px] text-slate-500 mt-1">{s.genre}</div>
+                <div className="text-[10px] text-slate-500 mt-1 uppercase">{s.status}</div>
               </button>
             ))}
             {series.length === 0 && (
