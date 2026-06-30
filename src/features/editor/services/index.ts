@@ -48,8 +48,97 @@ export const dashboardService = {
 // PROPOSAL SERVICE
 // =========================================================
 
+import { apiClient } from '../../../api/client';
+
+function mapBackendProposalToFrontend(bp: any): Proposal {
+  const mangakaName = bp.mangakaId?.name || bp.mangaka?.name || bp.mangakaName || 'Unknown Mangaka';
+  const mangakaEmail = bp.mangakaId?.email || bp.mangaka?.email || '';
+  const submittedDate = bp.submittedAt ? bp.submittedAt.split('T')[0] : (bp.createdAt ? bp.createdAt.split('T')[0] : '2026-06-30');
+  
+  let status: ProposalStatus = 'UNDER_REVIEW';
+  if (bp.status === 'FORWARDED') {
+    status = 'APPROVED_BY_TANTOU';
+  } else if (bp.status === 'REJECTED') {
+    status = 'REVISION_REQUESTED';
+  } else if (bp.status === 'PENDING') {
+    status = 'SUBMITTED';
+  } else if (bp.status === 'APPROVED') {
+    status = 'APPROVED';
+  }
+
+  return {
+    id: bp._id || bp.id,
+    title: bp.title || '',
+    synopsis: bp.synopsis || '',
+    genre: (bp.genre || 'Action') as any,
+    tags: bp.tags || [],
+    mangaka: {
+      id: bp.mangakaId?._id || bp.mangakaId || 'unknown',
+      name: mangakaName,
+      avatar: bp.mangakaId?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${mangakaName}`,
+      email: mangakaEmail,
+      totalSeries: 1,
+      joinedDate: '2026-01-01'
+    },
+    submittedDate: submittedDate,
+    lastUpdated: bp.updatedAt ? bp.updatedAt.split('T')[0] : submittedDate,
+    status: status,
+    storyDraft: {
+      description: bp.synopsis || '',
+      samplePages: bp.storyboardUrl ? [
+        {
+          id: 'sp-001',
+          pageNumber: 1,
+          imageUrl: bp.storyboardUrl,
+          caption: 'Storyboard draft uploaded by Mangaka'
+        }
+      ] : []
+    },
+    characterDesigns: [],
+    reviewComments: bp.comment ? [
+      {
+        id: 'c-001',
+        author: {
+          id: 'editor',
+          name: 'Editor Reviewer',
+          role: 'EDITOR',
+          avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Editor'
+        },
+        content: bp.comment,
+        timestamp: bp.updatedAt || new Date().toISOString()
+      }
+    ] : [],
+    assignedEditorId: bp.editorId || '',
+    targetAudience: 'Shonen',
+    estimatedChapters: 10,
+    scheduledFrequency: 'Weekly'
+  };
+}
+
 export const proposalService = {
   async getAll(filters?: { status?: ProposalStatus; search?: string }): Promise<Proposal[]> {
+    try {
+      const backendProposals = await apiClient.proposals.getAll();
+      if (backendProposals && backendProposals.length > 0) {
+        let mapped = backendProposals.map(mapBackendProposalToFrontend);
+        if (filters?.status) {
+          mapped = mapped.filter(p => p.status === filters.status);
+        }
+        if (filters?.search) {
+          const q = filters.search.toLowerCase();
+          mapped = mapped.filter(
+            p =>
+              p.title.toLowerCase().includes(q) ||
+              p.mangaka.name.toLowerCase().includes(q) ||
+              p.genre.toLowerCase().includes(q),
+          );
+        }
+        return mapped.sort((a, b) => new Date(b.submittedDate).getTime() - new Date(a.submittedDate).getTime());
+      }
+    } catch (e) {
+      console.error('Failed to load backend proposals, falling back to mocks:', e);
+    }
+
     await delay();
     let result = [..._proposals];
     if (filters?.status) {
@@ -68,11 +157,35 @@ export const proposalService = {
   },
 
   async getById(id: string): Promise<Proposal | null> {
+    try {
+      const backendProposals = await apiClient.proposals.getAll();
+      const bp = backendProposals.find((p: any) => p._id === id || p.id === id);
+      if (bp) {
+        return mapBackendProposalToFrontend(bp);
+      }
+    } catch (e) {
+      console.error('Failed to get backend proposal by ID:', e);
+    }
+
     await delay();
     return _proposals.find(p => p.id === id) ?? null;
   },
 
   async updateStatus(id: string, status: ProposalStatus): Promise<Proposal> {
+    if (id.length === 24) {
+      try {
+        if (status === 'APPROVED_BY_TANTOU' || status === 'APPROVED') {
+          const res = await apiClient.proposals.forward(id, 'Forwarded by Editor');
+          return mapBackendProposalToFrontend(res);
+        } else if (status === 'REVISION_REQUESTED') {
+          const res = await apiClient.proposals.reject(id, 'Revision requested by Editor');
+          return mapBackendProposalToFrontend(res);
+        }
+      } catch (e) {
+        console.error('Failed to update backend proposal status:', e);
+      }
+    }
+
     await delay();
     const idx = _proposals.findIndex(p => p.id === id);
     if (idx === -1) throw new Error('Proposal not found');
@@ -102,6 +215,15 @@ export const proposalService = {
   },
 
   async requestRevision(id: string, reason: string): Promise<Proposal> {
+    if (id.length === 24) {
+      try {
+        const res = await apiClient.proposals.reject(id, reason);
+        return mapBackendProposalToFrontend(res);
+      } catch (e) {
+        console.error('Failed to reject backend proposal:', e);
+      }
+    }
+
     await delay();
     const idx = _proposals.findIndex(p => p.id === id);
     if (idx === -1) throw new Error('Proposal not found');
@@ -124,6 +246,15 @@ export const proposalService = {
   },
 
   async approveAndSubmit(id: string): Promise<Proposal> {
+    if (id.length === 24) {
+      try {
+        const res = await apiClient.proposals.forward(id, 'Approved by Editor and forwarded to Board');
+        return mapBackendProposalToFrontend(res);
+      } catch (e) {
+        console.error('Failed to forward backend proposal:', e);
+      }
+    }
+
     await delay();
     const idx = _proposals.findIndex(p => p.id === id);
     if (idx === -1) throw new Error('Proposal not found');
