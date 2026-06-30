@@ -2,7 +2,7 @@
  * Type definitions for MangaFlow
  */
 
-export type UserRole = 'MANGAKA' | 'ASSISTANT' | 'EDITOR' | 'BOARD_MEMBER';
+export type UserRole = 'MANGAKA' | 'ASSISTANT' | 'EDITOR' | 'BOARD_MEMBER' | 'ADMIN';
 
 export interface User {
   _id: string;
@@ -20,6 +20,7 @@ export interface Series {
   _id: string;
   title: string;
   synopsis: string;
+  coverImage?: string;
   mangakaId: string | { _id: string; name: string; email: string };
   status: SeriesStatus;
   pubSchedule?: PubSchedule | null;
@@ -29,18 +30,29 @@ export interface Series {
   createdAt?: string;
 }
 
-export type ChapterStatus = 'IN_PROGRESS' | 'COMPLETED';
+export type ChapterStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ARCHIVED';
 
 export interface Chapter {
   _id: string;
   seriesId: string;
   series?: string; // MongoDB ref option
   chapterNumber: number;
+  title?: string;
   status: ChapterStatus;
   deadline: string;
 }
 
-export type TaskStatus = 'PENDING' | 'COMPLETED';
+export type TaskStatus = 
+  | 'PENDING' 
+  | 'IN_PROGRESS' 
+  | 'SUBMITTED' 
+  | 'MANGAKA_APPROVED' 
+  | 'APPROVED' 
+  | 'REVISION_REQUESTED' 
+  | 'REVISING' 
+  | 'COMPLETED' 
+  | 'ASSIGNED' 
+  | 'PENDING_REVIEW';
 
 export interface Task {
   _id: string;
@@ -60,6 +72,8 @@ export interface Task {
     type: 'panel' | 'bubble' | 'character';
   } | null;
   completedAt?: string;
+  reviewNote?: string;
+  reviewedAt?: string;
 }
 
 export interface Rating {
@@ -77,7 +91,34 @@ export interface Vote {
   submissionId: string; // series proposal ID
   voterId: string;
   decision: 'ACCEPT' | 'REJECT';
+  schedule?: 'WEEKLY' | 'MONTHLY' | null;
   comment?: string;
+  createdAt?: string;
+}
+
+export type DirectiveAction = 'CANCEL' | 'CHANGE_FORMAT';
+export type DirectiveStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface DirectiveVote {
+  _id: string;
+  voterId: string;
+  voterName?: string;
+  decision: 'ACCEPT' | 'REJECT';
+  comment?: string;
+  createdAt?: string;
+}
+
+export interface Directive {
+  _id: string;
+  seriesId: string;
+  seriesTitle?: string;
+  actionType: DirectiveAction;
+  newSchedule?: 'WEEKLY' | 'MONTHLY' | null;
+  reason: string;
+  status: DirectiveStatus;
+  proposedBy: string;
+  proposedByName?: string;
+  votes: DirectiveVote[];
   createdAt?: string;
 }
 

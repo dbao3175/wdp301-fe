@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { User, Series, Chapter, Rating } from '../types';
+import React, { useState, useEffect } from 'react';
+import { User, Series, Rating, Vote, Directive, DirectiveAction } from '../types';
 import { apiClient } from '../api/client';
-import { Vote, FileSpreadsheet, CheckSquare, PlusSquare, AlertOctagon, TrendingUp } from 'lucide-react';
+import { CheckSquare, X, Gavel, Plus } from 'lucide-react';
 
 interface EditorialBoardProps {
   currentUser: User;
@@ -16,91 +16,215 @@ export default function EditorialBoard({
   ratings,
   onRefreshAll
 }: EditorialBoardProps) {
-  // Pending series for vote
-  const pendingSeries = series.filter(s => s.status === 'PENDING');
+  // Real backend submission lists
+  const [submissionsList, setSubmissionsList] = useState<any[]>([]);
+  const [boardMembers, setBoardMembers] = useState<User[]>([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<any | null>(null);
+  const [voterStatus, setVoterStatus] = useState<any>(null);
+  const [selectedVoterIds, setSelectedVoterIds] = useState<string[]>([]);
 
-  // Voting state mapping keyed by series ID
-  const [votesData, setVotesData] = useState<Record<string, { decision: 'ACCEPT' | 'REJECT'; comment: string; schedule: 'WEEKLY' | 'MONTHLY' }>>({});
-  const [voteMessages, setVoteMessages] = useState<Record<string, string>>({});
+  const ITEMS_PER_PAGE = 5;
 
-  // Status transitions state forms
-  const [transitionSeriesId, setTransitionSeriesId] = useState('');
-  const [transitionStatus, setTransitionStatus] = useState<'PENDING' | 'APPROVED' | 'IN_PRODUCTION' | 'PUBLISHED' | 'REJECTED' | 'CANCELLED'>('PUBLISHED');
-  const [transitionStatusMsg, setTransitionStatusMsg] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [modalVotes, setModalVotes] = useState<Vote[]>([]);
+  const [modalVoteForm, setModalVoteForm] = useState<{
+    decision: 'ACCEPT' | 'REJECT';
+    comment: string;
+    schedule: 'WEEKLY' | 'MONTHLY';
+  }>({ decision: 'ACCEPT', comment: '', schedule: 'WEEKLY' });
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalSubmitting, setModalSubmitting] = useState(false);
 
-  // Reader votes ingestion form states
-  const [ingestSeriesId, setIngestSeriesId] = useState('');
-  const [ingestVoteCount, setIngestVoteCount] = useState(15420);
-  const [ingestSource, setIngestSource] = useState('Weekly Shonen Jump App');
-  const [ingestMsg, setIngestMsg] = useState('');
+  const [directives, setDirectives] = useState<Directive[]>([]);
+  const [showDirectiveForm, setShowDirectiveForm] = useState(false);
+  const [dirForm, setDirForm] = useState<{
+    seriesId: string;
+    actionType: DirectiveAction;
+    newSchedule: 'WEEKLY' | 'MONTHLY';
+    reason: string;
+  }>({ seriesId: '', actionType: 'CANCEL', newSchedule: 'MONTHLY', reason: '' });
+  const [dirMsg, setDirMsg] = useState('');
+  const [selectedDirective, setSelectedDirective] = useState<Directive | null>(null);
+  const [dirVoteForm, setDirVoteForm] = useState<{ decision: 'ACCEPT' | 'REJECT'; comment: string }>({ decision: 'ACCEPT', comment: '' });
+  const [dirVoteMsg, setDirVoteMsg] = useState('');
+  const [dirVoteSubmitting, setDirVoteSubmitting] = useState(false);
 
-  // Submit decision vote
-  const handleVoteSubmit = async (seriesId: string) => {
-    const data = votesData[seriesId] || { decision: 'ACCEPT', comment: '', schedule: 'WEEKLY' };
-    if (!data.comment) {
-      setVoteMessages({ ...voteMessages, [seriesId]: '❌ Error: Comment is required for editorial voting.' });
-      return;
-    }
+  const activeSeries = series.filter(s => s.status !== 'PENDING' && s.status !== 'CANCELLED' && s.status !== 'REJECTED');
 
+  const fetchAllSubmissions = async () => {
+    setLoadingSubmissions(true);
     try {
-      // 1. Submit Vote Record
-      await apiClient.votes.submit(seriesId, data.decision, data.comment);
-      
-      // 2. Perform Series Review (APPROVED or REJECTED)
-      const actionValue = data.decision === 'ACCEPT' ? 'APPROVED' : 'REJECTED';
-      await apiClient.series.review(seriesId, actionValue, data.comment, data.schedule);
-      
-      setVoteMessages({ ...voteMessages, [seriesId]: `🎉 Decision submitted successfully! Series is now ${actionValue}.` });
-      
-      // Refresh local caches
-      onRefreshAll();
-    } catch (err: any) {
-      setVoteMessages({ ...voteMessages, [seriesId]: `❌ Error: ${err.message}` });
+      const data = await apiClient.submissions.getAll();
+      setSubmissionsList(data || []);
+    } catch (err) {
+      console.error('Failed to fetch submissions:', err);
+    } finally {
+      setLoadingSubmissions(false);
     }
   };
 
-  // Submit general state changes
-  const handleTransitionSubmit = async () => {
-    if (!transitionSeriesId) {
-      setTransitionStatusMsg('❌ Select active series.');
-      return;
-    }
-
+  const fetchBoardMembers = async () => {
     try {
-      await apiClient.series.updateStatus(transitionSeriesId, transitionStatus);
-      setTransitionStatusMsg('✅ Series status shifted correctly!');
-      onRefreshAll();
-      setTimeout(() => setTransitionStatusMsg(''), 5000);
-    } catch (err: any) {
-      setTransitionStatusMsg(`Status transition denied: ${err.message}`);
+      const data = await apiClient.users.getAll('BOARD_MEMBER');
+      setBoardMembers(data || []);
+    } catch (err) {
+      console.error('Failed to fetch board members:', err);
     }
   };
 
-  // Ingest reader vote counts
-  const handleIngestSubmit = async () => {
-    if (!ingestSeriesId) {
-      setIngestMsg('❌ Select target series.');
-      return;
-    }
+  useEffect(() => {
+    fetchAllSubmissions();
+    fetchBoardMembers();
+    fetchDirectives();
+  }, []);
 
+  const pendingPitches = submissionsList.filter(
+    (sub) => sub.submissionType === 'PITCH' && sub.decisionStatus === 'PENDING'
+  );
+
+  const totalPages = Math.max(1, Math.ceil(pendingPitches.length / ITEMS_PER_PAGE));
+  const paginatedPitches = pendingPitches.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const openSubmissionModal = async (sub: any) => {
+    setSelectedSubmission(sub);
+    setModalMessage('');
+    setModalVoteForm({ decision: 'ACCEPT', comment: '', schedule: 'WEEKLY' });
+    setSelectedVoterIds([]);
     try {
-      await apiClient.ratings.submit(ingestSeriesId, ingestVoteCount, ingestSource);
-      setIngestMsg('🚀 Ratings data ingested! Ranks recalculated instantly.');
-      onRefreshAll();
-      setIngestVoteCount(15420);
-      setIngestSource('Weekly Shonen Jump App');
-      setTimeout(() => setIngestMsg(''), 5000);
-    } catch (err: any) {
-      setIngestMsg(`❌ Ingestion failed: ${err.message}`);
+      const votes = await apiClient.votes.getForSubmission(sub._id);
+      setModalVotes(Array.isArray(votes) ? votes : (votes as any)?.data || []);
+
+      const statusRes = await apiClient.submissions.getVotingStatus(sub._id);
+      setVoterStatus(statusRes?.data || null);
+    } catch (err) {
+      console.error('Failed to open submission details:', err);
+      setModalVotes([]);
+      setVoterStatus(null);
     }
   };
 
-  const updateVoteData = (seriesId: string, fields: Partial<typeof votesData[string]>) => {
-    const current = votesData[seriesId] || { decision: 'ACCEPT', comment: '', schedule: 'WEEKLY' };
-    setVotesData({
-      ...votesData,
-      [seriesId]: { ...current, ...fields }
-    });
+  const closeModal = () => {
+    setSelectedSubmission(null);
+    setModalVotes([]);
+    setVoterStatus(null);
+    setSelectedVoterIds([]);
+    setModalMessage('');
+    setModalSubmitting(false);
+  };
+
+  const handleModalVoteSubmit = async () => {
+    if (!selectedSubmission) return;
+    if (!modalVoteForm.comment.trim()) {
+      setModalMessage('❌ Comment is required for editorial voting.');
+      return;
+    }
+    setModalSubmitting(true);
+    try {
+      const scheduleParam = modalVoteForm.decision === 'ACCEPT' ? modalVoteForm.schedule : undefined;
+      await apiClient.votes.submit(
+        selectedSubmission._id,
+        modalVoteForm.decision,
+        modalVoteForm.comment,
+        scheduleParam
+      );
+      setModalMessage('🎉 Vote recorded successfully!');
+      
+      const votes = await apiClient.votes.getForSubmission(selectedSubmission._id);
+      setModalVotes(Array.isArray(votes) ? votes : (votes as any)?.data || []);
+
+      const statusRes = await apiClient.submissions.getVotingStatus(selectedSubmission._id);
+      setVoterStatus(statusRes?.data || null);
+
+      fetchAllSubmissions();
+      onRefreshAll();
+    } catch (err: any) {
+      setModalMessage(`❌ ${err.message}`);
+    } finally {
+      setModalSubmitting(false);
+    }
+  };
+
+  const handleAssignVoters = async () => {
+    if (!selectedSubmission || selectedVoterIds.length === 0) return;
+    try {
+      await apiClient.submissions.assignVoters(selectedSubmission._id, selectedVoterIds);
+      const statusRes = await apiClient.submissions.getVotingStatus(selectedSubmission._id);
+      setVoterStatus(statusRes?.data || null);
+      setSelectedVoterIds([]);
+      setModalMessage('🎉 Voters assigned successfully!');
+      fetchAllSubmissions();
+    } catch (err: any) {
+      setModalMessage(`❌ ${err.message}`);
+    }
+  };
+
+  const userVote = selectedSubmission
+    ? modalVotes.find(v => v.voterId === currentUser._id)
+    : null;
+
+  const fetchDirectives = async () => {
+    try {
+      const data = await apiClient.directives.getAll();
+      setDirectives(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to fetch directives:', err);
+    }
+  };
+
+  const handleCreateDirective = async () => {
+    if (!dirForm.seriesId) { setDirMsg('❌ Select a series.'); return; }
+    if (!dirForm.reason.trim()) { setDirMsg('❌ Reason is required.'); return; }
+    try {
+      await apiClient.directives.create(
+        dirForm.seriesId,
+        dirForm.actionType,
+        dirForm.reason,
+        dirForm.actionType === 'CHANGE_FORMAT' ? dirForm.newSchedule : undefined
+      );
+      setDirMsg('✅ Directive proposal created!');
+      setDirForm({ seriesId: '', actionType: 'CANCEL', newSchedule: 'MONTHLY', reason: '' });
+      setShowDirectiveForm(false);
+      onRefreshAll();
+      setTimeout(fetchDirectives, 300);
+      setTimeout(() => setDirMsg(''), 5000);
+    } catch (err: any) {
+      setDirMsg(`❌ ${err.message}`);
+    }
+  };
+
+  const handleDirectiveVoteSubmit = async () => {
+    if (!selectedDirective) return;
+    if (!dirVoteForm.comment.trim()) { setDirVoteMsg('❌ Comment required.'); return; }
+    setDirVoteSubmitting(true);
+    try {
+      await apiClient.directives.vote(selectedDirective._id, dirVoteForm.decision, dirVoteForm.comment);
+      setDirVoteMsg('✅ Vote recorded!');
+      onRefreshAll();
+      setTimeout(fetchDirectives, 300);
+      const updated = await apiClient.directives.getAll();
+      const fresh = (Array.isArray(updated) ? updated : []).find(d => d._id === selectedDirective._id);
+      if (fresh) setSelectedDirective(fresh);
+    } catch (err: any) {
+      setDirVoteMsg(`❌ ${err.message}`);
+    } finally {
+      setDirVoteSubmitting(false);
+    }
+  };
+
+  const openDirectiveModal = (d: Directive) => {
+    setSelectedDirective(d);
+    setDirVoteMsg('');
+    setDirVoteForm({ decision: 'ACCEPT', comment: '' });
+  };
+
+  const closeDirectiveModal = () => {
+    setSelectedDirective(null);
+    setDirVoteMsg('');
+    setDirVoteSubmitting(false);
   };
 
   return (
@@ -110,264 +234,478 @@ export default function EditorialBoard({
           <h1 className="font-syne text-3xl font-black text-ink-black uppercase italic tracking-tight">Editorial Board</h1>
           <p className="font-sans text-xs text-neutral-600 font-bold uppercase tracking-wider mt-1.5 flex items-center gap-2">
             <span className="inline-block w-2.5 h-2.5 bg-[#E63946]"></span>
-            Voting &amp; Serialization decisions for newly pitched series. Realtime status alignment panel.
+            Majority vote required to approve proposals. Vote tally &amp; serialization decisions panel.
           </p>
         </div>
       </header>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-        
-        {/* Pending Proposals Voting Columns */}
         <section className="xl:col-span-8 flex flex-col gap-6">
           <h2 className="font-syne text-xl font-black uppercase text-ink-black pb-4 border-b-4 border-ink-black flex items-center gap-3 select-none">
             <CheckSquare className="text-[#E63946] w-6 h-6 animate-pulse" />
             Pending Series Voting
+            {pendingPitches.length > 0 && (
+              <span className="ml-auto text-[10px] font-mono font-black text-neutral-500">
+                {pendingPitches.length} PROPOSAL{pendingPitches.length > 1 ? 'S' : ''} AWAITING BOARD DECISION
+              </span>
+            )}
           </h2>
 
-          <div className="flex flex-col gap-5">
-            {pendingSeries.map((item) => {
-              const currentVote = votesData[item._id] || { decision: 'ACCEPT', comment: '', schedule: 'WEEKLY' };
-              const msg = voteMessages[item._id];
+          <div className="flex flex-col">
+            {paginatedPitches.map((item) => {
+              const seriesItem = series.find(s => s._id === item.seriesId) || {
+                title: 'Loading pitch details...',
+                synopsis: 'Pitch metadata loading...',
+                coverImage: null,
+                mangakaId: 'Unknown'
+              };
+              const totalRequired = item.requiredVoters ? item.requiredVoters.length : 0;
+              const votedCount = item.requiredVoters ? item.requiredVoters.filter((v: any) => v.hasVoted).length : 0;
 
               return (
-                <div 
-                  key={item._id}
-                  className="bg-white border-4 border-ink-black rounded-none p-6 shadow-[8px_8px_0px_#141414] transition-all"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-3 mb-1.5">
-                        <h3 className="font-syne text-lg font-black uppercase tracking-tight">{item.title}</h3>
-                        <span className="px-2.5 py-0.5 border-2 border-ink-black text-[9px] font-mono font-black uppercase tracking-wider bg-[#FFF3B0] text-ink-black">
-                          Pending Approval
-                        </span>
-                      </div>
-                      <p className="font-sans text-[10px] font-extrabold uppercase text-neutral-500">
-                        Author Account ID: {typeof item.mangakaId === 'object' ? item.mangakaId.name : item.mangakaId}
-                      </p>
+                <div key={item._id} className="bg-white border-4 border-ink-black border-t-0 first:border-t-4 p-5 flex items-center gap-5 hover:bg-[#F5F5F0] transition-colors">
+                  <div className="w-16 h-20 bg-neutral-200 border-2 border-ink-black flex-shrink-0 overflow-hidden">
+                    {seriesItem.coverImage ? (
+                      <img src={seriesItem.coverImage} alt={seriesItem.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-neutral-400 text-[9px] font-mono font-bold">NO COVER</div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-syne text-sm font-black uppercase tracking-tight text-ink-black truncate">{seriesItem.title}</h3>
+                    <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
+                      Author: {typeof seriesItem.mangakaId === 'object' && seriesItem.mangakaId !== null ? (seriesItem.mangakaId as any).name : 'Mangaka'}
+                    </p>
+                    <p className="font-sans text-[10px] text-neutral-400 mt-1 line-clamp-1">{seriesItem.synopsis}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="px-2 py-0.5 text-[8px] font-mono font-black uppercase bg-[#FFF3B0] text-ink-black border border-ink-black">
+                        {item.action}
+                      </span>
                     </div>
                   </div>
-
-                  {msg && (
-                    <div className={`p-3 border-2 mb-4 text-xs font-mono font-bold uppercase select-none ${msg.startsWith('🎉') ? 'bg-[#2ECC71]/15 text-[#2ECC71] border-[#2ECC71]' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
-                      {msg}
-                    </div>
-                  )}
-
-                  <p className="bg-[#F5F5F0] p-4 border-2 border-ink-black rounded-none text-xs leading-relaxed font-sans font-bold text-ink-black mb-4">
-                    <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">Author Pitch Synopsis:</span>
-                    {item.synopsis}
-                  </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="md:col-span-1 space-y-3">
-                      <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase">Decision Vote</label>
-                      
-                      <label className="flex items-center gap-3 p-3 border-2 border-ink-black rounded-none cursor-pointer hover:bg-[#F5F5F0] bg-white text-xs font-bold font-sans uppercase">
-                        <input 
-                          type="radio"
-                          name={`decision_${item._id}`}
-                          className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer"
-                          checked={currentVote.decision === 'ACCEPT'}
-                          onChange={() => updateVoteData(item._id, { decision: 'ACCEPT' })}
-                        />
-                        <span className="select-none">Accept Serialization</span>
-                      </label>
-
-                      <label className="flex items-center gap-3 p-3 border-2 border-ink-black rounded-none cursor-pointer hover:bg-[#F5F5F0] bg-white text-xs font-bold font-sans uppercase">
-                        <input 
-                          type="radio"
-                          name={`decision_${item._id}`}
-                          className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer"
-                          checked={currentVote.decision === 'REJECT'}
-                          onChange={() => updateVoteData(item._id, { decision: 'REJECT' })}
-                        />
-                        <span className="select-none">Reject / Revise pitch</span>
-                      </label>
-
-                      {currentVote.decision === 'ACCEPT' && (
-                        <div className="mt-2 animate-fadeIn">
-                          <label className="block text-[10px] font-mono text-neutral-500 uppercase mb-1 font-bold" htmlFor={`pubSchedule_${item._id}`}>Target Schedule</label>
-                          <select 
-                            id={`pubSchedule_${item._id}`}
-                            className="bg-white border-2 border-ink-black rounded-none p-1.5 text-xs w-full focus:outline-none cursor-pointer font-bold"
-                            value={currentVote.schedule}
-                            onChange={(e) => updateVoteData(item._id, { schedule: e.target.value as any })}
-                          >
-                            <option value="WEEKLY">WEEKLY</option>
-                            <option value="MONTHLY">MONTHLY</option>
-                          </select>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2" htmlFor={`com_${item._id}`}>Editorial Feedback (Required)</label>
-                      <textarea 
-                        id={`com_${item._id}`}
-                        rows={4}
-                        className="w-full bg-[#F5F5F0] border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none"
-                        placeholder="Provide detailed feedback on dialogue flow, pacing, character development, and marketing potential..."
-                        value={currentVote.comment}
-                        onChange={(e) => updateVoteData(item._id, { comment: e.target.value })}
-                        required
-                      ></textarea>
+                  <div className="flex-shrink-0 text-center px-4 py-2 border-2 border-ink-black bg-[#F5F5F0] min-w-[100px]">
+                    <div className="font-mono text-xs font-black text-ink-black">Voters Status</div>
+                    <div className="font-mono text-sm font-black text-[#E63946]">
+                      {votedCount}/{totalRequired}
                     </div>
                   </div>
-
-                  <div className="mt-4 flex justify-end">
-                    <button 
-                      onClick={() => handleVoteSubmit(item._id)}
-                      className="bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs font-extrabold uppercase py-3 px-8 rounded-none border-2 border-ink-black shadow-[4px_4px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
-                    >
-                      Submit Vote
-                    </button>
-                  </div>
+                  <button onClick={() => openSubmissionModal(item)} className="flex-shrink-0 bg-[#E63946] hover:bg-red-600 text-white font-syne text-[10px] font-extrabold uppercase py-2.5 px-5 border-2 border-ink-black shadow-[3px_3px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
+                    Review &amp; Vote
+                  </button>
                 </div>
               );
             })}
-
-            {pendingSeries.length === 0 && (
+            {pendingPitches.length === 0 && (
               <div className="bg-white border-4 border-dashed border-ink-black rounded-none p-12 text-center text-xs font-mono font-bold text-neutral-500 uppercase select-none">
                 🌸 Perfect! All series pitch submissions have been reviewed and voted on. No waiting items.
               </div>
             )}
           </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="bg-white border-2 border-ink-black px-3 py-1.5 font-mono text-[10px] font-bold uppercase hover:bg-[#F5F5F0] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors">
+                ← Prev
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <button key={page} onClick={() => setCurrentPage(page)} className={`w-9 h-9 border-2 border-ink-black font-mono text-xs font-black transition-colors cursor-pointer ${page === currentPage ? 'bg-ink-black text-white shadow-[2px_2px_0px_#E63946]' : 'bg-white text-ink-black hover:bg-[#F5F5F0]'}`}>
+                  {page}
+                </button>
+              ))}
+              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="bg-white border-2 border-ink-black px-3 py-1.5 font-mono text-[10px] font-bold uppercase hover:bg-[#F5F5F0] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors">
+                Next →
+              </button>
+            </div>
+          )}
         </section>
 
-        {/* Sidebar forms */}
         <div className="xl:col-span-4 flex flex-col gap-6">
-          
-          {/* Transition Status card panel */}
+          {/* Directive Proposals Section */}
           <section className="bg-white border-4 border-ink-black rounded-none p-6 shadow-[4px_4px_0px_#141414]">
             <h2 className="font-syne text-md font-black uppercase text-ink-black border-b-2 border-ink-black pb-3 mb-4 flex items-center gap-2 select-none">
-              <AlertOctagon className="text-[#E63946] w-5 h-5" />
-              Update Series Status
+              <Gavel className="text-[#E63946] w-5 h-5" />
+              Board Directive Proposals
             </h2>
+            <p className="font-sans text-[10px] text-neutral-500 font-bold uppercase tracking-wider mb-4">
+              Propose to cancel low-ranking series or change publication format. Majority vote required.
+            </p>
 
-            {transitionStatusMsg && (
-              <div className={`p-3 border-2 mb-3 text-xs font-mono font-bold uppercase select-none leading-normal ${transitionStatusMsg.startsWith('✅') ? 'bg-[#2ECC71]/15 text-[#2ECC71] border-[#2ECC71]' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
-                {transitionStatusMsg}
+            {dirMsg && (
+              <div className={`p-3 border-2 mb-3 text-xs font-mono font-bold uppercase select-none leading-normal ${dirMsg.startsWith('✅') ? 'bg-[#2ECC71]/15 text-[#2ECC71] border-[#2ECC71]' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
+                {dirMsg}
               </div>
             )}
 
-            <form onSubmit={(e) => { e.preventDefault(); handleTransitionSubmit(); }} className="space-y-4">
-              <div>
-                <label className="font-mono text-[10px] text-ink-black block mb-1.5 font-extrabold uppercase animate-pulse" htmlFor="seriesT">Select Series</label>
-                <div className="relative">
-                  <select 
-                    id="seriesT"
-                    value={transitionSeriesId}
-                    onChange={(e) => setTransitionSeriesId(e.target.value)}
-                    className="w-full bg-[#F5F5F0] border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black focus:bg-white focus:outline-none cursor-pointer"
-                    required
-                  >
-                    <option value="">Choose Series...</option>
-                    {series.filter(s => s.status !== 'PENDING').map(s => (
-                      <option key={s._id} value={s._id}>{s.title} ({s.status})</option>
+            {/* Active proposals */}
+            <div className="space-y-3 mb-4">
+              {directives.length === 0 && (
+                <div className="bg-[#F5F5F0] border-2 border-dashed border-neutral-300 p-4 text-center text-xs font-mono font-bold text-neutral-400 uppercase">
+                  No active directives
+                </div>
+              )}
+              {directives.map(d => {
+                const acceptCount = (d.votes || []).filter(v => v.decision === 'ACCEPT').length;
+                const rejectCount = (d.votes || []).filter(v => v.decision === 'REJECT').length;
+                const totalCount = (d.votes || []).length;
+                return (
+                  <div key={d._id} className="border-2 border-ink-black p-3 bg-[#F5F5F0] hover:bg-white transition-colors">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <span className={`inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 ${d.actionType === 'CANCEL' ? 'bg-[#E63946] text-white' : 'bg-[#FFF3B0] text-ink-black border border-ink-black'}`}>
+                          {d.actionType === 'CANCEL' ? 'CANCEL SERIES' : `CHANGE → ${d.newSchedule || 'MONTHLY'}`}
+                        </span>
+                        <span className="font-syne text-xs font-black text-ink-black truncate">{d.seriesTitle || d.seriesId}</span>
+                      </div>
+                    </div>
+                    <p className="font-sans text-[10px] text-neutral-500 line-clamp-2 mb-2">{d.reason}</p>
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="flex items-center gap-1">
+                        <span className="font-mono text-[9px] text-[#2ECC71] font-black">{acceptCount}Y</span>
+                        <span className="font-mono text-[9px] text-neutral-400">/</span>
+                        <span className="font-mono text-[9px] text-[#E63946] font-black">{rejectCount}N</span>
+                        <span className="font-mono text-[9px] text-neutral-400 ml-1">({totalCount} total)</span>
+                      </div>
+                    </div>
+                    <button onClick={() => openDirectiveModal(d)} className="w-full bg-ink-black hover:bg-neutral-800 text-white font-syne text-[9px] font-extrabold uppercase py-2 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
+                      Review & Vote
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Toggle create form */}
+            {!showDirectiveForm ? (
+              <button onClick={() => { setShowDirectiveForm(true); setDirMsg(''); }} className="w-full flex items-center justify-center gap-2 bg-[#E63946] border-2 border-ink-black hover:bg-red-600 text-white font-syne text-xs uppercase font-extrabold py-3 rounded-none shadow-[2px_2px_0px_#141414] transition-colors cursor-pointer">
+                <Plus className="w-4 h-4" />
+                Propose New Directive
+              </button>
+            ) : (
+              <div className="border-4 border-ink-black p-4 space-y-3 bg-[#F5F5F0]">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">New Directive Proposal</h3>
+                  <button onClick={() => setShowDirectiveForm(false)} className="p-1 hover:bg-white border border-ink-black cursor-pointer">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+                <div>
+                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">Select Series</label>
+                  <select value={dirForm.seriesId} onChange={(e) => setDirForm({ ...dirForm, seriesId: e.target.value })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none cursor-pointer">
+                    <option value="">Choose active series...</option>
+                    {activeSeries.map(s => (
+                      <option key={s._id} value={s._id}>{s.title} ({s.status}{s.pubSchedule ? ` / ${s.pubSchedule}` : ''})</option>
                     ))}
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label className="font-mono text-[10px] text-ink-black block mb-1.5 font-extrabold uppercase" htmlFor="statusNew">New Status Matrix</label>
-                <div className="relative">
-                  <select 
-                    id="statusNew"
-                    value={transitionStatus}
-                    onChange={(e) => setTransitionStatus(e.target.value as any)}
-                    className="w-full bg-[#F5F5F0] border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black focus:bg-white focus:outline-none cursor-pointer"
-                  >
-                    <option value="IN_PRODUCTION">IN_PRODUCTION</option>
-                    <option value="PUBLISHED">PUBLISHED</option>
-                    <option value="CANCELLED">CANCELLED</option>
-                    <option value="APPROVED">APPROVED</option>
+                <div>
+                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">Action Type</label>
+                  <select value={dirForm.actionType} onChange={(e) => setDirForm({ ...dirForm, actionType: e.target.value as DirectiveAction })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none cursor-pointer">
+                    <option value="CANCEL">Cancel Series (low ranking)</option>
+                    <option value="CHANGE_FORMAT">Change Publication Format</option>
                   </select>
+                </div>
+                {dirForm.actionType === 'CHANGE_FORMAT' && (
+                  <div>
+                    <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">New Schedule</label>
+                    <select value={dirForm.newSchedule} onChange={(e) => setDirForm({ ...dirForm, newSchedule: e.target.value as 'WEEKLY' | 'MONTHLY' })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none cursor-pointer">
+                      <option value="WEEKLY">WEEKLY</option>
+                      <option value="MONTHLY">MONTHLY</option>
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">Justification (Required)</label>
+                  <textarea rows={3} value={dirForm.reason} onChange={(e) => setDirForm({ ...dirForm, reason: e.target.value })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none resize-none" placeholder="Explain why this directive is needed (e.g. low reader ranking data)..."></textarea>
+                </div>
+                <button onClick={handleCreateDirective} className="w-full bg-ink-black hover:bg-neutral-800 text-white font-syne text-xs uppercase font-extrabold py-3 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
+                  Submit Proposal
+                </button>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+
+      {/* Vote Detail Modal */}
+      {/* Vote Detail Modal */}
+      {selectedSubmission && (() => {
+        const seriesItem = series.find(s => s._id === selectedSubmission.seriesId) || {
+          title: 'Unknown Series',
+          synopsis: 'No pitch details available',
+          coverImage: null,
+          mangakaId: 'Unknown'
+        };
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70" onClick={closeModal}></div>
+            <div className="relative bg-white border-4 border-ink-black shadow-[8px_8px_0px_#141414] w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b-4 border-ink-black p-5 flex items-start justify-between z-10">
+                <div>
+                  <h2 className="font-syne text-lg font-black uppercase tracking-tight text-ink-black">{seriesItem.title}</h2>
+                  <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
+                    Author: {typeof seriesItem.mangakaId === 'object' && seriesItem.mangakaId !== null ? (seriesItem.mangakaId as any).name : 'Mangaka'}
+                  </p>
+                </div>
+                <button onClick={closeModal} className="p-2 hover:bg-[#F5F5F0] border-2 border-ink-black cursor-pointer transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-5 space-y-5">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-[#2ECC71]/10 border-2 border-[#2ECC71] p-3 text-center">
+                    <div className="font-mono text-2xl font-black text-[#2ECC71]">{modalVotes.filter(v => v.decision === 'ACCEPT').length}</div>
+                    <div className="font-mono text-[9px] font-bold text-[#2ECC71] uppercase">Accept</div>
+                  </div>
+                  <div className="bg-[#E63946]/10 border-2 border-[#E63946] p-3 text-center">
+                    <div className="font-mono text-2xl font-black text-[#E63946]">{modalVotes.filter(v => v.decision === 'REJECT').length}</div>
+                    <div className="font-mono text-[9px] font-bold text-[#E63946] uppercase">Reject</div>
+                  </div>
+                  <div className="bg-[#F5F5F0] border-2 border-ink-black p-3 text-center">
+                    <div className="font-mono text-2xl font-black text-ink-black">{modalVotes.length}</div>
+                    <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">Total Cast</div>
+                  </div>
+                </div>
+
+                <div className="bg-[#F5F5F0] p-4 border-2 border-ink-black">
+                  <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">Author Pitch Synopsis:</span>
+                  <p className="font-sans text-xs leading-relaxed font-bold text-ink-black">{seriesItem.synopsis}</p>
+                </div>
+
+                {/* Voter Assignment Section */}
+                <div className="bg-[#F5F5F0] p-4 border-2 border-ink-black space-y-3">
+                  <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1">Assign Required Voters:</span>
+                  
+                  {/* Current voters list */}
+                  {voterStatus && voterStatus.voters && voterStatus.voters.length > 0 && (
+                    <div className="space-y-1 mb-3">
+                      <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase">Assigned Board Members:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {voterStatus.voters.map((v: any) => (
+                          <span key={v.userId?._id || v.userId} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono border ${
+                            v.hasVoted 
+                              ? 'bg-[#2ECC71]/10 border-[#2ECC71] text-[#2ECC71]' 
+                              : 'bg-[#E63946]/10 border-[#E63946] text-[#E63946]'
+                          }`}>
+                            {v.userId?.name || 'Unknown'} {v.hasVoted ? '✓' : '✗'}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dropdown / list of available board members to add */}
+                  <div className="flex gap-2">
+                    <select 
+                      multiple
+                      value={selectedVoterIds}
+                      onChange={(e) => {
+                        const options = Array.from(e.target.selectedOptions, option => option.value);
+                        setSelectedVoterIds(options);
+                      }}
+                      className="flex-1 bg-white border-2 border-ink-black p-2 font-sans text-xs text-ink-black focus:outline-none h-20"
+                    >
+                      {boardMembers
+                        .filter(m => !voterStatus?.voters?.some((v: any) => (v.userId?._id || v.userId) === m._id))
+                        .map(m => (
+                          <option key={m._id} value={m._id}>{m.name}</option>
+                        ))
+                      }
+                    </select>
+                    <button 
+                      onClick={handleAssignVoters}
+                      disabled={selectedVoterIds.length === 0}
+                      className="bg-ink-black hover:bg-neutral-800 text-white font-syne text-[10px] font-extrabold uppercase px-4 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                    >
+                      Assign Voters
+                    </button>
+                  </div>
+                  <p className="text-[8px] text-neutral-400 font-sans leading-none mt-1">Hold Ctrl/Cmd to select multiple members.</p>
+                </div>
+
+                {modalVotes.length > 0 && (
+                  <div>
+                    <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black mb-2">Board Member Votes</h3>
+                    <div className="space-y-2">
+                      {modalVotes.map(vote => (
+                        <div key={vote._id} className={`p-3 border-2 ${vote.decision === 'ACCEPT' ? 'border-[#2ECC71] bg-[#2ECC71]/5' : 'border-[#E63946] bg-[#E63946]/5'}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`px-2 py-0.5 text-[8px] font-mono font-black uppercase ${vote.decision === 'ACCEPT' ? 'bg-[#2ECC71] text-white' : 'bg-[#E63946] text-white'}`}>
+                              {vote.decision}
+                            </span>
+                            {vote.schedule && (
+                              <span className="px-2 py-0.5 text-[8px] font-mono font-black uppercase bg-[#FFF3B0] text-ink-black border border-ink-black">
+                                {vote.schedule}
+                              </span>
+                            )}
+                          </div>
+                          <p className="font-sans text-[10px] text-ink-black font-bold">{vote.comment}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!userVote ? (
+                  <div className="border-4 border-ink-black p-5 space-y-4">
+                    <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">Cast Your Vote</h3>
+                    {modalMessage && (
+                      <div className={`p-3 border-2 text-xs font-mono font-bold uppercase ${modalMessage.startsWith('🎉') ? 'bg-[#2ECC71]/15 text-[#2ECC71] border-[#2ECC71]' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
+                        {modalMessage}
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-[#F5F5F0] text-xs font-bold font-sans uppercase">
+                        <input type="radio" name="modal_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={modalVoteForm.decision === 'ACCEPT'} onChange={() => setModalVoteForm({ ...modalVoteForm, decision: 'ACCEPT' })} />
+                        Accept Serialization
+                      </label>
+                      <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-[#F5F5F0] text-xs font-bold font-sans uppercase">
+                        <input type="radio" name="modal_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={modalVoteForm.decision === 'REJECT'} onChange={() => setModalVoteForm({ ...modalVoteForm, decision: 'REJECT' })} />
+                        Reject / Revise pitch
+                      </label>
+                    </div>
+                    {modalVoteForm.decision === 'ACCEPT' && (
+                      <div className="animate-fadeIn">
+                        <label className="block text-[10px] font-mono text-neutral-500 uppercase mb-1 font-bold">Preferred Schedule</label>
+                        <select className="bg-white border-2 border-ink-black rounded-none p-2 text-xs w-full focus:outline-none cursor-pointer font-bold" value={modalVoteForm.schedule} onChange={(e) => setModalVoteForm({ ...modalVoteForm, schedule: e.target.value as any })}>
+                          <option value="WEEKLY">WEEKLY</option>
+                          <option value="MONTHLY">MONTHLY</option>
+                        </select>
+                      </div>
+                    )}
+                    <div>
+                      <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">Editorial Feedback (Required)</label>
+                      <textarea rows={3} className="w-full bg-[#F5F5F0] border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder="Provide detailed feedback on the proposal..." value={modalVoteForm.comment} onChange={(e) => setModalVoteForm({ ...modalVoteForm, comment: e.target.value })}></textarea>
+                    </div>
+                    <button onClick={handleModalVoteSubmit} disabled={modalSubmitting} className="w-full bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs font-extrabold uppercase py-3 border-2 border-ink-black shadow-[4px_4px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer disabled:opacity-50">
+                      {modalSubmitting ? 'Submitting...' : 'Submit Vote'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className={`p-4 border-4 ${userVote.decision === 'ACCEPT' ? 'border-[#2ECC71] bg-[#2ECC71]/10' : 'border-[#E63946] bg-[#E63946]/10'}`}>
+                    <p className="font-mono text-xs font-black uppercase mb-1">
+                      ✅ You voted: {userVote.decision}
+                      {userVote.schedule && ` (${userVote.schedule})`}
+                    </p>
+                    <p className="font-sans text-[10px] text-neutral-600 font-bold">{userVote.comment}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Directive Vote Modal */}
+      {selectedDirective && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={closeDirectiveModal}></div>
+          <div className="relative bg-white border-4 border-ink-black shadow-[8px_8px_0px_#141414] w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b-4 border-ink-black p-5 flex items-start justify-between z-10">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`px-2 py-0.5 text-[9px] font-mono font-black uppercase ${selectedDirective.actionType === 'CANCEL' ? 'bg-[#E63946] text-white' : 'bg-[#FFF3B0] text-ink-black border border-ink-black'}`}>
+                    {selectedDirective.actionType === 'CANCEL' ? 'CANCEL SERIES' : `CHANGE → ${selectedDirective.newSchedule || 'MONTHLY'}`}
+                  </span>
+                </div>
+                <h2 className="font-syne text-lg font-black uppercase tracking-tight text-ink-black">{selectedDirective.seriesTitle || selectedDirective.seriesId}</h2>
+                <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
+                  Proposed by: {selectedDirective.proposedByName || selectedDirective.proposedBy}
+                </p>
+              </div>
+              <button onClick={closeDirectiveModal} className="p-2 hover:bg-[#F5F5F0] border-2 border-ink-black cursor-pointer transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-5">
+              {/* Tally */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-[#2ECC71]/10 border-2 border-[#2ECC71] p-3 text-center">
+                  <div className="font-mono text-2xl font-black text-[#2ECC71]">{(selectedDirective.votes || []).filter(v => v.decision === 'ACCEPT').length}</div>
+                  <div className="font-mono text-[9px] font-bold text-[#2ECC71] uppercase">Accept</div>
+                </div>
+                <div className="bg-[#E63946]/10 border-2 border-[#E63946] p-3 text-center">
+                  <div className="font-mono text-2xl font-black text-[#E63946]">{(selectedDirective.votes || []).filter(v => v.decision === 'REJECT').length}</div>
+                  <div className="font-mono text-[9px] font-bold text-[#E63946] uppercase">Reject</div>
+                </div>
+                <div className="bg-[#F5F5F0] border-2 border-ink-black p-3 text-center">
+                  <div className="font-mono text-2xl font-black text-ink-black">{(selectedDirective.votes || []).length}</div>
+                  <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">Total Cast</div>
                 </div>
               </div>
 
-              <div className="text-[10px] font-mono font-bold text-[#E63946] border-2 border-[#E63946]/20 p-2 bg-[#E63946]/5 select-none leading-relaxed uppercase">
-                ⚠️ NOTICE: Allowed transition boundaries state rules apply. MANGAKA pitches must go through pending board votes prior to production.
+              {/* Reason */}
+              <div className="bg-[#F5F5F0] p-4 border-2 border-ink-black">
+                <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">Justification:</span>
+                <p className="font-sans text-xs leading-relaxed font-bold text-ink-black">{selectedDirective.reason}</p>
               </div>
 
-              <button 
-                type="submit"
-                className="w-full bg-[#E63946] border-2 border-ink-black hover:bg-red-600 text-white font-syne text-xs uppercase font-extrabold py-3 rounded-none shadow-[2px_2px_0px_#141414] transition-colors cursor-pointer"
-              >
-                Recalibrating Pipeline
-              </button>
-            </form>
-          </section>
+              {/* Existing votes */}
+              {(selectedDirective.votes || []).length > 0 && (
+                <div>
+                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black mb-2">Board Votes</h3>
+                  <div className="space-y-2">
+                    {(selectedDirective.votes || []).map(vote => (
+                      <div key={vote._id} className={`p-3 border-2 ${vote.decision === 'ACCEPT' ? 'border-[#2ECC71] bg-[#2ECC71]/5' : 'border-[#E63946] bg-[#E63946]/5'}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`px-2 py-0.5 text-[8px] font-mono font-black uppercase ${vote.decision === 'ACCEPT' ? 'bg-[#2ECC71] text-white' : 'bg-[#E63946] text-white'}`}>
+                            {vote.decision}
+                          </span>
+                          {vote.voterName && <span className="font-sans text-[9px] text-neutral-500 font-bold">{vote.voterName}</span>}
+                        </div>
+                        <p className="font-sans text-[10px] text-ink-black font-bold">{vote.comment}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          {/* Reader Votes ratings Ingestion card */}
-          <section className="bg-white border-4 border-ink-black rounded-none p-6 shadow-[4px_4px_0px_#141414]">
-            <h2 className="font-syne text-md font-black uppercase text-ink-black border-b-2 border-ink-black pb-3 mb-4 flex items-center gap-2 select-none">
-              <FileSpreadsheet className="text-[#2ECC71] w-5 h-5" />
-              Ingest Reader Ratings
-            </h2>
-
-            {ingestMsg && (
-              <div className={`p-3 border-2 mb-3 text-xs font-mono font-bold uppercase select-none ${ingestMsg.startsWith('🚀') ? 'bg-[#2ECC71]/15 text-[#2ECC71] border-[#2ECC71]' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
-                {ingestMsg}
-              </div>
-            )}
-
-            <form onSubmit={(e) => { e.preventDefault(); handleIngestSubmit(); }} className="space-y-4">
-              <div>
-                <label className="font-mono text-[10px] text-ink-black block mb-1.5 font-extrabold uppercase" htmlFor="ing">Select Series</label>
-                <select 
-                  id="ing"
-                  value={ingestSeriesId}
-                  onChange={(e) => setIngestSeriesId(e.target.value)}
-                  className="w-full bg-[#F5F5F0] border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black focus:bg-white focus:outline-none cursor-pointer"
-                  required
-                >
-                  <option value="">Choose Series...</option>
-                  {series.filter(s => s.status !== 'PENDING').map(s => (
-                    <option key={s._id} value={s._id}>{s.title}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="font-mono text-[10px] text-ink-black block mb-1.5 font-extrabold uppercase" htmlFor="ingV">Reader Vote Multiplier</label>
-                <input 
-                  id="ingV"
-                  type="number"
-                  value={ingestVoteCount}
-                  onChange={(e) => setIngestVoteCount(Number(e.target.value))}
-                  className="w-full bg-[#F5F5F0] border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black focus:bg-white focus:outline-none font-mono"
-                  min={1}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="font-mono text-[10px] text-ink-black block mb-1.5 font-extrabold uppercase" htmlFor="ingS">Platform Data Source</label>
-                <input 
-                  id="ingS"
-                  type="text"
-                  value={ingestSource}
-                  onChange={(e) => setIngestSource(e.target.value)}
-                  className="w-full bg-[#F5F5F0] border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black focus:bg-white focus:outline-none"
-                  placeholder="e.g. Shonen Jump Weekly In-App"
-                  required
-                />
-              </div>
-
-              <button 
-                type="submit"
-                className="w-full bg-white text-ink-black hover:bg-[#F5F5F0] border-2 border-ink-black font-syne text-xs uppercase font-extrabold py-3 rounded-none shadow-[2px_2px_0px_#141414] transition-all cursor-pointer"
-              >
-                Record popular vote
-              </button>
-            </form>
-          </section>
-
+              {/* Cast vote form */}
+              {selectedDirective.status === 'PENDING' && !(selectedDirective.votes || []).some(v => v.voterId === currentUser._id) ? (
+                <div className="border-4 border-ink-black p-5 space-y-4">
+                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">Cast Your Vote</h3>
+                  {dirVoteMsg && (
+                    <div className={`p-3 border-2 text-xs font-mono font-bold uppercase ${dirVoteMsg.startsWith('✅') ? 'bg-[#2ECC71]/15 text-[#2ECC71] border-[#2ECC71]' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
+                      {dirVoteMsg}
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-[#F5F5F0] text-xs font-bold font-sans uppercase">
+                      <input type="radio" name="dir_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={dirVoteForm.decision === 'ACCEPT'} onChange={() => setDirVoteForm({ ...dirVoteForm, decision: 'ACCEPT' })} />
+                      Approve Directive
+                    </label>
+                    <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-[#F5F5F0] text-xs font-bold font-sans uppercase">
+                      <input type="radio" name="dir_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={dirVoteForm.decision === 'REJECT'} onChange={() => setDirVoteForm({ ...dirVoteForm, decision: 'REJECT' })} />
+                      Reject Directive
+                    </label>
+                  </div>
+                  <div>
+                    <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">Board Feedback (Required)</label>
+                    <textarea rows={3} className="w-full bg-[#F5F5F0] border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder="Explain your vote..." value={dirVoteForm.comment} onChange={(e) => setDirVoteForm({ ...dirVoteForm, comment: e.target.value })}></textarea>
+                  </div>
+                  <button onClick={handleDirectiveVoteSubmit} disabled={dirVoteSubmitting} className="w-full bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs font-extrabold uppercase py-3 border-2 border-ink-black shadow-[4px_4px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer disabled:opacity-50">
+                    {dirVoteSubmitting ? 'Submitting...' : 'Submit Vote'}
+                  </button>
+                </div>
+              ) : (
+                <div className={`p-4 border-4 ${(selectedDirective.votes || []).find(v => v.voterId === currentUser._id)?.decision === 'ACCEPT' ? 'border-[#2ECC71] bg-[#2ECC71]/10' : (selectedDirective.votes || []).find(v => v.voterId === currentUser._id) ? 'border-[#E63946] bg-[#E63946]/10' : 'border-neutral-300 bg-neutral-50'}`}>
+                  {(selectedDirective.votes || []).find(v => v.voterId === currentUser._id) ? (
+                    <div>
+                      <p className="font-mono text-xs font-black uppercase mb-1">
+                        ✅ You voted: {(selectedDirective.votes || []).find(v => v.voterId === currentUser._id)?.decision}
+                      </p>
+                      <p className="font-sans text-[10px] text-neutral-600 font-bold">{(selectedDirective.votes || []).find(v => v.voterId === currentUser._id)?.comment}</p>
+                    </div>
+                  ) : (
+                    <p className="font-mono text-xs font-black uppercase text-neutral-400">
+                      {selectedDirective.status === 'APPROVED' ? '✅ Directive APPROVED' : selectedDirective.status === 'REJECTED' ? '❌ Directive REJECTED' : 'Voting closed'}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-
-      </div>
+      )}
     </div>
   );
 }

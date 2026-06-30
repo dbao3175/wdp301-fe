@@ -1,20 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { apiClient } from '../api/client';
 import { 
   Compass, 
   Layers, 
-  FileText, 
   CheckSquare, 
   TrendingUp, 
   LogOut, 
-  Settings2, 
   Menu, 
   X, 
-  Radio, 
-  CloudLightning,
-  ChevronDown,
-  Sparkles
+  Sparkles,
+  BookOpen,
+  Bell,
+  Shield
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -33,44 +31,52 @@ export default function Navigation({
   onConfigChange
 }: NavigationProps) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
   
-  // API Connection toggle configs
-  const currentConfig = apiClient.getConfig();
-  const [apiPort, setApiPort] = useState(currentConfig.baseUrl);
-  const [useLiveBackend, setUseLiveBackend] = useState(currentConfig.useLiveBackend);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
-  const handleConfigSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    apiClient.updateConfig({
-      baseUrl: apiPort,
-      useLiveBackend
-    });
-    setShowConfig(false);
-    // Reload state caches without fully reloading the page
-    if (onConfigChange) {
-      onConfigChange();
+  const fetchNotifications = async () => {
+    if (!currentUser?._id) return;
+    try {
+      const data = await apiClient.notifications.getAll(currentUser._id);
+      setNotifications(data || []);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
     }
   };
 
-  const handleDirectToggle = () => {
-    const nextBackendState = !useLiveBackend;
-    setUseLiveBackend(nextBackendState);
-    apiClient.updateConfig({
-      baseUrl: apiPort,
-      useLiveBackend: nextBackendState
-    });
-    if (onConfigChange) {
-      onConfigChange();
+  const handleMarkRead = async (id: string) => {
+    try {
+      await apiClient.notifications.markRead(id);
+      setNotifications(prev => prev.map(n => n._id === id ? { ...n, read: true } : n));
+    } catch (err) {
+      console.error('Error marking notification as read:', err);
     }
   };
+
+  const handleMarkAllRead = async () => {
+    if (!currentUser?._id) return;
+    try {
+      await apiClient.notifications.markAllRead(currentUser._id);
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch (err) {
+      console.error('Error marking all notifications as read:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 8000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
 
   const navItems = [
-    { id: 'workspace', label: 'Manga Workspace', icon: Compass, roles: ['MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'] },
-    { id: 'tasks', label: 'Task Delegation', icon: Layers, roles: ['MANGAKA', 'EDITOR'] },
-    { id: 'production', label: 'Production Tracker', icon: FileText, roles: ['MANGAKA', 'EDITOR', 'BOARD_MEMBER'] },
+    { id: 'workspace', label: 'Manga Workspace', icon: Compass, roles: ['MANGAKA', 'EDITOR'] },
+    { id: 'chapters', label: 'Chapter Management', icon: BookOpen, roles: ['MANGAKA', 'EDITOR'] },
+    { id: 'tasks', label: 'Series Proposals', icon: Layers, roles: ['MANGAKA', 'EDITOR'] },
     { id: 'board', label: 'Editorial Board', icon: CheckSquare, roles: ['EDITOR', 'BOARD_MEMBER'] },
-    { id: 'analytics', label: 'Leaderboard & Analytics', icon: TrendingUp, roles: ['MANGAKA', 'EDITOR', 'BOARD_MEMBER'] }
+    { id: 'analytics', label: 'Rankings Dashboard', icon: TrendingUp, roles: ['BOARD_MEMBER', 'MANGAKA'] },
+    { id: 'admin', label: 'Admin Panel', icon: Shield, roles: ['ADMIN'] }
   ];
 
   // Filtering tabs representing only items the current role has clearance for
@@ -89,12 +95,86 @@ export default function Navigation({
           </div>
           <span className="font-syne text-sm font-black uppercase tracking-widest leading-none">MANGA STUDIO OS</span>
         </div>
-        <button 
-          onClick={() => setIsMobileOpen(!isMobileOpen)}
-          className="p-1 text-white focus:outline-none cursor-pointer"
-        >
-          {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Mobile Bell Button */}
+          <div className="relative">
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className={`p-1.5 border-2 border-ink-black rounded-xs transition-colors cursor-pointer relative bg-white text-ink-black`}
+              title="Notifications"
+            >
+              <Bell className="w-3.5 h-3.5" />
+              {notifications.filter(n => !n.read).length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 px-0.5 bg-[#E63946] text-white text-[8px] font-black flex items-center justify-center rounded-full border border-white animate-pulse">
+                  {notifications.filter(n => !n.read).length}
+                </span>
+              )}
+            </button>
+            {showNotifications && (
+              <div className="fixed top-16 right-4 left-4 bg-white border-4 border-ink-black shadow-[6px_6px_0px_#141414] z-50 flex flex-col max-h-[350px]">
+                {/* Header */}
+                <div className="bg-[#E63946] text-white p-2.5 border-b-4 border-ink-black flex justify-between items-center select-none">
+                  <span className="font-syne font-black text-xs uppercase tracking-wider">Thông báo</span>
+                  <div className="flex items-center gap-2">
+                    {notifications.filter(n => !n.read).length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleMarkAllRead}
+                        className="px-1.5 py-0.5 border border-white hover:bg-white/20 text-[9px] font-mono font-bold uppercase transition-all cursor-pointer"
+                      >
+                        Đọc hết
+                      </button>
+                    )}
+                    <button 
+                      type="button"
+                      onClick={() => setShowNotifications(false)}
+                      className="text-white hover:text-neutral-200 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* List */}
+                <div className="overflow-y-auto divide-y-2 divide-[#141414] flex-1 bg-white text-ink-black max-h-[250px]">
+                  {notifications.length === 0 ? (
+                    <div className="p-6 text-center text-neutral-400 font-mono text-[10px]">
+                      Không có thông báo mới nào
+                    </div>
+                  ) : (
+                    notifications.map((n) => (
+                      <div 
+                        key={n._id} 
+                        onClick={() => handleMarkRead(n._id)}
+                        className={`p-3 text-left transition-colors cursor-pointer hover:bg-neutral-50 flex gap-2 items-start ${
+                          !n.read ? 'bg-yellow-50/70 border-l-4 border-l-[#E63946]' : 'border-l-4 border-l-transparent'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-[11px] font-extrabold text-ink-black leading-tight mb-0.5">
+                            {n.title}
+                          </h4>
+                          <p className="text-[10px] text-neutral-600 leading-snug">
+                            {n.content}
+                          </p>
+                          <span className="text-[8px] font-mono text-neutral-400 mt-1 block">
+                            {new Date(n.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <button 
+            onClick={() => setIsMobileOpen(!isMobileOpen)}
+            className="p-1 text-white focus:outline-none cursor-pointer"
+          >
+            {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
       </header>
 
       {/* Main Left Desktop Sidebar */}
@@ -118,7 +198,7 @@ export default function Navigation({
                 Studio Auth &amp; Role
               </span>
               
-              <div className="flex items-center gap-3 bg-white p-2.5 border-2 border-ink-black rounded-sm shadow-[2px_2px_0px_#141414]">
+              <div className="flex items-center gap-3 bg-white p-2.5 border-2 border-ink-black rounded-sm shadow-[2px_2px_0px_#141414] relative">
                 <img 
                   src={currentUser.avatar || "https://lh3.googleusercontent.com/aida-public/AB6AXuCHg4AqOzqTV4dewyU1i46CaCUf4pdWEGhiU2lW3liCFs9JIde6fE9uwaRXVueKT86jIlGpymMPHJCh6-Coee4I6o2JxMGU-b-ts2Dmy6dKXtzK6RPgJ9XIL-1TYRm1JkqG8CkCx_ZgdB3cBNUUJyT9pvzu7uKesV0D55DoIMkLIv6PspHUrWtqKEj3H2tBogMUnEDiuCIIKF5mSpOCdwVfdskbQpvNQx3V_lA8OtcIk6q8LZ9AmfiRwuw0bF5K5naoU52pMuRXDiP2"} 
                   alt={currentUser.name} 
@@ -132,6 +212,82 @@ export default function Navigation({
                     {currentUser.role}
                   </div>
                 </div>
+                {/* Notification Bell trigger */}
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className={`p-1.5 border-2 border-ink-black rounded-xs transition-colors cursor-pointer relative flex-shrink-0 ${
+                    showNotifications ? 'bg-ink-black text-white' : 'bg-white hover:bg-neutral-100 text-ink-black'
+                  }`}
+                  title="View Notifications"
+                >
+                  <Bell className="w-4 h-4" />
+                  {notifications.filter(n => !n.read).length > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 bg-[#E63946] text-white text-[8px] font-black flex items-center justify-center rounded-full border border-white animate-pulse">
+                      {notifications.filter(n => !n.read).length}
+                    </span>
+                  )}
+                </button>
+
+                {/* Desktop Notification Dropdown */}
+                {showNotifications && (
+                  <div className="absolute left-[260px] top-0 w-80 bg-white border-4 border-ink-black shadow-[6px_6px_0px_#141414] z-50 flex flex-col max-h-[400px]">
+                    {/* Header */}
+                    <div className="bg-[#E63946] text-white p-3 border-b-4 border-ink-black flex justify-between items-center select-none">
+                      <span className="font-syne font-black text-xs uppercase tracking-wider">NOTIFICATIONS</span>
+                      <div className="flex items-center gap-2">
+                        {notifications.filter(n => !n.read).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleMarkAllRead}
+                            className="px-1.5 py-0.5 border border-white hover:bg-white/20 text-[9px] font-mono font-bold uppercase transition-all cursor-pointer"
+                            title="Mark all as read"
+                          >
+                            Mark all read
+                          </button>
+                        )}
+                        <button 
+                          type="button"
+                          onClick={() => setShowNotifications(false)}
+                          className="text-white hover:text-neutral-200 cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* List */}
+                    <div className="overflow-y-auto divide-y-2 divide-ink-black flex-1 bg-white text-ink-black max-h-[300px]">
+                      {notifications.length === 0 ? (
+                        <div className="p-6 text-center text-neutral-400 font-mono text-[10px]">
+                          No new notifications
+                        </div>
+                      ) : (
+                        notifications.map((n) => (
+                          <div 
+                            key={n._id} 
+                            onClick={() => handleMarkRead(n._id)}
+                            className={`p-3 text-left transition-colors cursor-pointer hover:bg-neutral-50 flex gap-2 items-start ${
+                              !n.read ? 'bg-yellow-50/70 border-l-4 border-l-[#E63946]' : 'border-l-4 border-l-transparent'
+                            }`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-[11px] font-extrabold text-ink-black leading-tight mb-0.5">
+                                {n.title}
+                              </h4>
+                              <p className="text-[10px] text-neutral-600 leading-snug">
+                                {n.content}
+                              </p>
+                              <span className="text-[8px] font-mono text-neutral-400 mt-1 block">
+                                {new Date(n.createdAt).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* User email info reference */}
@@ -178,77 +334,7 @@ export default function Navigation({
         </div>
 
         {/* Configurations footer & logout */}
-        <div className="p-4 border-t-2 border-ink-black bg-[#F5F5F0] space-y-3">
-          
-          {/* BE Connection Config drawer */}
-          <div>
-            <button
-              onClick={() => setShowConfig(!showConfig)}
-              className="flex items-center justify-between w-full text-ink-black hover:text-[#E63946] text-[10px] font-mono font-black uppercase cursor-pointer pb-2"
-            >
-              <span className="flex items-center gap-1.5">
-                <Settings2 className="w-3.5 h-3.5" />
-                Connection API
-              </span>
-              <ChevronDown className={`w-3.5 h-3.5 transform transition-transform ${showConfig ? 'rotate-180' : ''}`} />
-            </button>
-
-            {useLiveBackend ? (
-              <button
-                type="button"
-                onClick={handleDirectToggle}
-                title="Click to toggle to Local Emulator"
-                className="inline-flex items-center gap-1.5 bg-[#2ECC71]/10 px-2 py-1 border border-ink-black text-[#2ECC71] font-mono text-[9px] font-black uppercase rounded-xs cursor-pointer hover:bg-[#2ECC71]/25 transition-all text-left"
-              >
-                <CloudLightning className="w-3 h-3 animate-pulse text-[#2ECC71]" />
-                LIVE REST SYNC
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleDirectToggle}
-                title="Click to toggle to Live Backend SYNC"
-                className="inline-flex items-center gap-1.5 bg-[#FFF3B0] px-2 py-1 border border-ink-black text-black font-mono text-[9px] font-black uppercase rounded-xs cursor-pointer hover:bg-amber-100 transition-all text-left"
-              >
-                <Radio className="w-3 h-3 text-[#E63946]" />
-                LOCAL EMULATOR
-              </button>
-            )}
-
-            {showConfig && (
-              <form onSubmit={handleConfigSave} className="bg-white border-2 border-ink-black rounded-sm p-3 space-y-2 mt-2 shadow-[2px_2px_0px_#141414] animate-fadeIn">
-                <div>
-                  <label className="block text-[8px] font-mono text-ink-black font-bold uppercase mb-0.5" htmlFor="portI">Target API Address</label>
-                  <input
-                    id="portI"
-                    type="text"
-                    className="w-full bg-[#F5F5F0] text-ink-black text-[10px] font-mono p-1 border border-ink-black focus:outline-none"
-                    value={apiPort}
-                    onChange={(e) => setApiPort(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="flex items-center justify-between pb-1 pt-1">
-                  <span className="text-[8px] font-mono text-ink-black font-bold uppercase">Connect Live Node</span>
-                  <input
-                    type="checkbox"
-                    className="form-checkbox text-[#E63946] border-2 border-ink-black focus:ring-0 rounded-none w-3.5 h-3.5"
-                    checked={useLiveBackend}
-                    onChange={(e) => setUseLiveBackend(e.target.checked)}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full bg-[#E63946] text-white py-1 px-1.5 text-[9px] font-mono font-bold uppercase border-2 border-ink-black shadow-[1.5px_1.5px_0px_#141414] transition-all hover:bg-red-600 cursor-pointer"
-                >
-                  Save &amp; Reload
-                </button>
-              </form>
-            )}
-          </div>
-
+        <div className="p-4 border-t-2 border-ink-black bg-[#F5F5F0]">
           <button
             onClick={onLogout}
             className="w-full flex items-center justify-center gap-2 bg-white border-2 border-ink-black hover:bg-neutral-50 text-ink-black font-syne text-[10px] uppercase font-black tracking-tight py-2 rounded-none shadow-[2px_2px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"

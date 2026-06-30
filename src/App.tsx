@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { User, Series, Chapter, Task, Rating, UserRole } from './types';
 import { apiClient, getStoredUser, setStoredUserSession } from './api/client';
 import WorkspaceCanvas from './components/WorkspaceCanvas';
 import TaskDelegation from './components/TaskDelegation';
-import ProductionTracker from './components/ProductionTracker';
 import EditorialBoard from './components/EditorialBoard';
 import LeaderboardAnalytics from './components/LeaderboardAnalytics';
+import ChapterManagement from './components/ChapterManagement';
+import AssistantApp from './components/assistant/AssistantApp';
 import Navigation from './components/Navigation';
+import AdminPanel from './components/AdminPanel';
 import LoginBackground from './components/LoginBackground';
+import { EditorApp } from './features/editor/EditorApp.tsx';
 import { Sparkles, Key, Radio, Layers, CloudLightning } from 'lucide-react';
 
 export default function App() {
@@ -17,6 +21,8 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authRole, setAuthRole] = useState<UserRole>('MANGAKA');
+  const [authVerificationCode, setAuthVerificationCode] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
   const [authStatusMsg, setAuthStatusMsg] = useState('');
   const [isRegisterMode, setIsRegisterMode] = useState(false);
 
@@ -81,35 +87,43 @@ export default function App() {
       const liveRatings = await apiClient.ratings.getAll();
 
       setSeriesList(liveSeries);
-      setChapterList(liveChapters);
       setTaskList(liveTasks);
       setRatingList(liveRatings);
+
+      let currentChapters = liveChapters;
+      setChapterList(currentChapters);
+
+      const liveChaptersList = currentChapters;
 
       // Auto assign active series elements if not set or invalid under live backend data
       let currentActiveSeries = activeSeries;
       const isLive = apiClient.getConfig().useLiveBackend;
       const isValidObjectId = (id: string) => /^[0-9a-fA-F]{24}$/.test(id);
 
-      if (liveSeries.length > 0) {
-        const seriesExists = activeSeries && liveSeries.some(s => s._id === activeSeries._id);
+      const approvedSeries = liveSeries.filter(s => s.status !== 'PENDING' && s.status !== 'REJECTED');
+      if (approvedSeries.length > 0) {
+        const seriesExists = activeSeries && approvedSeries.some(s => s._id === activeSeries._id);
         const seriesValid = activeSeries && (!isLive || isValidObjectId(activeSeries._id));
         if (!activeSeries || !seriesExists || !seriesValid) {
-          setActiveSeries(liveSeries[0]);
-          currentActiveSeries = liveSeries[0];
+          setActiveSeries(approvedSeries[0]);
+          currentActiveSeries = approvedSeries[0];
         }
+      } else {
+        setActiveSeries(null);
+        currentActiveSeries = null;
       }
 
-      if (liveChapters.length > 0) {
+      if (liveChaptersList.length > 0) {
         const currentSid = currentActiveSeries?._id;
-        const validChaptersForSeries = liveChapters.filter(c => c.seriesId === currentSid || c.series === currentSid);
-        const chapterExists = activeChapter && liveChapters.some(c => c._id === activeChapter._id);
+        const validChaptersForSeries = liveChaptersList.filter(c => c.seriesId === currentSid || c.series === currentSid);
+        const chapterExists = activeChapter && liveChaptersList.some(c => c._id === activeChapter._id);
         const chapterValid = activeChapter && (!isLive || isValidObjectId(activeChapter._id));
         
         if (!activeChapter || !chapterExists || !chapterValid || (activeChapter && activeChapter.seriesId !== currentSid && activeChapter.series !== currentSid)) {
           if (validChaptersForSeries.length > 0) {
             setActiveChapter(validChaptersForSeries[0]);
           } else {
-            setActiveChapter(liveChapters[0]);
+            setActiveChapter(liveChaptersList[0]);
           }
         }
       } else {
@@ -128,6 +142,23 @@ export default function App() {
   }, [currentUser]);
 
   // Auth Submit Handlers
+  const handleSendCode = async () => {
+    if (!authEmail) {
+      setAuthStatusMsg('❌ Email is required to send code.');
+      return;
+    }
+    setSendingCode(true);
+    setAuthStatusMsg('');
+    try {
+      await apiClient.auth.sendVerificationCode(authEmail);
+      setAuthStatusMsg('🎉 Verification code sent! Please check your email.');
+    } catch (err: any) {
+      setAuthStatusMsg(`❌ ${err.message}`);
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthStatusMsg('');
@@ -138,14 +169,22 @@ export default function App() {
           setAuthStatusMsg('❌ Full name is required.');
           return;
         }
-        const res = await apiClient.auth.register(authName, authEmail, authRole, authPassword);
+        if (!authVerificationCode) {
+          setAuthStatusMsg('❌ Verification code is required.');
+          return;
+        }
+        const res = await apiClient.auth.register(authName, authEmail, authRole, authPassword, authVerificationCode);
         setCurrentUser(res.data);
         
         // Auto-focus default appropriate dashboard tab according to role selection
-        if (authRole === 'ASSISTANT' || authRole === 'MANGAKA') {
+        if (authRole === 'ASSISTANT') {
+          setActiveTab('assistant-tasks');
+        } else if (authRole === 'MANGAKA') {
           setActiveTab('workspace');
         } else if (authRole === 'EDITOR') {
-          setActiveTab('production');
+          setActiveTab('workspace');
+        } else if (authRole === 'ADMIN') {
+          setActiveTab('admin');
         } else {
           setActiveTab('board');
         }
@@ -153,12 +192,15 @@ export default function App() {
         const res = await apiClient.auth.login(authEmail, authPassword);
         setCurrentUser(res.data);
         
-        // Auto-focus default appropriate dashboard tab according to role selection
         const role = res.data.role;
-        if (role === 'ASSISTANT' || role === 'MANGAKA') {
+        if (role === 'ASSISTANT') {
+          setActiveTab('assistant-tasks');
+        } else if (role === 'MANGAKA') {
           setActiveTab('workspace');
         } else if (role === 'EDITOR') {
-          setActiveTab('production');
+          setActiveTab('workspace');
+        } else if (role === 'ADMIN') {
+          setActiveTab('admin');
         } else {
           setActiveTab('board');
         }
@@ -235,16 +277,43 @@ export default function App() {
 
               <div>
                 <label className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1" htmlFor="emailAddr">Registered Email Address</label>
-                <input
-                  id="emailAddr"
-                  type="email"
-                  required
-                  className="w-full bg-[#F5F5F0] border-2 border-ink-black hover:border-[#E63946] focus:border-[#E63946] focus:bg-white focus:outline-none rounded-none px-4 py-3 font-sans text-xs text-ink-black font-bold transition-all"
-                  placeholder="name@example.com"
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                />
+                <div className="flex gap-2">
+                  <input
+                    id="emailAddr"
+                    type="email"
+                    required
+                    className="flex-1 bg-[#F5F5F0] border-2 border-ink-black hover:border-[#E63946] focus:border-[#E63946] focus:bg-white focus:outline-none rounded-none px-4 py-3 font-sans text-xs text-ink-black font-bold transition-all"
+                    placeholder="name@example.com"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                  />
+                  {isRegisterMode && (
+                    <button
+                      type="button"
+                      onClick={handleSendCode}
+                      disabled={sendingCode}
+                      className="bg-ink-black hover:bg-neutral-800 text-white font-syne text-[10px] font-extrabold uppercase px-4 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 cursor-pointer shrink-0"
+                    >
+                      {sendingCode ? 'Sending...' : 'Send Code'}
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {isRegisterMode && (
+                <div>
+                  <label className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1" htmlFor="verificationCode">Verification Code</label>
+                  <input
+                    id="verificationCode"
+                    type="text"
+                    required
+                    className="w-full bg-[#F5F5F0] border-2 border-ink-black hover:border-[#E63946] focus:border-[#E63946] focus:bg-white focus:outline-none rounded-none px-4 py-3 font-sans text-xs text-ink-black font-bold transition-all font-mono"
+                    placeholder="Enter 6-digit code"
+                    value={authVerificationCode}
+                    onChange={(e) => setAuthVerificationCode(e.target.value)}
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1" htmlFor="password">Password</label>
@@ -263,7 +332,7 @@ export default function App() {
                 <div>
                   <label className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1">MangaFlow Access Role</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {(['MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'] as UserRole[]).map((role) => (
+                    {(['MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER', 'ADMIN'] as UserRole[]).map((role) => (
                       <button
                         key={role}
                         type="button"
@@ -314,6 +383,19 @@ export default function App() {
 
           </div>
         </div>
+      ) : currentUser.role === 'ASSISTANT' ? (
+        <AssistantApp
+          currentUser={currentUser}
+          activeTab={activeTab}
+          onChangeTab={setActiveTab}
+          onLogout={handleLogout}
+        />
+      ) : currentUser.role === 'EDITOR' ? (
+        /* ======================== EDITOR ROLE — NEW EDITOR SPA ======================== */
+        <Routes>
+          <Route path="/editor/*" element={<EditorApp onLogout={handleLogout} />} />
+          <Route path="*" element={<Navigate to="/editor/dashboard" replace />} />
+        </Routes>
       ) : (
         /* ======================== MAIN APPLICATION WORKSPACE ======================== */
         <div className="min-h-screen pt-16 md:pt-0 md:pl-72">
@@ -328,23 +410,10 @@ export default function App() {
           />
 
           {/* Core Content canvas viewports */}
-          <main className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto block">
+          <main className="block">
             
-            {activeTab === 'workspace' && (
-              <div className="space-y-6">
-                <header className="mb-8 pb-5 border-b-4 border-ink-black flex flex-col md:flex-row md:items-end justify-between gap-4">
-                  <div>
-                    <h1 className="font-syne text-3xl font-black text-ink-black uppercase italic tracking-tight">Manga Creation Workspace</h1>
-                    <p className="font-sans text-xs text-neutral-600 font-bold uppercase tracking-wider mt-1.5 flex items-center gap-2">
-                      <span className="inline-block w-2.5 h-2.5 bg-[#E63946]"></span>
-                      Manage panel positions, allocate assistant tasks, and direct draft commentary.
-                    </p>
-                  </div>
-                  <div className="px-3 py-1 bg-[#2ECC71] text-white text-[10px] font-bold uppercase border-2 border-ink-black shadow-[2px_2px_0px_#141414] max-w-max">
-                    In Production Unit
-                  </div>
-                </header>
-
+            {activeTab === 'workspace' && currentUser.role !== 'BOARD_MEMBER' && (
+              <div className="p-4 md:p-6">
                 <WorkspaceCanvas 
                   currentUser={currentUser}
                   activeSeries={activeSeries}
@@ -352,6 +421,23 @@ export default function App() {
                   onRefreshTasks={refreshAllModelCaches}
                 />
               </div>
+            )}
+
+            {(activeTab !== 'workspace' || currentUser.role === 'BOARD_MEMBER') && (
+              <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto">
+
+            {activeTab === 'chapters' && (
+              <ChapterManagement 
+                currentUser={currentUser!}
+                series={seriesList}
+                chapters={chapterList}
+                tasks={taskList}
+                activeSeries={activeSeries}
+                onRefreshAll={refreshAllModelCaches}
+                onSelectSeries={setActiveSeries}
+                onSelectChapter={setActiveChapter}
+                onChangeTab={setActiveTab}
+              />
             )}
 
             {activeTab === 'tasks' && (
@@ -363,24 +449,6 @@ export default function App() {
                 onRefreshAll={refreshAllModelCaches}
                 onSelectSeries={setActiveSeries}
                 onSelectChapter={setActiveChapter}
-              />
-            )}
-
-            {activeTab === 'production' && (
-              <ProductionTracker 
-                currentUser={currentUser}
-                series={seriesList}
-                chapters={chapterList}
-                tasks={taskList}
-                onRefreshAll={refreshAllModelCaches}
-                onSelectSeries={(s) => {
-                  setActiveSeries(s);
-                  setActiveTab('workspace');
-                }}
-                onSelectChapter={(c) => {
-                  setActiveChapter(c);
-                  setActiveTab('workspace');
-                }}
               />
             )}
 
@@ -400,6 +468,16 @@ export default function App() {
                 ratings={ratingList}
                 onRefreshAll={refreshAllModelCaches}
               />
+            )}
+
+            {activeTab === 'admin' && (
+              <AdminPanel 
+                currentUser={currentUser!}
+                onRefreshAll={refreshAllModelCaches}
+              />
+            )}
+
+              </div>
             )}
 
           </main>
