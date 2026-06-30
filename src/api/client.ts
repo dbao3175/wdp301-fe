@@ -206,6 +206,7 @@ export const apiClient = {
         assignedTo,
         title,
         region,
+        regions: region ? [region] : [],
         description,
         pageIds
       });
