@@ -2,7 +2,7 @@
  * Type definitions for MangaFlow
  */
 
-export type UserRole = 'MANGAKA' | 'ASSISTANT' | 'EDITOR' | 'BOARD_MEMBER';
+export type UserRole = 'MANGAKA' | 'ASSISTANT' | 'EDITOR' | 'BOARD_MEMBER' | 'ADMIN';
 
 export interface User {
   _id: string;
@@ -30,7 +30,7 @@ export interface Series {
   createdAt?: string;
 }
 
-export type ChapterStatus = 'IN_PROGRESS' | 'COMPLETED';
+export type ChapterStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ARCHIVED';
 
 export interface Chapter {
   _id: string;
@@ -42,7 +42,17 @@ export interface Chapter {
   deadline: string;
 }
 
-export type TaskStatus = 'PENDING' | 'COMPLETED';
+export type TaskStatus = 
+  | 'PENDING' 
+  | 'IN_PROGRESS' 
+  | 'SUBMITTED' 
+  | 'MANGAKA_APPROVED' 
+  | 'APPROVED' 
+  | 'REVISION_REQUESTED' 
+  | 'REVISING' 
+  | 'COMPLETED' 
+  | 'ASSIGNED' 
+  | 'PENDING_REVIEW';
 
 export interface Task {
   _id: string;

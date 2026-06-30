@@ -9,7 +9,8 @@ import {
   DirectiveAction,
   UserRole,
   SeriesStatus,
-  PubSchedule
+  PubSchedule,
+  ChapterStatus
 } from '../types';
 
 import {
@@ -32,13 +33,18 @@ export const apiClient = {
 
   // AUTH
   auth: {
-    register: async (name: string, email: string, role: UserRole, password?: string): Promise<{ success: boolean; data: User }> => {
+    sendVerificationCode: async (email: string): Promise<any> => {
+      return await makeFetchRequest('/api/auth/send-verification-code', 'POST', { email });
+    },
+
+    register: async (name: string, email: string, role: UserRole, password?: string, verificationCode?: string): Promise<{ success: boolean; data: User }> => {
       const actualPassword = password || 'password123';
       const res = await makeFetchRequest('/api/auth/register', 'POST', { 
         name, 
         email, 
         password: actualPassword, 
-        role 
+        role,
+        verificationCode
       });
       setStoredUserSession(res.data, res.data.token);
       return { success: true, data: res.data };
@@ -64,12 +70,7 @@ export const apiClient = {
     }
   },
 
-  users: {
-    getAll: async (role?: string): Promise<User[]> => {
-      const res = await makeFetchRequest(`/api/users${role ? `?role=${role}` : ''}`, 'GET');
-      return res.data;
-    }
-  },
+
 
   // SERIES MANAGEMENT
   series: {
@@ -94,6 +95,56 @@ export const apiClient = {
     }
   },
 
+  proposals: {
+    create: async (title: string, genre: string, synopsis: string, storyboard: File): Promise<any> => {
+      const config = getClientConfig();
+      const url = `${config.baseUrl}/api/series/proposal`;
+      const fd = new FormData();
+      fd.append('title', title);
+      fd.append('genre', genre);
+      fd.append('synopsis', synopsis);
+      fd.append('storyboard', storyboard);
+
+      const headers: HeadersInit = {};
+      const storedToken = getStoredToken();
+      if (storedToken) {
+        headers['Authorization'] = `Bearer ${storedToken}`;
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: fd
+      });
+
+      const responseText = await response.text();
+      let responseData;
+      try {
+        responseData = responseText ? JSON.parse(responseText) : {};
+      } catch (e) {
+        responseData = { message: responseText || `Proposal failed with status ${response.status}` };
+      }
+
+      if (!response.ok) {
+        throw new Error(responseData.message || `Proposal failed with status ${response.status}`);
+      }
+      return responseData.data;
+    },
+
+    getAll: async (): Promise<any[]> => {
+      const res = await makeFetchRequest('/api/series/proposal', 'GET');
+      return res.data;
+    },
+
+    forward: async (id: string, comment: string): Promise<any> => {
+      return await makeFetchRequest(`/api/series/proposal/${id}/forward`, 'PUT', { comment });
+    },
+
+    reject: async (id: string, comment: string): Promise<any> => {
+      return await makeFetchRequest(`/api/series/proposal/${id}/reject`, 'PUT', { comment });
+    }
+  },
+
   // CHAPTERS INDEXING
   chapters: {
     getAll: async (seriesId?: string): Promise<Chapter[]> => {
@@ -108,7 +159,7 @@ export const apiClient = {
       return res.data;
     },
     
-    update: async (chapterId: string, payload: { chapterNumber?: number; title?: string; deadline?: string }): Promise<Chapter> => {
+    update: async (chapterId: string, payload: { chapterNumber?: number; title?: string; deadline?: string; status?: ChapterStatus }): Promise<Chapter> => {
       const res = await makeFetchRequest(`/api/chapters/${chapterId}`, 'PUT', payload);
       return res.data;
     },
@@ -124,6 +175,11 @@ export const apiClient = {
       if (!found) throw new Error('Chapter not found');
       const nextStatus = found.status === 'IN_PROGRESS' ? 'COMPLETED' : 'IN_PROGRESS';
       const res = await makeFetchRequest(`/api/chapters/${chapterId}`, 'PUT', { status: nextStatus });
+      return res.data;
+    },
+
+    publish: async (chapterId: string): Promise<Chapter> => {
+      const res = await makeFetchRequest(`/api/chapters/publish/${chapterId}`, 'POST', {});
       return res.data;
     }
   },
@@ -242,6 +298,50 @@ export const apiClient = {
     },
     getPayoutAccount: async (): Promise<any> => {
       const res = await makeFetchRequest('/api/assistant/payout-account', 'GET');
+      return res.data;
+    }
+  },
+
+  users: {
+    getAll: async (role?: string): Promise<User[]> => {
+      const res = await makeFetchRequest(`/api/users${role ? `?role=${role}` : ''}`, 'GET');
+      return res.data;
+    },
+    create: async (payload: any): Promise<User> => {
+      const res = await makeFetchRequest('/api/users', 'POST', payload);
+      return res.data;
+    },
+    update: async (userId: string, payload: any): Promise<User> => {
+      const res = await makeFetchRequest(`/api/users/${userId}`, 'PUT', payload);
+      return res.data;
+    },
+    delete: async (userId: string): Promise<void> => {
+      await makeFetchRequest(`/api/users/${userId}`, 'DELETE');
+    }
+  },
+
+  submissions: {
+    create: async (seriesId: string, submissionType: 'PITCH' | 'POST_DECISION' | 'CHANGE_EDITOR', action: 'APPROVE_WEEKLY' | 'APPROVE_MONTHLY' | 'CANCEL' | 'CHANGE_FORMAT'): Promise<any> => {
+      return await makeFetchRequest('/api/submissions', 'POST', { seriesId, submissionType, action });
+    },
+    getAll: async (): Promise<any[]> => {
+      const res = await makeFetchRequest('/api/submissions/all', 'GET');
+      return res.data;
+    },
+    getBySeries: async (seriesId: string): Promise<any[]> => {
+      const res = await makeFetchRequest(`/api/submissions/series/${seriesId}`, 'GET');
+      return res.data;
+    },
+    getById: async (submissionId: string): Promise<any> => {
+      const res = await makeFetchRequest(`/api/submissions/${submissionId}`, 'GET');
+      return res.data;
+    },
+    assignVoters: async (submissionId: string, userIds: string[]): Promise<any> => {
+      const res = await makeFetchRequest(`/api/submissions/${submissionId}/voters`, 'POST', { userIds });
+      return res.data;
+    },
+    getVotingStatus: async (submissionId: string): Promise<any> => {
+      const res = await makeFetchRequest(`/api/submissions/${submissionId}/voters`, 'GET');
       return res.data;
     }
   },

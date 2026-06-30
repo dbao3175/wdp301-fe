@@ -9,6 +9,7 @@ import LeaderboardAnalytics from './components/LeaderboardAnalytics';
 import ChapterManagement from './components/ChapterManagement';
 import AssistantApp from './components/assistant/AssistantApp';
 import Navigation from './components/Navigation';
+import AdminPanel from './components/AdminPanel';
 import LoginBackground from './components/LoginBackground';
 import { EditorApp } from './features/editor/EditorApp.tsx';
 import { Sparkles, Key, Radio, Layers, CloudLightning } from 'lucide-react';
@@ -20,6 +21,8 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authRole, setAuthRole] = useState<UserRole>('MANGAKA');
+  const [authVerificationCode, setAuthVerificationCode] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
   const [authStatusMsg, setAuthStatusMsg] = useState('');
   const [isRegisterMode, setIsRegisterMode] = useState(false);
 
@@ -139,6 +142,23 @@ export default function App() {
   }, [currentUser]);
 
   // Auth Submit Handlers
+  const handleSendCode = async () => {
+    if (!authEmail) {
+      setAuthStatusMsg('❌ Email is required to send code.');
+      return;
+    }
+    setSendingCode(true);
+    setAuthStatusMsg('');
+    try {
+      await apiClient.auth.sendVerificationCode(authEmail);
+      setAuthStatusMsg('🎉 Verification code sent! Please check your email.');
+    } catch (err: any) {
+      setAuthStatusMsg(`❌ ${err.message}`);
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthStatusMsg('');
@@ -149,7 +169,11 @@ export default function App() {
           setAuthStatusMsg('❌ Full name is required.');
           return;
         }
-        const res = await apiClient.auth.register(authName, authEmail, authRole, authPassword);
+        if (!authVerificationCode) {
+          setAuthStatusMsg('❌ Verification code is required.');
+          return;
+        }
+        const res = await apiClient.auth.register(authName, authEmail, authRole, authPassword, authVerificationCode);
         setCurrentUser(res.data);
         
         // Auto-focus default appropriate dashboard tab according to role selection
@@ -159,6 +183,8 @@ export default function App() {
           setActiveTab('workspace');
         } else if (authRole === 'EDITOR') {
           setActiveTab('workspace');
+        } else if (authRole === 'ADMIN') {
+          setActiveTab('admin');
         } else {
           setActiveTab('board');
         }
@@ -166,7 +192,6 @@ export default function App() {
         const res = await apiClient.auth.login(authEmail, authPassword);
         setCurrentUser(res.data);
         
-        // Auto-focus default appropriate dashboard tab according to role selection
         const role = res.data.role;
         if (role === 'ASSISTANT') {
           setActiveTab('assistant-tasks');
@@ -174,6 +199,8 @@ export default function App() {
           setActiveTab('workspace');
         } else if (role === 'EDITOR') {
           setActiveTab('workspace');
+        } else if (role === 'ADMIN') {
+          setActiveTab('admin');
         } else {
           setActiveTab('board');
         }
@@ -250,16 +277,43 @@ export default function App() {
 
               <div>
                 <label className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1" htmlFor="emailAddr">Registered Email Address</label>
-                <input
-                  id="emailAddr"
-                  type="email"
-                  required
-                  className="w-full bg-[#F5F5F0] border-2 border-ink-black hover:border-[#E63946] focus:border-[#E63946] focus:bg-white focus:outline-none rounded-none px-4 py-3 font-sans text-xs text-ink-black font-bold transition-all"
-                  placeholder="name@example.com"
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                />
+                <div className="flex gap-2">
+                  <input
+                    id="emailAddr"
+                    type="email"
+                    required
+                    className="flex-1 bg-[#F5F5F0] border-2 border-ink-black hover:border-[#E63946] focus:border-[#E63946] focus:bg-white focus:outline-none rounded-none px-4 py-3 font-sans text-xs text-ink-black font-bold transition-all"
+                    placeholder="name@example.com"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                  />
+                  {isRegisterMode && (
+                    <button
+                      type="button"
+                      onClick={handleSendCode}
+                      disabled={sendingCode}
+                      className="bg-ink-black hover:bg-neutral-800 text-white font-syne text-[10px] font-extrabold uppercase px-4 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 cursor-pointer shrink-0"
+                    >
+                      {sendingCode ? 'Sending...' : 'Send Code'}
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {isRegisterMode && (
+                <div>
+                  <label className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1" htmlFor="verificationCode">Verification Code</label>
+                  <input
+                    id="verificationCode"
+                    type="text"
+                    required
+                    className="w-full bg-[#F5F5F0] border-2 border-ink-black hover:border-[#E63946] focus:border-[#E63946] focus:bg-white focus:outline-none rounded-none px-4 py-3 font-sans text-xs text-ink-black font-bold transition-all font-mono"
+                    placeholder="Enter 6-digit code"
+                    value={authVerificationCode}
+                    onChange={(e) => setAuthVerificationCode(e.target.value)}
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1" htmlFor="password">Password</label>
@@ -278,7 +332,7 @@ export default function App() {
                 <div>
                   <label className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1">MangaFlow Access Role</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {(['MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'] as UserRole[]).map((role) => (
+                    {(['MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER', 'ADMIN'] as UserRole[]).map((role) => (
                       <button
                         key={role}
                         type="button"
@@ -377,6 +431,7 @@ export default function App() {
                 currentUser={currentUser!}
                 series={seriesList}
                 chapters={chapterList}
+                tasks={taskList}
                 activeSeries={activeSeries}
                 onRefreshAll={refreshAllModelCaches}
                 onSelectSeries={setActiveSeries}
@@ -411,6 +466,13 @@ export default function App() {
                 currentUser={currentUser}
                 series={seriesList}
                 ratings={ratingList}
+                onRefreshAll={refreshAllModelCaches}
+              />
+            )}
+
+            {activeTab === 'admin' && (
+              <AdminPanel 
+                currentUser={currentUser!}
                 onRefreshAll={refreshAllModelCaches}
               />
             )}

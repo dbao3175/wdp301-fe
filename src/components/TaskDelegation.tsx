@@ -15,7 +15,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { User, Series, Chapter, Task } from '../types';
 import { apiClient } from '../api/client';
 import {
@@ -128,8 +128,8 @@ function MangakaView({
   //   await axios.post('/api/series/proposal', fd);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !genre || !synopsis.trim()) {
-      setStatusMsg({ text: 'Please fill in all required fields.', ok: false });
+    if (!title.trim() || !genre || !synopsis.trim() || !file) {
+      setStatusMsg({ text: 'Please fill in all required fields and upload a storyboard file.', ok: false });
       return;
     }
 
@@ -364,42 +364,68 @@ function EditorView({
   const [actionDone, setActionDone]       = useState<'forwarded' | 'rejected' | null>(null);
   const [isLoading, setIsLoading]         = useState(false);
 
-  // ── Download handler placeholder ─────────────────────────────────────────
-  // Replace the href logic with an Axios blob download:
-  //   const res = await axios.get(`/api/series/proposal/${proposalId}/storyboard`,
-  //     { responseType: 'blob' });
-  //   const url = URL.createObjectURL(res.data);
-  //   const a = document.createElement('a'); a.href = url;
-  //   a.download = proposal.storyboardPreviewName; a.click();
-  //   URL.revokeObjectURL(url);
-  const handleDownload = () => {
-    if (!proposal.storyboardFile) return;
-    const url = URL.createObjectURL(proposal.storyboardFile);
-    const a   = document.createElement('a');
-    a.href     = url;
-    a.download = proposal.storyboardPreviewName;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleDownload = async () => {
+    if (proposal.storyboardFile) {
+      const url = URL.createObjectURL(proposal.storyboardFile);
+      const a   = document.createElement('a');
+      a.href     = url;
+      a.download = proposal.storyboardPreviewName;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    if (!(proposal as any)._id) return;
+    try {
+      setIsLoading(true);
+      const config = apiClient.getConfig();
+      const url = `${config.baseUrl}/api/series/proposal/${(proposal as any)._id}/storyboard`;
+      const headers: HeadersInit = {};
+      const token = localStorage.getItem('mangaflow_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const response = await fetch(url, { headers });
+      if (!response.ok) throw new Error('Download failed');
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = proposal.storyboardPreviewName || 'storyboard.zip';
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err: any) {
+      console.error(err);
+      alert('Failed to download storyboard');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleForward = async () => {
     if (!editorComment.trim()) return;
     setIsLoading(true);
-    // await axios.put(`/api/series/proposal/${proposalId}/forward`, { comment: editorComment });
-    await new Promise(r => setTimeout(r, 600)); // sim delay
-    onForward(editorComment);
-    setActionDone('forwarded');
-    setIsLoading(false);
+    try {
+      await onForward(editorComment);
+      setActionDone('forwarded');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleReject = async () => {
     if (!editorComment.trim()) return;
     setIsLoading(true);
-    // await axios.put(`/api/series/proposal/${proposalId}/reject`, { comment: editorComment });
-    await new Promise(r => setTimeout(r, 600)); // sim delay
-    onReject(editorComment);
-    setActionDone('rejected');
-    setIsLoading(false);
+    try {
+      await onReject(editorComment);
+      setActionDone('rejected');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // ── Post-decision confirmation screen ────────────────────────────────────
@@ -482,7 +508,7 @@ function EditorView({
           <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Storyboard File</h2>
         </div>
 
-        {proposal.storyboardFile ? (
+        {proposal.storyboardFile || proposal.storyboardPreviewName ? (
           /* ── File attachment card ── */
           <div className="bg-[#121214] border border-[#2d2d34] rounded-md p-5 flex flex-col items-center gap-4 flex-1">
             {/* File icon */}
@@ -609,78 +635,110 @@ export default function TaskDelegation({
   const [submittedProposal, setSubmittedProposal] = useState<ProposalDraft | null>(null);
   const [finalStatus, setFinalStatus] = useState<'forwarded' | 'rejected' | null>(null);
 
-  // Real backend pending list for Editor
-  const pendingSeriesList = series.filter(s => s.status === 'PENDING');
+  // Real backend pending proposal list for Editor
+  const [proposalsList, setProposalsList] = useState<any[]>([]);
+  const [loadingProposals, setLoadingProposals] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
-  const selectedSeries = pendingSeriesList.find(s => s._id === selectedSeriesId) || pendingSeriesList[0] || null;
 
-  // Role-based view selection — MANGAKA defaults to submission form,
-  // EDITOR defaults to the review view (if a proposal exists).
   const isMangaka = currentUser.role === 'MANGAKA';
   const isEditor  = currentUser.role === 'EDITOR' || currentUser.role === 'BOARD_MEMBER';
 
+  const fetchProposals = async () => {
+    if (!isEditor) return;
+    setLoadingProposals(true);
+    try {
+      const data = await apiClient.proposals.getAll();
+      setProposalsList(data || []);
+    } catch (err) {
+      console.error('Failed to fetch proposals:', err);
+    } finally {
+      setLoadingProposals(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProposals();
+  }, [currentUser]);
+
+  const pendingProposals = proposalsList.filter(p => p.status === 'PENDING');
+  const selectedProposal = pendingProposals.find(p => p._id === selectedSeriesId) || pendingProposals[0] || null;
+
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  const handleMangakaSubmit = (draft: ProposalDraft) => {
-    // In production: the BE persists the proposal and this component
-    // would refetch or navigate.  Here we simulate optimistic local state.
-    setSubmittedProposal(draft);
-
-    // Also create a lightweight Series stub in the local mock store
-    apiClient.series.create(draft.title, draft.synopsis).then(() => {
+  const handleMangakaSubmit = async (draft: ProposalDraft) => {
+    if (!draft.storyboardFile) {
+      showToast('Storyboard file is required', 'warn');
+      return;
+    }
+    try {
+      await apiClient.proposals.create(
+        draft.title,
+        draft.genre,
+        draft.synopsis,
+        draft.storyboardFile
+      );
+      setSubmittedProposal(draft);
+      showToast('Proposal submitted successfully!', 'success');
       onRefreshAll();
-    }).catch(() => {});
+    } catch (err: any) {
+      showToast(err.message || 'Submission failed', 'warn');
+    }
   };
 
   const handleForward = async (comment: string) => {
-    if (!selectedSeries) return;
+    if (!selectedProposal) return;
     try {
-      // Call actual BE review API
-      await apiClient.series.review(selectedSeries._id, 'APPROVED', comment, 'WEEKLY');
+      // 1. Update proposal status to FORWARDED
+      await apiClient.proposals.forward(selectedProposal._id, comment);
+
+      // 2. Create the Series stub (initially PENDING in database)
+      const newSeries = await apiClient.series.create(selectedProposal.title, selectedProposal.synopsis);
+
+      // 3. Create the Voting Session (SeriesSubmission) on the Board for this Series
+      await apiClient.submissions.create(newSeries._id, 'PITCH', 'APPROVE_WEEKLY');
       
-      // Call actual BE notification API to notify Mangaka
-      const mangakaIdStr = typeof selectedSeries.mangakaId === 'object' && selectedSeries.mangakaId !== null 
-        ? (selectedSeries.mangakaId as any)._id 
-        : selectedSeries.mangakaId;
+      const mangakaIdStr = typeof selectedProposal.mangakaId === 'object' && selectedProposal.mangakaId !== null 
+        ? (selectedProposal.mangakaId as any)._id 
+        : selectedProposal.mangakaId;
       
       await apiClient.notifications.create(
         mangakaIdStr,
-        'Đề xuất Series mới đã được duyệt!',
-        `Biên tập viên ${currentUser.name} đã duyệt đề xuất Series "${selectedSeries.title}" của bạn. Trạng thái series hiện là APPROVED.`,
+        'Đề xuất Series mới đã được chuyển tiếp lên Board!',
+        `Biên tập viên ${currentUser.name} đã chuyển tiếp đề xuất Series "${selectedProposal.title}" của bạn lên Hội đồng để bỏ phiếu. Nhận xét: ${comment}`,
         'INFO'
       );
 
-      showToast('Đã phê duyệt series và gửi thông báo cho tác giả.', 'success');
+      showToast('Đã chuyển tiếp đề xuất lên Hội đồng biên tập và khởi tạo Voting Session.', 'success');
+      fetchProposals();
       onRefreshAll();
       handleReset();
     } catch (err: any) {
-      showToast(err.message || 'Phê duyệt thất bại', 'warn');
+      showToast(err.message || 'Chuyển tiếp thất bại', 'warn');
     }
   };
 
   const handleReject = async (comment: string) => {
-    if (!selectedSeries) return;
+    if (!selectedProposal) return;
     try {
-      // Call actual BE review API
-      await apiClient.series.review(selectedSeries._id, 'REJECTED', comment);
+      await apiClient.proposals.reject(selectedProposal._id, comment);
       
-      // Call actual BE notification API to notify Mangaka
-      const mangakaIdStr = typeof selectedSeries.mangakaId === 'object' && selectedSeries.mangakaId !== null 
-        ? (selectedSeries.mangakaId as any)._id 
-        : selectedSeries.mangakaId;
+      const mangakaIdStr = typeof selectedProposal.mangakaId === 'object' && selectedProposal.mangakaId !== null 
+        ? (selectedProposal.mangakaId as any)._id 
+        : selectedProposal.mangakaId;
       
       await apiClient.notifications.create(
         mangakaIdStr,
         'Yêu cầu chỉnh sửa đề xuất Series mới',
-        `Biên tập viên ${currentUser.name} yêu cầu chỉnh sửa đề xuất Series "${selectedSeries.title}". Nhận xét: ${comment}`,
+        `Biên tập viên ${currentUser.name} yêu cầu chỉnh sửa đề xuất Series "${selectedProposal.title}". Nhận xét: ${comment}`,
         'WARNING'
       );
 
-      showToast('Đã gửi yêu cầu chỉnh sửa và thông báo cho tác giả.', 'warn');
+      showToast('Đã từ chối đề xuất và gửi nhận xét cho tác giả.', 'warn');
+      fetchProposals();
       onRefreshAll();
       handleReset();
     } catch (err: any) {
-      showToast(err.message || 'Gửi yêu cầu chỉnh sửa thất bại', 'warn');
+      showToast(err.message || 'Từ chối đề xuất thất bại', 'warn');
     }
   };
 
@@ -690,25 +748,24 @@ export default function TaskDelegation({
     setSelectedSeriesId(null);
   };
 
-  // Map backend selectedSeries to EditorView proposal input
-  const activeProposal = selectedSeries ? {
-    title: selectedSeries.title,
-    genre: (selectedSeries as any).genre || 'Shonen',
-    synopsis: selectedSeries.synopsis,
+  // Map backend selectedProposal to EditorView proposal input
+  const activeProposal = selectedProposal ? {
+    _id: selectedProposal._id,
+    title: selectedProposal.title,
+    genre: selectedProposal.genre || 'Shonen',
+    synopsis: selectedProposal.synopsis,
     storyboardFile: null,
-    storyboardPreviewName: selectedSeries.coverImage ? selectedSeries.coverImage.split('/').pop() || 'storyboard.pdf' : 'storyboard.zip',
+    storyboardPreviewName: selectedProposal.storyboardOriginalName || 'storyboard.zip',
     storyboardPreviewSize: 'N/A',
-    submittedAt: selectedSeries.createdAt ? new Date(selectedSeries.createdAt).toLocaleString() : new Date().toLocaleString(),
-    submittedBy: typeof selectedSeries.mangakaId === 'object' && selectedSeries.mangakaId !== null ? (selectedSeries.mangakaId as any).name : 'Unknown Mangaka',
+    submittedAt: selectedProposal.submittedAt ? new Date(selectedProposal.submittedAt).toLocaleString() : new Date().toLocaleString(),
+    submittedBy: typeof selectedProposal.mangakaId === 'object' && selectedProposal.mangakaId !== null ? (selectedProposal.mangakaId as any).name : 'Unknown Mangaka',
   } : null;
 
   // ── Determine which content to show ───────────────────────────────────────
-  // MANGAKA: always shows their own submission form (until submitted)
-  // EDITOR:  shows review view if a proposal is queued, otherwise empty state
   const showMangakaForm    = isMangaka && !submittedProposal;
   const showMangakaSuccess = isMangaka && !!submittedProposal;
-  const showEditorReview   = isEditor  && pendingSeriesList.length > 0;
-  const showEditorEmpty    = isEditor  && pendingSeriesList.length === 0;
+  const showEditorReview   = isEditor  && pendingProposals.length > 0;
+  const showEditorEmpty    = isEditor  && pendingProposals.length === 0;
 
   return (
     /* Outer container — dark matte black shell, matching WorkspaceCanvas */
@@ -812,12 +869,12 @@ export default function TaskDelegation({
             {/* Sidebar list of pending proposals */}
             <div className="lg:col-span-3 bg-[#1e1e24] border border-[#2d2d34] rounded-md p-4 space-y-2 max-h-[500px] overflow-y-auto">
               <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Pending Proposals</h3>
-              {pendingSeriesList.map(s => (
+              {pendingProposals.map(s => (
                 <button
                   key={s._id}
                   onClick={() => setSelectedSeriesId(s._id)}
                   className={`w-full text-left px-3 py-2.5 rounded border transition-all ${
-                    (selectedSeriesId === s._id || (!selectedSeriesId && pendingSeriesList[0]?._id === s._id))
+                    (selectedSeriesId === s._id || (!selectedSeriesId && pendingProposals[0]?._id === s._id))
                       ? 'bg-red-600/10 border-red-600/50 text-red-400 font-bold'
                       : 'bg-[#121214] border-[#2d2d34] text-slate-400 hover:border-slate-500'
                   }`}

@@ -280,6 +280,7 @@ export default function LeaderboardAnalytics({
   const [ingestSource, setIngestSource] = useState('Weekly');
   const [ingestMsg, setIngestMsg] = useState('');
   const [ingestSubmitting, setIngestSubmitting] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
 
   const entries    = period === 'weekly' ? weeklyData  : monthlyData;
   const setEntries = period === 'weekly' ? setWeeklyData : setMonthlyData;
@@ -379,6 +380,119 @@ export default function LeaderboardAnalytics({
       onRefreshAll();
     } catch (err: any) {
       setIngestMsg(`❌ Failed: ${err.message}`);
+    } finally {
+      setIngestSubmitting(false);
+    }
+  };
+
+  const parseCSV = (text: string) => {
+    const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    if (lines.length <= 1) return [];
+    
+    const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
+    
+    const titleIdx = headers.findIndex(h => h.includes('title') || h.includes('seriesid') || h.includes('name'));
+    const votesIdx = headers.findIndex(h => h.includes('vote') || h.includes('count') || h.includes('rank') || h.includes('votes'));
+    const sourceIdx = headers.findIndex(h => h.includes('source') || h.includes('period'));
+
+    if (titleIdx === -1 || votesIdx === -1) {
+      throw new Error("Invalid CSV format. Must contain columns: 'title' or 'seriesId' and 'votes' or 'voteCount'.");
+    }
+
+    const results = [];
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split(',').map(p => p.trim().replace(/^["']|["']$/g, ''));
+      const titleOrId = parts[titleIdx];
+      const votesVal = Number(parts[votesIdx]);
+      const sourceVal = sourceIdx !== -1 && parts[sourceIdx] ? parts[sourceIdx] : 'Weekly';
+      if (titleOrId && !isNaN(votesVal)) {
+        results.push({ titleOrId, votes: votesVal, source: sourceVal });
+      }
+    }
+    return results;
+  };
+
+  const parseJSON = (text: string) => {
+    const data = JSON.parse(text);
+    const results: any[] = [];
+    if (Array.isArray(data)) {
+      for (const item of data) {
+        const titleOrId = item.seriesId || item.title || item.name;
+        const votes = Number(item.voteCount || item.votes || item.count);
+        const source = item.periodSource || item.source || 'Weekly';
+        if (titleOrId && !isNaN(votes)) {
+          results.push({ titleOrId, votes, source });
+        }
+      }
+    }
+    return results;
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      await handleUploadedFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      await handleUploadedFile(e.target.files[0]);
+    }
+  };
+
+  const handleUploadedFile = async (file: File) => {
+    setIngestSubmitting(true);
+    setIngestMsg('');
+    try {
+      const text = await file.text();
+      let records: any[] = [];
+      if (file.name.endsWith('.csv')) {
+        records = parseCSV(text);
+      } else if (file.name.endsWith('.json')) {
+        records = parseJSON(text);
+      } else {
+        throw new Error('Unsupported file format. Please upload a .csv or .json file.');
+      }
+
+      if (records.length === 0) {
+        throw new Error('No valid entries found in the file.');
+      }
+
+      let successCount = 0;
+      for (const record of records) {
+        let resolvedSeriesId = '';
+        const matchedSeries = series.find(s => 
+          s._id === record.titleOrId || 
+          s.title.toLowerCase() === record.titleOrId.toLowerCase()
+        );
+        if (matchedSeries) {
+          resolvedSeriesId = matchedSeries._id;
+        } else {
+          continue;
+        }
+
+        await apiClient.ratings.submit(resolvedSeriesId, record.votes, record.source);
+        successCount++;
+      }
+
+      setIngestMsg(`🚀 Successfully imported ${successCount} series rankings!`);
+      handleRefresh();
+    } catch (err: any) {
+      setIngestMsg(`❌ Import Error: ${err.message}`);
     } finally {
       setIngestSubmitting(false);
     }
@@ -656,6 +770,42 @@ export default function LeaderboardAnalytics({
                   <option value="Weekly">Weekly</option>
                   <option value="Monthly">Monthly</option>
                 </select>
+              </div>
+
+              {/* Drag and Drop Upload Area */}
+              <div className="border-t border-[#2d2d34] pt-4">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Or Import CSV/JSON rankings file</label>
+                <div 
+                  onDragEnter={handleDrag}
+                  onDragOver={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed rounded-md p-6 text-center cursor-pointer transition-all ${
+                    dragActive 
+                      ? 'border-red-500 bg-red-500/10' 
+                      : 'border-[#2d2d34] hover:border-slate-500 bg-[#121214]'
+                  }`}
+                >
+                  <p className="text-xs text-slate-400 font-bold mb-1">
+                    Drag and drop your file here
+                  </p>
+                  <p className="text-[10px] text-slate-500 uppercase">
+                    Supported: .csv, .json (must match 'title' &amp; 'votes')
+                  </p>
+                  <input 
+                    type="file" 
+                    id="rankings-file-upload" 
+                    className="hidden" 
+                    accept=".csv,.json"
+                    onChange={handleFileChange}
+                  />
+                  <label 
+                    htmlFor="rankings-file-upload" 
+                    className="inline-block mt-3 px-3 py-1.5 bg-[#2d2d34] hover:bg-[#3a3a44] text-white text-[10px] font-bold uppercase rounded cursor-pointer transition-colors"
+                  >
+                    Select File
+                  </label>
+                </div>
               </div>
 
               <div className="flex gap-3 pt-2">

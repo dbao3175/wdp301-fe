@@ -49,7 +49,7 @@ import {
 // Domain types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type WTaskStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REVISING' | 'ASSIGNED';
+type WTaskStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REVISING' | 'ASSIGNED' | 'MANGAKA_APPROVED';
 
 interface WTask {
   id: string;
@@ -99,10 +99,11 @@ const TASK_TYPES = ['Background', 'Character', 'Effects', 'Lettering', 'Toning']
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<WTaskStatus, { label: string; color: string; icon: React.ReactNode }> = {
-  PENDING_REVIEW: { label: 'Pending Review', color: 'bg-[#2d2d34] text-slate-300 border border-[#3a3a44]',          icon: <Clock        className="w-3 h-3" /> },
-  APPROVED:       { label: 'Approved',       color: 'bg-white text-black border border-white',                      icon: <CheckCircle2 className="w-3 h-3" /> },
-  REVISING:       { label: 'Revising',       color: 'bg-red-500/10 text-red-400 border border-red-500/20',          icon: <RotateCcw    className="w-3 h-3" /> },
-  ASSIGNED:       { label: 'Assigned',       color: 'bg-[#2d2d34]/60 text-slate-500 border border-[#3a3a44]/50',   icon: <UserIcon     className="w-3 h-3" /> },
+  PENDING_REVIEW:   { label: 'Pending Review', color: 'bg-[#2d2d34] text-slate-300 border border-[#3a3a44]',          icon: <Clock        className="w-3 h-3" /> },
+  APPROVED:         { label: 'Approved',       color: 'bg-white text-black border border-white',                      icon: <CheckCircle2 className="w-3 h-3" /> },
+  REVISING:         { label: 'Revising',       color: 'bg-red-500/10 text-red-400 border border-red-500/20',          icon: <RotateCcw    className="w-3 h-3" /> },
+  ASSIGNED:         { label: 'Assigned',       color: 'bg-[#2d2d34]/60 text-slate-500 border border-[#3a3a44]/50',   icon: <UserIcon     className="w-3 h-3" /> },
+  MANGAKA_APPROVED: { label: 'Mangaka Approved',color: 'bg-green-500/10 text-green-400 border border-green-500/20',   icon: <CheckCircle2 className="w-3 h-3" /> },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -456,6 +457,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
         if (t.status === 'SUBMITTED') uiStatus = 'PENDING_REVIEW';
         else if (t.status === 'APPROVED') uiStatus = 'APPROVED';
         else if (t.status === 'REVISION_REQUESTED') uiStatus = 'REVISING';
+        else if (t.status === 'MANGAKA_APPROVED') uiStatus = 'MANGAKA_APPROVED';
 
         return {
           id: t._id,
@@ -975,15 +977,38 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
 
                 {/* Approve */}
                 <div className="px-4 py-3 border-b border-[#2d2d34] shrink-0">
-                  <button
-                    onClick={handleApprove}
-                    disabled={activeTask.status === 'APPROVED'}
-                    className="w-full py-2.5 rounded-md bg-white hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-black transition-all cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <Check className="w-4 h-4" /> Approve Task
-                  </button>
-                  {activeTask.status === 'APPROVED' && (
-                    <p className="text-[9px] text-slate-500 text-center mt-1.5">Already approved</p>
+                  {currentUser.role === 'MANGAKA' ? (
+                    <>
+                      <button
+                        onClick={handleApprove}
+                        disabled={activeTask.status !== 'PENDING_REVIEW'}
+                        className="w-full py-2.5 rounded-md bg-white hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-black transition-all cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        <Check className="w-4 h-4" /> Approve (Vòng 1)
+                      </button>
+                      {activeTask.status === 'MANGAKA_APPROVED' && (
+                        <p className="text-[9px] text-green-400 text-center mt-1.5">Bạn đã duyệt (Vòng 1). Chờ Editor duyệt cuối.</p>
+                      )}
+                      {activeTask.status === 'APPROVED' && (
+                        <p className="text-[9px] text-slate-500 text-center mt-1.5">Task đã hoàn tất</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={handleApprove}
+                        disabled={activeTask.status !== 'MANGAKA_APPROVED'}
+                        className="w-full py-2.5 rounded-md bg-white hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-black transition-all cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        <Check className="w-4 h-4" /> Final Approve (Vòng 2)
+                      </button>
+                      {activeTask.status === 'PENDING_REVIEW' && (
+                        <p className="text-[9px] text-amber-500 text-center mt-1.5">Chờ Mangaka duyệt trước (Vòng 1)</p>
+                      )}
+                      {activeTask.status === 'APPROVED' && (
+                        <p className="text-[9px] text-slate-500 text-center mt-1.5">Task đã hoàn tất</p>
+                      )}
+                    </>
                   )}
                 </div>
 

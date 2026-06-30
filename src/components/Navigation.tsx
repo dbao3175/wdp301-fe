@@ -11,7 +11,8 @@ import {
   X, 
   Sparkles,
   BookOpen,
-  Bell
+  Bell,
+  Shield
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -74,7 +75,8 @@ export default function Navigation({
     { id: 'chapters', label: 'Chapter Management', icon: BookOpen, roles: ['MANGAKA', 'EDITOR'] },
     { id: 'tasks', label: 'Series Proposals', icon: Layers, roles: ['MANGAKA', 'EDITOR'] },
     { id: 'board', label: 'Editorial Board', icon: CheckSquare, roles: ['EDITOR', 'BOARD_MEMBER'] },
-    { id: 'analytics', label: 'Rankings Dashboard', icon: TrendingUp, roles: ['BOARD_MEMBER', 'MANGAKA'] }
+    { id: 'analytics', label: 'Rankings Dashboard', icon: TrendingUp, roles: ['BOARD_MEMBER', 'MANGAKA'] },
+    { id: 'admin', label: 'Admin Panel', icon: Shield, roles: ['ADMIN'] }
   ];
 
   // Filtering tabs representing only items the current role has clearance for

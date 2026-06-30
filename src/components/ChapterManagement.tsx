@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { User, Series, Chapter } from '../types';
+import { User, Series, Chapter, Task } from '../types';
 import { apiClient } from '../api/client';
 import { 
-  BookOpen, Plus, Edit2, Trash2, Check, X, ArrowRight, Save
+  BookOpen, Plus, Edit2, Archive, Check, X, ArrowRight, Save
 } from 'lucide-react';
 
 interface ChapterManagementProps {
   currentUser: User;
   series: Series[];
   chapters: Chapter[];
+  tasks: Task[];
   activeSeries: Series | null;
   onRefreshAll: () => void;
   onSelectSeries: (series: Series) => void;
@@ -17,7 +18,7 @@ interface ChapterManagementProps {
 }
 
 export default function ChapterManagement({
-  currentUser, series, chapters, activeSeries, onRefreshAll, onSelectSeries, onSelectChapter, onChangeTab
+  currentUser, series, chapters, tasks, activeSeries, onRefreshAll, onSelectSeries, onSelectChapter, onChangeTab
 }: ChapterManagementProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
@@ -38,7 +39,7 @@ export default function ChapterManagement({
     ? chapters.filter(c => {
         const sid = typeof c.seriesId === 'object' && c.seriesId !== null ? (c.seriesId as any)._id : c.seriesId;
         const fallbackSid = typeof c.series === 'object' && c.series !== null ? (c.series as any)._id : c.series;
-        return sid === activeSeries._id || fallbackSid === activeSeries._id;
+        return (sid === activeSeries._id || fallbackSid === activeSeries._id) && c.status !== 'ARCHIVED';
       })
     : [];
 
@@ -76,14 +77,14 @@ export default function ChapterManagement({
     }
   };
 
-  const handleDelete = async (chapterId: string) => {
-    if (!confirm('Are you sure you want to delete this chapter? All tasks within it will be orphaned!')) return;
+  const handleArchive = async (chapterId: string) => {
+    if (!confirm('Are you sure you want to archive this chapter? This will hide it from the active list.')) return;
     try {
-      await apiClient.chapters.delete(chapterId);
-      showToast('Chapter deleted.');
+      await apiClient.chapters.update(chapterId, { status: 'ARCHIVED' });
+      showToast('Chapter archived.');
       onRefreshAll();
     } catch (err: any) {
-      showToast(err.message || 'Failed to delete chapter', 'error');
+      showToast(err.message || 'Failed to archive chapter', 'error');
     }
   };
 
@@ -100,6 +101,31 @@ export default function ChapterManagement({
     setCTitle('');
     setCDeadline('');
     setEditingChapterId(null);
+  };
+
+  const handlePublish = async (chapterId: string, chapterNumber: number) => {
+    const chapterTasks = tasks.filter(t => {
+      const cid = typeof t.chapterId === 'object' && t.chapterId !== null ? (t.chapterId as any)._id : t.chapterId;
+      return cid === chapterId;
+    });
+
+    if (chapterTasks.length === 0) {
+      showToast('Cannot publish chapter: No tasks assigned yet.', 'error');
+      return;
+    }
+    const allApproved = chapterTasks.every(t => t.status === 'APPROVED');
+    if (!allApproved) {
+      showToast('Cannot publish chapter: All tasks must be final-approved by Editor.', 'error');
+      return;
+    }
+
+    try {
+      await apiClient.chapters.publish(chapterId);
+      showToast(`Chapter ${chapterNumber} published successfully!`);
+      onRefreshAll();
+    } catch (err: any) {
+      showToast(err.message || 'Publishing failed', 'error');
+    }
   };
 
   const goToWorkspace = (c: Chapter) => {
@@ -237,50 +263,77 @@ export default function ChapterManagement({
                     No chapters exist for this series yet.
                   </div>
                 ) : (
-                  currentSeriesChapters.map(c => (
-                    <div key={c._id} className="flex items-center justify-between p-4 bg-[#1e1e24] border border-[#2d2d34] hover:border-slate-500 rounded-md transition-all group">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded bg-[#121214] border border-[#2d2d34] flex flex-col items-center justify-center text-slate-300">
-                          <span className="text-[9px] font-bold uppercase">CH</span>
-                          <span className="text-xs font-black">{c.chapterNumber}</span>
+                  currentSeriesChapters.map(c => {
+                    const chapterTasks = tasks.filter(t => {
+                      const cid = typeof t.chapterId === 'object' && t.chapterId !== null ? (t.chapterId as any)._id : t.chapterId;
+                      return cid === c._id;
+                    });
+                    const allApproved = chapterTasks.length > 0 && chapterTasks.every(t => t.status === 'APPROVED');
+
+                    return (
+                      <div key={c._id} className="flex items-center justify-between p-4 bg-[#1e1e24] border border-[#2d2d34] hover:border-slate-500 rounded-md transition-all group">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded bg-[#121214] border border-[#2d2d34] flex flex-col items-center justify-center text-slate-300">
+                            <span className="text-[9px] font-bold uppercase">CH</span>
+                            <span className="text-xs font-black">{c.chapterNumber}</span>
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-white flex items-center gap-2">
+                              Chapter {c.chapterNumber} {c.title && <span className="text-slate-400 font-medium">- {c.title}</span>}
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-mono border ${
+                                c.status === 'COMPLETED' 
+                                  ? 'bg-green-500/10 border-green-500/40 text-green-400' 
+                                  : allApproved 
+                                    ? 'bg-[#FFF3B0]/10 border-[#FFF3B0]/40 text-[#FFF3B0]' 
+                                    : 'bg-red-500/10 border-red-500/40 text-red-400'
+                              }`}>
+                                {c.status === 'COMPLETED' ? 'PUBLISHED' : allApproved ? 'READY TO PUBLISH' : 'INCOMPLETE TASKS'}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 mt-1">
+                              Deadline: {c.deadline ? new Date(c.deadline).toLocaleDateString() : 'N/A'}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-sm font-bold text-white flex items-center gap-2">
-                            Chapter {c.chapterNumber} {c.title && <span className="text-slate-400 font-medium">- {c.title}</span>}
-                            <span className="px-2 py-0.5 rounded bg-[#121214] border border-[#2d2d34] text-[9px] text-slate-500 font-mono">
-                              {c.status}
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-slate-400 mt-1">
-                            Deadline: {c.deadline ? new Date(c.deadline).toLocaleDateString() : 'N/A'}
-                          </div>
+                        
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {currentUser.role === 'MANGAKA' && c.status !== 'COMPLETED' && (
+                            <button 
+                              onClick={() => handlePublish(c._id, c.chapterNumber)}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase rounded cursor-pointer transition-colors ${
+                                allApproved 
+                                  ? 'bg-green-600 hover:bg-green-500 text-white' 
+                                  : 'bg-red-900/30 text-red-400/50 border border-red-900/50 cursor-not-allowed'
+                              }`}
+                              title={allApproved ? 'Publish Chapter to readers' : 'Cannot publish: All tasks must be APPROVED by Editor'}
+                            >
+                              Publish
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => goToWorkspace(c)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black hover:bg-slate-200 text-[10px] font-bold uppercase rounded cursor-pointer"
+                          >
+                            Workspace <ArrowRight className="w-3 h-3" />
+                          </button>
+                          <button 
+                            onClick={() => startEdit(c)}
+                            className="p-1.5 bg-[#121214] border border-[#2d2d34] hover:text-white rounded text-slate-400 transition-colors cursor-pointer"
+                            title="Edit Chapter"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={() => handleArchive(c._id)}
+                            className="p-1.5 bg-[#121214] border border-[#2d2d34] hover:border-amber-500/50 hover:text-amber-400 rounded text-slate-400 transition-colors cursor-pointer"
+                            title="Archive Chapter"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
-                      
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => goToWorkspace(c)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black hover:bg-slate-200 text-[10px] font-bold uppercase rounded"
-                        >
-                          Workspace <ArrowRight className="w-3 h-3" />
-                        </button>
-                        <button 
-                          onClick={() => startEdit(c)}
-                          className="p-1.5 bg-[#121214] border border-[#2d2d34] hover:text-white rounded text-slate-400 transition-colors"
-                          title="Edit Chapter"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(c._id)}
-                          className="p-1.5 bg-[#121214] border border-[#2d2d34] hover:border-red-500/50 hover:text-red-400 rounded text-slate-400 transition-colors"
-                          title="Delete Chapter"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </>

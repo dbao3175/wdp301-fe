@@ -16,11 +16,17 @@ export default function EditorialBoard({
   ratings,
   onRefreshAll
 }: EditorialBoardProps) {
-  const pendingSeries = series.filter(s => s.status === 'PENDING');
+  // Real backend submission lists
+  const [submissionsList, setSubmissionsList] = useState<any[]>([]);
+  const [boardMembers, setBoardMembers] = useState<User[]>([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<any | null>(null);
+  const [voterStatus, setVoterStatus] = useState<any>(null);
+  const [selectedVoterIds, setSelectedVoterIds] = useState<string[]>([]);
+
   const ITEMS_PER_PAGE = 5;
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedSeries, setSelectedSeries] = useState<Series | null>(null);
   const [modalVotes, setModalVotes] = useState<Vote[]>([]);
   const [modalVoteForm, setModalVoteForm] = useState<{
     decision: 'ACCEPT' | 'REJECT';
@@ -29,7 +35,6 @@ export default function EditorialBoard({
   }>({ decision: 'ACCEPT', comment: '', schedule: 'WEEKLY' });
   const [modalMessage, setModalMessage] = useState('');
   const [modalSubmitting, setModalSubmitting] = useState(false);
-  const [voteCounts, setVoteCounts] = useState<Record<string, Vote[]>>({});
 
   const [directives, setDirectives] = useState<Directive[]>([]);
   const [showDirectiveForm, setShowDirectiveForm] = useState(false);
@@ -47,61 +52,73 @@ export default function EditorialBoard({
 
   const activeSeries = series.filter(s => s.status !== 'PENDING' && s.status !== 'CANCELLED' && s.status !== 'REJECTED');
 
-  const fetchVoteCounts = async () => {
+  const fetchAllSubmissions = async () => {
+    setLoadingSubmissions(true);
     try {
-      const results: Record<string, Vote[]> = {};
-      for (const s of pendingSeries) {
-        const votes = await apiClient.votes.getForSubmission(s._id);
-        results[s._id] = Array.isArray(votes) ? votes : (votes as any)?.data || [];
-      }
-      setVoteCounts(results);
+      const data = await apiClient.submissions.getAll();
+      setSubmissionsList(data || []);
     } catch (err) {
-      console.error('Failed to fetch vote counts:', err);
+      console.error('Failed to fetch submissions:', err);
+    } finally {
+      setLoadingSubmissions(false);
+    }
+  };
+
+  const fetchBoardMembers = async () => {
+    try {
+      const data = await apiClient.users.getAll('BOARD_MEMBER');
+      setBoardMembers(data || []);
+    } catch (err) {
+      console.error('Failed to fetch board members:', err);
     }
   };
 
   useEffect(() => {
-    if (pendingSeries.length > 0) fetchVoteCounts();
-  }, [pendingSeries.length]);
+    fetchAllSubmissions();
+    fetchBoardMembers();
+    fetchDirectives();
+  }, []);
 
-  const totalPages = Math.max(1, Math.ceil(pendingSeries.length / ITEMS_PER_PAGE));
-  const paginatedSeries = pendingSeries.slice(
+  const pendingPitches = submissionsList.filter(
+    (sub) => sub.submissionType === 'PITCH' && sub.decisionStatus === 'PENDING'
+  );
+
+  const totalPages = Math.max(1, Math.ceil(pendingPitches.length / ITEMS_PER_PAGE));
+  const paginatedPitches = pendingPitches.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
 
-  const getVoteTally = (seriesId: string) => {
-    const votes = voteCounts[seriesId] || [];
-    return {
-      accept: votes.filter(v => v.decision === 'ACCEPT').length,
-      reject: votes.filter(v => v.decision === 'REJECT').length,
-      total: votes.length
-    };
-  };
-
-  const openSeriesModal = async (s: Series) => {
-    setSelectedSeries(s);
+  const openSubmissionModal = async (sub: any) => {
+    setSelectedSubmission(sub);
     setModalMessage('');
     setModalVoteForm({ decision: 'ACCEPT', comment: '', schedule: 'WEEKLY' });
+    setSelectedVoterIds([]);
     try {
-      const votes = await apiClient.votes.getForSubmission(s._id);
-      const list = Array.isArray(votes) ? votes : (votes as any)?.data || [];
-      setModalVotes(list);
-    } catch {
+      const votes = await apiClient.votes.getForSubmission(sub._id);
+      setModalVotes(Array.isArray(votes) ? votes : (votes as any)?.data || []);
+
+      const statusRes = await apiClient.submissions.getVotingStatus(sub._id);
+      setVoterStatus(statusRes?.data || null);
+    } catch (err) {
+      console.error('Failed to open submission details:', err);
       setModalVotes([]);
+      setVoterStatus(null);
     }
   };
 
   const closeModal = () => {
-    setSelectedSeries(null);
+    setSelectedSubmission(null);
     setModalVotes([]);
+    setVoterStatus(null);
+    setSelectedVoterIds([]);
     setModalMessage('');
     setModalSubmitting(false);
   };
 
   const handleModalVoteSubmit = async () => {
-    if (!selectedSeries) return;
-    if (!modalVoteForm.comment) {
+    if (!selectedSubmission) return;
+    if (!modalVoteForm.comment.trim()) {
       setModalMessage('❌ Comment is required for editorial voting.');
       return;
     }
@@ -109,17 +126,21 @@ export default function EditorialBoard({
     try {
       const scheduleParam = modalVoteForm.decision === 'ACCEPT' ? modalVoteForm.schedule : undefined;
       await apiClient.votes.submit(
-        selectedSeries._id,
+        selectedSubmission._id,
         modalVoteForm.decision,
         modalVoteForm.comment,
         scheduleParam
       );
-      const votes = await apiClient.votes.getForSubmission(selectedSeries._id);
-      const list = Array.isArray(votes) ? votes : (votes as any)?.data || [];
-      setModalVotes(list);
       setModalMessage('🎉 Vote recorded successfully!');
+      
+      const votes = await apiClient.votes.getForSubmission(selectedSubmission._id);
+      setModalVotes(Array.isArray(votes) ? votes : (votes as any)?.data || []);
+
+      const statusRes = await apiClient.submissions.getVotingStatus(selectedSubmission._id);
+      setVoterStatus(statusRes?.data || null);
+
+      fetchAllSubmissions();
       onRefreshAll();
-      setTimeout(fetchVoteCounts, 300);
     } catch (err: any) {
       setModalMessage(`❌ ${err.message}`);
     } finally {
@@ -127,7 +148,21 @@ export default function EditorialBoard({
     }
   };
 
-  const userVote = selectedSeries
+  const handleAssignVoters = async () => {
+    if (!selectedSubmission || selectedVoterIds.length === 0) return;
+    try {
+      await apiClient.submissions.assignVoters(selectedSubmission._id, selectedVoterIds);
+      const statusRes = await apiClient.submissions.getVotingStatus(selectedSubmission._id);
+      setVoterStatus(statusRes?.data || null);
+      setSelectedVoterIds([]);
+      setModalMessage('🎉 Voters assigned successfully!');
+      fetchAllSubmissions();
+    } catch (err: any) {
+      setModalMessage(`❌ ${err.message}`);
+    }
+  };
+
+  const userVote = selectedSubmission
     ? modalVotes.find(v => v.voterId === currentUser._id)
     : null;
 
@@ -139,10 +174,6 @@ export default function EditorialBoard({
       console.error('Failed to fetch directives:', err);
     }
   };
-
-  useEffect(() => {
-    fetchDirectives();
-  }, []);
 
   const handleCreateDirective = async () => {
     if (!dirForm.seriesId) { setDirMsg('❌ Select a series.'); return; }
@@ -174,7 +205,6 @@ export default function EditorialBoard({
       setDirVoteMsg('✅ Vote recorded!');
       onRefreshAll();
       setTimeout(fetchDirectives, 300);
-      // Refresh the selected directive
       const updated = await apiClient.directives.getAll();
       const fresh = (Array.isArray(updated) ? updated : []).find(d => d._id === selectedDirective._id);
       if (fresh) setSelectedDirective(fresh);
@@ -214,47 +244,58 @@ export default function EditorialBoard({
           <h2 className="font-syne text-xl font-black uppercase text-ink-black pb-4 border-b-4 border-ink-black flex items-center gap-3 select-none">
             <CheckSquare className="text-[#E63946] w-6 h-6 animate-pulse" />
             Pending Series Voting
-            {pendingSeries.length > 0 && (
+            {pendingPitches.length > 0 && (
               <span className="ml-auto text-[10px] font-mono font-black text-neutral-500">
-                {pendingSeries.length} PROPOSAL{pendingSeries.length > 1 ? 'S' : ''} AWAITING BOARD DECISION
+                {pendingPitches.length} PROPOSAL{pendingPitches.length > 1 ? 'S' : ''} AWAITING BOARD DECISION
               </span>
             )}
           </h2>
 
           <div className="flex flex-col">
-            {paginatedSeries.map((item) => {
-              const tally = getVoteTally(item._id);
+            {paginatedPitches.map((item) => {
+              const seriesItem = series.find(s => s._id === item.seriesId) || {
+                title: 'Loading pitch details...',
+                synopsis: 'Pitch metadata loading...',
+                coverImage: null,
+                mangakaId: 'Unknown'
+              };
+              const totalRequired = item.requiredVoters ? item.requiredVoters.length : 0;
+              const votedCount = item.requiredVoters ? item.requiredVoters.filter((v: any) => v.hasVoted).length : 0;
+
               return (
                 <div key={item._id} className="bg-white border-4 border-ink-black border-t-0 first:border-t-4 p-5 flex items-center gap-5 hover:bg-[#F5F5F0] transition-colors">
                   <div className="w-16 h-20 bg-neutral-200 border-2 border-ink-black flex-shrink-0 overflow-hidden">
-                    {item.coverImage ? (
-                      <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover" />
+                    {seriesItem.coverImage ? (
+                      <img src={seriesItem.coverImage} alt={seriesItem.title} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-neutral-400 text-[9px] font-mono font-bold">NO COVER</div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-syne text-sm font-black uppercase tracking-tight text-ink-black truncate">{item.title}</h3>
+                    <h3 className="font-syne text-sm font-black uppercase tracking-tight text-ink-black truncate">{seriesItem.title}</h3>
                     <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
-                      Author: {typeof item.mangakaId === 'object' ? item.mangakaId.name : item.mangakaId}
+                      Author: {typeof seriesItem.mangakaId === 'object' && seriesItem.mangakaId !== null ? (seriesItem.mangakaId as any).name : 'Mangaka'}
                     </p>
-                    <p className="font-sans text-[10px] text-neutral-400 mt-1 line-clamp-1">{item.synopsis}</p>
-                  </div>
-                  <div className="flex-shrink-0 text-center px-4 py-2 border-2 border-ink-black bg-[#F5F5F0] min-w-[80px]">
-                    <div className="font-mono text-lg font-black text-ink-black">{tally.total}</div>
-                    <div className="font-mono text-[8px] font-bold text-neutral-500 uppercase">
-                      <span className="text-[#2ECC71]">{tally.accept}Y</span>
-                      {' / '}
-                      <span className="text-[#E63946]">{tally.reject}N</span>
+                    <p className="font-sans text-[10px] text-neutral-400 mt-1 line-clamp-1">{seriesItem.synopsis}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="px-2 py-0.5 text-[8px] font-mono font-black uppercase bg-[#FFF3B0] text-ink-black border border-ink-black">
+                        {item.action}
+                      </span>
                     </div>
                   </div>
-                  <button onClick={() => openSeriesModal(item)} className="flex-shrink-0 bg-[#E63946] hover:bg-red-600 text-white font-syne text-[10px] font-extrabold uppercase py-2.5 px-5 border-2 border-ink-black shadow-[3px_3px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
+                  <div className="flex-shrink-0 text-center px-4 py-2 border-2 border-ink-black bg-[#F5F5F0] min-w-[100px]">
+                    <div className="font-mono text-xs font-black text-ink-black">Voters Status</div>
+                    <div className="font-mono text-sm font-black text-[#E63946]">
+                      {votedCount}/{totalRequired}
+                    </div>
+                  </div>
+                  <button onClick={() => openSubmissionModal(item)} className="flex-shrink-0 bg-[#E63946] hover:bg-red-600 text-white font-syne text-[10px] font-extrabold uppercase py-2.5 px-5 border-2 border-ink-black shadow-[3px_3px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
                     Review &amp; Vote
                   </button>
                 </div>
               );
             })}
-            {pendingSeries.length === 0 && (
+            {pendingPitches.length === 0 && (
               <div className="bg-white border-4 border-dashed border-ink-black rounded-none p-12 text-center text-xs font-mono font-bold text-neutral-500 uppercase select-none">
                 🌸 Perfect! All series pitch submissions have been reviewed and voted on. No waiting items.
               </div>
@@ -386,113 +427,173 @@ export default function EditorialBoard({
       </div>
 
       {/* Vote Detail Modal */}
-      {selectedSeries && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70" onClick={closeModal}></div>
-          <div className="relative bg-white border-4 border-ink-black shadow-[8px_8px_0px_#141414] w-full max-w-2xl max-h-[85vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b-4 border-ink-black p-5 flex items-start justify-between z-10">
-              <div>
-                <h2 className="font-syne text-lg font-black uppercase tracking-tight text-ink-black">{selectedSeries.title}</h2>
-                <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
-                  Author: {typeof selectedSeries.mangakaId === 'object' ? selectedSeries.mangakaId.name : selectedSeries.mangakaId}
-                </p>
-              </div>
-              <button onClick={closeModal} className="p-2 hover:bg-[#F5F5F0] border-2 border-ink-black cursor-pointer transition-colors">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-5 space-y-5">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-[#2ECC71]/10 border-2 border-[#2ECC71] p-3 text-center">
-                  <div className="font-mono text-2xl font-black text-[#2ECC71]">{modalVotes.filter(v => v.decision === 'ACCEPT').length}</div>
-                  <div className="font-mono text-[9px] font-bold text-[#2ECC71] uppercase">Accept</div>
-                </div>
-                <div className="bg-[#E63946]/10 border-2 border-[#E63946] p-3 text-center">
-                  <div className="font-mono text-2xl font-black text-[#E63946]">{modalVotes.filter(v => v.decision === 'REJECT').length}</div>
-                  <div className="font-mono text-[9px] font-bold text-[#E63946] uppercase">Reject</div>
-                </div>
-                <div className="bg-[#F5F5F0] border-2 border-ink-black p-3 text-center">
-                  <div className="font-mono text-2xl font-black text-ink-black">{modalVotes.length}</div>
-                  <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">Total Cast</div>
-                </div>
-              </div>
-
-              <div className="bg-[#F5F5F0] p-4 border-2 border-ink-black">
-                <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">Author Pitch Synopsis:</span>
-                <p className="font-sans text-xs leading-relaxed font-bold text-ink-black">{selectedSeries.synopsis}</p>
-              </div>
-
-              {modalVotes.length > 0 && (
+      {/* Vote Detail Modal */}
+      {selectedSubmission && (() => {
+        const seriesItem = series.find(s => s._id === selectedSubmission.seriesId) || {
+          title: 'Unknown Series',
+          synopsis: 'No pitch details available',
+          coverImage: null,
+          mangakaId: 'Unknown'
+        };
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70" onClick={closeModal}></div>
+            <div className="relative bg-white border-4 border-ink-black shadow-[8px_8px_0px_#141414] w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b-4 border-ink-black p-5 flex items-start justify-between z-10">
                 <div>
-                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black mb-2">Board Member Votes</h3>
-                  <div className="space-y-2">
-                    {modalVotes.map(vote => (
-                      <div key={vote._id} className={`p-3 border-2 ${vote.decision === 'ACCEPT' ? 'border-[#2ECC71] bg-[#2ECC71]/5' : 'border-[#E63946] bg-[#E63946]/5'}`}>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`px-2 py-0.5 text-[8px] font-mono font-black uppercase ${vote.decision === 'ACCEPT' ? 'bg-[#2ECC71] text-white' : 'bg-[#E63946] text-white'}`}>
-                            {vote.decision}
-                          </span>
-                          {vote.schedule && (
-                            <span className="px-2 py-0.5 text-[8px] font-mono font-black uppercase bg-[#FFF3B0] text-ink-black border border-ink-black">
-                              {vote.schedule}
-                            </span>
-                          )}
-                        </div>
-                        <p className="font-sans text-[10px] text-ink-black font-bold">{vote.comment}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {!userVote ? (
-                <div className="border-4 border-ink-black p-5 space-y-4">
-                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">Cast Your Vote</h3>
-                  {modalMessage && (
-                    <div className={`p-3 border-2 text-xs font-mono font-bold uppercase ${modalMessage.startsWith('🎉') ? 'bg-[#2ECC71]/15 text-[#2ECC71] border-[#2ECC71]' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
-                      {modalMessage}
-                    </div>
-                  )}
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-[#F5F5F0] text-xs font-bold font-sans uppercase">
-                      <input type="radio" name="modal_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={modalVoteForm.decision === 'ACCEPT'} onChange={() => setModalVoteForm({ ...modalVoteForm, decision: 'ACCEPT' })} />
-                      Accept Serialization
-                    </label>
-                    <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-[#F5F5F0] text-xs font-bold font-sans uppercase">
-                      <input type="radio" name="modal_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={modalVoteForm.decision === 'REJECT'} onChange={() => setModalVoteForm({ ...modalVoteForm, decision: 'REJECT' })} />
-                      Reject / Revise pitch
-                    </label>
-                  </div>
-                  {modalVoteForm.decision === 'ACCEPT' && (
-                    <div className="animate-fadeIn">
-                      <label className="block text-[10px] font-mono text-neutral-500 uppercase mb-1 font-bold">Preferred Schedule</label>
-                      <select className="bg-white border-2 border-ink-black rounded-none p-2 text-xs w-full focus:outline-none cursor-pointer font-bold" value={modalVoteForm.schedule} onChange={(e) => setModalVoteForm({ ...modalVoteForm, schedule: e.target.value as any })}>
-                        <option value="WEEKLY">WEEKLY</option>
-                        <option value="MONTHLY">MONTHLY</option>
-                      </select>
-                    </div>
-                  )}
-                  <div>
-                    <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">Editorial Feedback (Required)</label>
-                    <textarea rows={3} className="w-full bg-[#F5F5F0] border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder="Provide detailed feedback on the proposal..." value={modalVoteForm.comment} onChange={(e) => setModalVoteForm({ ...modalVoteForm, comment: e.target.value })}></textarea>
-                  </div>
-                  <button onClick={handleModalVoteSubmit} disabled={modalSubmitting} className="w-full bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs font-extrabold uppercase py-3 border-2 border-ink-black shadow-[4px_4px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer disabled:opacity-50">
-                    {modalSubmitting ? 'Submitting...' : 'Submit Vote'}
-                  </button>
-                </div>
-              ) : (
-                <div className={`p-4 border-4 ${userVote.decision === 'ACCEPT' ? 'border-[#2ECC71] bg-[#2ECC71]/10' : 'border-[#E63946] bg-[#E63946]/10'}`}>
-                  <p className="font-mono text-xs font-black uppercase mb-1">
-                    ✅ You voted: {userVote.decision}
-                    {userVote.schedule && ` (${userVote.schedule})`}
+                  <h2 className="font-syne text-lg font-black uppercase tracking-tight text-ink-black">{seriesItem.title}</h2>
+                  <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
+                    Author: {typeof seriesItem.mangakaId === 'object' && seriesItem.mangakaId !== null ? (seriesItem.mangakaId as any).name : 'Mangaka'}
                   </p>
-                  <p className="font-sans text-[10px] text-neutral-600 font-bold">{userVote.comment}</p>
                 </div>
-              )}
+                <button onClick={closeModal} className="p-2 hover:bg-[#F5F5F0] border-2 border-ink-black cursor-pointer transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-5 space-y-5">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-[#2ECC71]/10 border-2 border-[#2ECC71] p-3 text-center">
+                    <div className="font-mono text-2xl font-black text-[#2ECC71]">{modalVotes.filter(v => v.decision === 'ACCEPT').length}</div>
+                    <div className="font-mono text-[9px] font-bold text-[#2ECC71] uppercase">Accept</div>
+                  </div>
+                  <div className="bg-[#E63946]/10 border-2 border-[#E63946] p-3 text-center">
+                    <div className="font-mono text-2xl font-black text-[#E63946]">{modalVotes.filter(v => v.decision === 'REJECT').length}</div>
+                    <div className="font-mono text-[9px] font-bold text-[#E63946] uppercase">Reject</div>
+                  </div>
+                  <div className="bg-[#F5F5F0] border-2 border-ink-black p-3 text-center">
+                    <div className="font-mono text-2xl font-black text-ink-black">{modalVotes.length}</div>
+                    <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">Total Cast</div>
+                  </div>
+                </div>
+
+                <div className="bg-[#F5F5F0] p-4 border-2 border-ink-black">
+                  <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">Author Pitch Synopsis:</span>
+                  <p className="font-sans text-xs leading-relaxed font-bold text-ink-black">{seriesItem.synopsis}</p>
+                </div>
+
+                {/* Voter Assignment Section */}
+                <div className="bg-[#F5F5F0] p-4 border-2 border-ink-black space-y-3">
+                  <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1">Assign Required Voters:</span>
+                  
+                  {/* Current voters list */}
+                  {voterStatus && voterStatus.voters && voterStatus.voters.length > 0 && (
+                    <div className="space-y-1 mb-3">
+                      <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase">Assigned Board Members:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {voterStatus.voters.map((v: any) => (
+                          <span key={v.userId?._id || v.userId} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono border ${
+                            v.hasVoted 
+                              ? 'bg-[#2ECC71]/10 border-[#2ECC71] text-[#2ECC71]' 
+                              : 'bg-[#E63946]/10 border-[#E63946] text-[#E63946]'
+                          }`}>
+                            {v.userId?.name || 'Unknown'} {v.hasVoted ? '✓' : '✗'}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dropdown / list of available board members to add */}
+                  <div className="flex gap-2">
+                    <select 
+                      multiple
+                      value={selectedVoterIds}
+                      onChange={(e) => {
+                        const options = Array.from(e.target.selectedOptions, option => option.value);
+                        setSelectedVoterIds(options);
+                      }}
+                      className="flex-1 bg-white border-2 border-ink-black p-2 font-sans text-xs text-ink-black focus:outline-none h-20"
+                    >
+                      {boardMembers
+                        .filter(m => !voterStatus?.voters?.some((v: any) => (v.userId?._id || v.userId) === m._id))
+                        .map(m => (
+                          <option key={m._id} value={m._id}>{m.name}</option>
+                        ))
+                      }
+                    </select>
+                    <button 
+                      onClick={handleAssignVoters}
+                      disabled={selectedVoterIds.length === 0}
+                      className="bg-ink-black hover:bg-neutral-800 text-white font-syne text-[10px] font-extrabold uppercase px-4 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                    >
+                      Assign Voters
+                    </button>
+                  </div>
+                  <p className="text-[8px] text-neutral-400 font-sans leading-none mt-1">Hold Ctrl/Cmd to select multiple members.</p>
+                </div>
+
+                {modalVotes.length > 0 && (
+                  <div>
+                    <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black mb-2">Board Member Votes</h3>
+                    <div className="space-y-2">
+                      {modalVotes.map(vote => (
+                        <div key={vote._id} className={`p-3 border-2 ${vote.decision === 'ACCEPT' ? 'border-[#2ECC71] bg-[#2ECC71]/5' : 'border-[#E63946] bg-[#E63946]/5'}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`px-2 py-0.5 text-[8px] font-mono font-black uppercase ${vote.decision === 'ACCEPT' ? 'bg-[#2ECC71] text-white' : 'bg-[#E63946] text-white'}`}>
+                              {vote.decision}
+                            </span>
+                            {vote.schedule && (
+                              <span className="px-2 py-0.5 text-[8px] font-mono font-black uppercase bg-[#FFF3B0] text-ink-black border border-ink-black">
+                                {vote.schedule}
+                              </span>
+                            )}
+                          </div>
+                          <p className="font-sans text-[10px] text-ink-black font-bold">{vote.comment}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!userVote ? (
+                  <div className="border-4 border-ink-black p-5 space-y-4">
+                    <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">Cast Your Vote</h3>
+                    {modalMessage && (
+                      <div className={`p-3 border-2 text-xs font-mono font-bold uppercase ${modalMessage.startsWith('🎉') ? 'bg-[#2ECC71]/15 text-[#2ECC71] border-[#2ECC71]' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
+                        {modalMessage}
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-[#F5F5F0] text-xs font-bold font-sans uppercase">
+                        <input type="radio" name="modal_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={modalVoteForm.decision === 'ACCEPT'} onChange={() => setModalVoteForm({ ...modalVoteForm, decision: 'ACCEPT' })} />
+                        Accept Serialization
+                      </label>
+                      <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-[#F5F5F0] text-xs font-bold font-sans uppercase">
+                        <input type="radio" name="modal_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={modalVoteForm.decision === 'REJECT'} onChange={() => setModalVoteForm({ ...modalVoteForm, decision: 'REJECT' })} />
+                        Reject / Revise pitch
+                      </label>
+                    </div>
+                    {modalVoteForm.decision === 'ACCEPT' && (
+                      <div className="animate-fadeIn">
+                        <label className="block text-[10px] font-mono text-neutral-500 uppercase mb-1 font-bold">Preferred Schedule</label>
+                        <select className="bg-white border-2 border-ink-black rounded-none p-2 text-xs w-full focus:outline-none cursor-pointer font-bold" value={modalVoteForm.schedule} onChange={(e) => setModalVoteForm({ ...modalVoteForm, schedule: e.target.value as any })}>
+                          <option value="WEEKLY">WEEKLY</option>
+                          <option value="MONTHLY">MONTHLY</option>
+                        </select>
+                      </div>
+                    )}
+                    <div>
+                      <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">Editorial Feedback (Required)</label>
+                      <textarea rows={3} className="w-full bg-[#F5F5F0] border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder="Provide detailed feedback on the proposal..." value={modalVoteForm.comment} onChange={(e) => setModalVoteForm({ ...modalVoteForm, comment: e.target.value })}></textarea>
+                    </div>
+                    <button onClick={handleModalVoteSubmit} disabled={modalSubmitting} className="w-full bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs font-extrabold uppercase py-3 border-2 border-ink-black shadow-[4px_4px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer disabled:opacity-50">
+                      {modalSubmitting ? 'Submitting...' : 'Submit Vote'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className={`p-4 border-4 ${userVote.decision === 'ACCEPT' ? 'border-[#2ECC71] bg-[#2ECC71]/10' : 'border-[#E63946] bg-[#E63946]/10'}`}>
+                    <p className="font-mono text-xs font-black uppercase mb-1">
+                      ✅ You voted: {userVote.decision}
+                      {userVote.schedule && ` (${userVote.schedule})`}
+                    </p>
+                    <p className="font-sans text-[10px] text-neutral-600 font-bold">{userVote.comment}</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Directive Vote Modal */}
       {selectedDirective && (
