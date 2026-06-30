@@ -32,13 +32,19 @@ export const apiClient = {
 
   // AUTH
   auth: {
-    register: async (name: string, email: string, role: UserRole, password?: string): Promise<{ success: boolean; data: User }> => {
+    sendVerificationCode: async (email: string): Promise<{ success: boolean; message: string }> => {
+      const res = await makeFetchRequest('/api/auth/send-verification-code', 'POST', { email });
+      return res as any;
+    },
+
+    register: async (name: string, email: string, role: UserRole, verificationCode: string, password?: string): Promise<{ success: boolean; data: User }> => {
       const actualPassword = password || 'password123';
       const res = await makeFetchRequest('/api/auth/register', 'POST', { 
         name, 
         email, 
         password: actualPassword, 
-        role 
+        role,
+        verificationCode
       });
       setStoredUserSession(res.data, res.data.token);
       return { success: true, data: res.data };

@@ -22,6 +22,8 @@ export default function App() {
   const [authRole, setAuthRole] = useState<UserRole>('MANGAKA');
   const [authStatusMsg, setAuthStatusMsg] = useState('');
   const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [authVerificationCode, setAuthVerificationCode] = useState('');
+  const [isCodeSent, setIsCodeSent] = useState(false);
 
   // Active workspace state caching
   const [activeTab, setActiveTabState] = useState<string>(() => {
@@ -139,6 +141,21 @@ export default function App() {
   }, [currentUser]);
 
   // Auth Submit Handlers
+  const handleSendCode = async () => {
+    if (!authEmail) {
+      setAuthStatusMsg('❌ Email is required to send verification code.');
+      return;
+    }
+    setAuthStatusMsg('⏳ Sending code...');
+    try {
+      await apiClient.auth.sendVerificationCode(authEmail);
+      setIsCodeSent(true);
+      setAuthStatusMsg('✅ Verification code sent to your email.');
+    } catch (err: any) {
+      setAuthStatusMsg(`❌ ${err.message}`);
+    }
+  };
+
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthStatusMsg('');
@@ -149,7 +166,11 @@ export default function App() {
           setAuthStatusMsg('❌ Full name is required.');
           return;
         }
-        const res = await apiClient.auth.register(authName, authEmail, authRole, authPassword);
+        if (!authVerificationCode) {
+          setAuthStatusMsg('❌ Verification code is required.');
+          return;
+        }
+        const res = await apiClient.auth.register(authName, authEmail, authRole, authVerificationCode, authPassword);
         setCurrentUser(res.data);
         
         // Auto-focus default appropriate dashboard tab according to role selection
@@ -250,16 +271,42 @@ export default function App() {
 
               <div>
                 <label className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1" htmlFor="emailAddr">Registered Email Address</label>
-                <input
-                  id="emailAddr"
-                  type="email"
-                  required
-                  className="w-full bg-[#F5F5F0] border-2 border-ink-black hover:border-[#E63946] focus:border-[#E63946] focus:bg-white focus:outline-none rounded-none px-4 py-3 font-sans text-xs text-ink-black font-bold transition-all"
-                  placeholder="name@example.com"
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                />
+                <div className="flex gap-2">
+                  <input
+                    id="emailAddr"
+                    type="email"
+                    required
+                    className="flex-1 w-full bg-[#F5F5F0] border-2 border-ink-black hover:border-[#E63946] focus:border-[#E63946] focus:bg-white focus:outline-none rounded-none px-4 py-3 font-sans text-xs text-ink-black font-bold transition-all"
+                    placeholder="name@example.com"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                  />
+                  {isRegisterMode && (
+                    <button
+                      type="button"
+                      onClick={handleSendCode}
+                      className="bg-ink-black text-white px-4 py-3 border-2 border-ink-black rounded-none text-[10px] uppercase font-syne font-extrabold hover:bg-[#E63946] hover:border-[#E63946] transition-all whitespace-nowrap"
+                    >
+                      {isCodeSent ? 'Resend' : 'Send Code'}
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {isRegisterMode && (
+                <div>
+                  <label className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1" htmlFor="verificationCode">Verification Code</label>
+                  <input
+                    id="verificationCode"
+                    type="text"
+                    required
+                    className="w-full bg-[#F5F5F0] border-2 border-ink-black hover:border-[#E63946] focus:border-[#E63946] focus:bg-white focus:outline-none rounded-none px-4 py-3 font-sans text-xs text-ink-black font-bold transition-all tracking-[0.2em]"
+                    placeholder="123456"
+                    value={authVerificationCode}
+                    onChange={(e) => setAuthVerificationCode(e.target.value)}
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1" htmlFor="password">Password</label>
