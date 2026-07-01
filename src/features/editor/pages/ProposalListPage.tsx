@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Eye, Search, Filter, SortAsc, SortDesc, RefreshCw } from 'lucide-react';
-import { proposalService } from '../services/index.ts';
+import { apiClient } from '../../../api/client.ts';
 import type { Proposal, ProposalStatus } from '../types/index.ts';
 import { SearchInput, FilterDropdown, DataTable } from '../components/common/DataTable.tsx';
 import type { Column } from '../components/common/DataTable.tsx';
@@ -20,6 +20,7 @@ const STATUS_OPTIONS = [
   { value: 'RESUBMITTED', label: 'Resubmitted' },
   { value: 'APPROVED_BY_TANTOU', label: 'Approved' },
   { value: 'SENT_TO_EDITORIAL_BOARD', label: 'Sent to Board' },
+  { value: 'APPROVED', label: 'Board Approved' },
   { value: 'SERIES_CREATED', label: 'Series Created' },
 ];
 
@@ -42,7 +43,7 @@ const statusLabels: Record<ProposalStatus, string> = {
   RESUBMITTED: 'Resubmitted',
   APPROVED_BY_TANTOU: 'Approved',
   SENT_TO_EDITORIAL_BOARD: 'Sent to Board',
-  APPROVED: 'Approved',
+  APPROVED: 'Board Approved',
   SERIES_CREATED: 'Series Created',
   REJECTED: 'Rejected',
 };
@@ -52,12 +53,48 @@ export const ProposalListPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
+  const mapProposal = (p: any) => ({
+    id: p._id || p.id,
+    title: p.title || '',
+    synopsis: p.synopsis || '',
+    genre: p.genre || '',
+    tags: p.tags || [],
+    mangaka: {
+      id: p.mangakaId?._id || p.mangaka?.id || '',
+      name: p.mangakaId?.name || p.mangaka?.name || 'Unknown',
+      avatar: p.mangaka?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default',
+      email: p.mangakaId?.email || p.mangaka?.email || '',
+      totalSeries: p.mangaka?.totalSeries || 0,
+      joinedDate: p.mangaka?.joinedDate || '',
+    },
+    submittedDate: p.submittedAt || p.submittedDate || '',
+    lastUpdated: p.lastUpdated || p.submittedAt || '',
+    status: p.status || '',
+    // Backend proposals don't have these rich fields, so provide defaults
+    storyDraft: p.storyDraft || { description: p.synopsis || '', samplePages: [] },
+    characterDesigns: p.characterDesigns || [],
+    reviewComments: p.reviewComments || [],
+    assignedEditorId: p.assignedEditorId || '',
+    targetAudience: p.targetAudience || '',
+    estimatedChapters: p.estimatedChapters || 0,
+    scheduledFrequency: p.scheduledFrequency || '',
+  });
+
   const { data: proposals, isLoading, error, refetch } = useQuery({
     queryKey: ['proposals', statusFilter, search],
     queryFn: () =>
-      proposalService.getAll({
-        status: statusFilter as ProposalStatus | undefined,
-        search,
+      apiClient.proposals.getAll(statusFilter || undefined).then((data: any[]) => {
+        let result = (data || []).map(mapProposal);
+        if (search) {
+          const q = search.toLowerCase();
+          result = result.filter(
+            (p: any) =>
+              (p.title || '').toLowerCase().includes(q) ||
+              (p.mangaka?.name || '').toLowerCase().includes(q) ||
+              (p.genre || '').toLowerCase().includes(q),
+          );
+        }
+        return result;
       }),
   });
 
@@ -77,7 +114,7 @@ export const ProposalListPage: React.FC = () => {
       render: (row) => (
         <div className="flex items-center gap-3">
           <div
-            className="w-1.5 h-10 flex-shrink-0"
+            className="w-1.5 h-10 shrink-0"
             style={{
               backgroundColor:
                 row.status === 'SUBMITTED' || row.status === 'UNDER_REVIEW'

@@ -13,27 +13,73 @@ import {
   ArrowRight,
   Calendar,
 } from 'lucide-react';
-import { dashboardService } from '../services/index.ts';
+import { apiClient } from '../../../api/client.ts';
 import { StatsCard } from '../components/common/StatsCard.tsx';
 import { LoadingState, ErrorState, StatusBadge } from '../components/common/States.tsx';
 import { VoteTrendChart, RankingChart } from '../components/analytics/Charts.tsx';
 import { SeriesCard, DeadlineCard, RankingBadge, VoteCounter, ProgressTimeline } from '../components/series/SeriesComponents.tsx';
-import { mockDeadlines } from '../mock/data.ts';
 
 export const DashboardPage: React.FC = () => {
-  const { data: stats, isLoading, error, refetch } = useQuery({
+  const { data: dashboardData, isLoading, error, refetch } = useQuery({
     queryKey: ['editor-dashboard-stats'],
-    queryFn: dashboardService.getStats,
+    queryFn: () => apiClient.editor.getDashboard(),
   });
 
-  const { data: deadlines } = useQuery({
-    queryKey: ['editor-deadlines'],
-    queryFn: dashboardService.getDeadlines,
+  const { data: mySeries } = useQuery({
+    queryKey: ['editor-my-series'],
+    queryFn: () => apiClient.editor.getMySeries(),
   });
 
   if (isLoading) return <LoadingState message="Loading dashboard..." />;
   if (error) return <ErrorState onRetry={refetch} />;
-  if (!stats) return null;
+  if (!dashboardData) return null;
+
+  const stats = {
+    activeSeries: dashboardData.seriesCount || 0,
+    pendingProposals: 0,
+    pendingChapterReviews: dashboardData.deadlines?.nearDueCount || 0,
+    upcomingDeadlines: dashboardData.deadlines?.nearDueCount || 0,
+    delayedProjects: dashboardData.deadlines?.overdueCount || 0,
+    topRankedSeries: (mySeries || []).slice(0, 3).map((s: any) => ({
+      id: s._id,
+      title: s.title,
+      coverUrl: s.coverImage || 'https://picsum.photos/seed/default/400/560',
+      totalVotes: 0,
+      currentRanking: 0,
+      previousRanking: 0,
+      status: s.status || 'ACTIVE',
+      currentStage: 'STORY_PLANNING',
+      completionPercentage: 0,
+      publishedChapters: 0,
+      totalChapters: 0,
+      voteHistory: [],
+      rankingHistory: [],
+      progressHistory: [],
+      mangaka: { name: typeof s.mangakaId === 'object' && s.mangakaId ? s.mangakaId.name : 'Unknown' },
+    })),
+    mostVotedSeries: [],
+  };
+
+  const deadlines = dashboardData.deadlines ? [
+    ...(dashboardData.deadlines.overdue || []).map((d: any) => ({
+      id: d.chapterId?._id || d.chapterId,
+      title: `Ch.${d.chapterNumber} Review`,
+      seriesTitle: d.seriesTitle || 'Unknown Series',
+      type: 'chapter_review' as const,
+      dueDate: d.dueAt,
+      daysRemaining: 0,
+      priority: 'CRITICAL' as const,
+    })),
+    ...(dashboardData.deadlines.nearDue || []).map((d: any) => ({
+      id: d.chapterId?._id || d.chapterId,
+      title: `Ch.${d.chapterNumber} Review`,
+      seriesTitle: d.seriesTitle || 'Unknown Series',
+      type: 'chapter_review' as const,
+      dueDate: d.dueAt,
+      daysRemaining: Math.ceil((new Date(d.dueAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+      priority: 'HIGH' as const,
+    })),
+  ] : [];
 
   return (
     <div className="space-y-6">
@@ -107,7 +153,7 @@ export const DashboardPage: React.FC = () => {
               <Clock className="w-4 h-4 text-neutral-400" />
             </div>
             <div className="divide-y divide-neutral-100">
-              {(deadlines ?? mockDeadlines).map((dl) => (
+              {(deadlines ?? []).map((dl: any) => (
                 <div key={dl.id} className="p-3">
                   <DeadlineCard deadline={dl} />
                 </div>
@@ -242,7 +288,7 @@ export const DashboardPage: React.FC = () => {
                     </div>
                   </div>
                   <ProgressTimeline
-                    currentStage={series.currentStage}
+                    currentStage={series.currentStage as any}
                     completionPercentage={series.completionPercentage}
                   />
                   <div className="flex items-center justify-between mt-2">

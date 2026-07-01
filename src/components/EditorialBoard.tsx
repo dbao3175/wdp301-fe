@@ -168,7 +168,7 @@ export default function EditorialBoard({
 
   const fetchDirectives = async () => {
     try {
-      const data = await apiClient.directives.getAll();
+      const data = await apiClient.proposals.getAll();
       setDirectives(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch directives:', err);

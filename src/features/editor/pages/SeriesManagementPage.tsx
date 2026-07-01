@@ -11,7 +11,7 @@ import {
   RefreshCw,
   Zap,
 } from 'lucide-react';
-import { seriesService } from '../services/index.ts';
+import { apiClient } from '../../../api/client.ts';
 import type { Series } from '../types/index.ts';
 import { SearchInput, FilterDropdown } from '../components/common/DataTable.tsx';
 import { LoadingState, ErrorState, StatusBadge } from '../components/common/States.tsx';
@@ -77,8 +77,68 @@ export const SeriesManagementPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const { data: series, isLoading, error, refetch } = useQuery({
-    queryKey: ['series-list', status, search, sortBy],
-    queryFn: () => seriesService.getAll({ status, search, sortBy }),
+    queryKey: ['editor-my-series'],
+    queryFn: () => apiClient.editor.getMySeries(),
+    select: (rawData: any[]) => {
+      let result = rawData || [];
+      if (status !== 'ALL') {
+        result = result.filter((s: any) => s.status === status);
+      }
+      if (search) {
+        const q = search.toLowerCase();
+        result = result.filter(
+          (s: any) =>
+            (s.title || '').toLowerCase().includes(q) ||
+            (s.mangaka?.name || s.mangakaId?.name || '').toLowerCase().includes(q) ||
+            (s.genre || '').toLowerCase().includes(q),
+        );
+      }
+      if (sortBy === 'votes') {
+        result.sort((a: any, b: any) => (b.totalVotes || 0) - (a.totalVotes || 0));
+      } else if (sortBy === 'ranking') {
+        result.sort((a: any, b: any) => (a.currentRanking || 999) - (b.currentRanking || 999));
+      } else if (sortBy === 'deadline') {
+        result.sort((a: any, b: any) => new Date(a.deadline || 0).getTime() - new Date(b.deadline || 0).getTime());
+      }
+      return result.map((s: any) => ({
+        id: s._id,
+        title: s.title,
+        synopsis: s.synopsis || '',
+        genre: s.genre || '',
+        tags: s.tags || [],
+        coverUrl: s.coverImage || 'https://picsum.photos/seed/default/400/560',
+        mangaka: {
+          id: s.mangakaId?._id || s.mangaka?.id || '',
+          name: typeof s.mangakaId === 'object' && s.mangakaId ? s.mangakaId.name : s.mangaka?.name || 'Unknown',
+          avatar: s.mangaka?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default',
+          email: s.mangaka?.email || '',
+          totalSeries: s.mangaka?.totalSeries || 0,
+          joinedDate: s.mangaka?.joinedDate || '',
+        },
+        assignedEditorId: s.assignedEditorId || '',
+        status: s.status || 'ACTIVE',
+        currentStage: s.currentStage || 'STORY_PLANNING',
+        completionPercentage: s.completionPercentage || 0,
+        deadline: s.deadline || '',
+        remainingDays: s.remainingDays || 0,
+        totalChapters: s.totalChapters || 0,
+        publishedChapters: s.publishedChapters || 0,
+        currentRanking: s.currentRanking || 0,
+        previousRanking: s.previousRanking || 0,
+        totalVotes: s.totalVotes || 0,
+        averageVotesPerChapter: s.averageVotesPerChapter || 0,
+        highestVotedChapter: s.highestVotedChapter || '',
+        latestChapterVotes: s.latestChapterVotes || 0,
+        startDate: s.startDate || '',
+        chapters: s.chapters || [],
+        productionLogs: s.productionLogs || [],
+        editorialNotes: s.editorialNotes || [],
+        revisionHistory: s.revisionHistory || [],
+        rankingHistory: s.rankingHistory || [],
+        voteHistory: s.voteHistory || [],
+        progressHistory: s.progressHistory || [],
+      }));
+    },
   });
 
   const topRanked = series ? [...series].sort((a, b) => a.currentRanking - b.currentRanking).slice(0, 3) : [];

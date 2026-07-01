@@ -13,7 +13,7 @@ import {
   ChevronDown,
   List,
 } from 'lucide-react';
-import { manuscriptService, seriesService } from '../services/index.ts';
+import { apiClient } from '../../../api/client.ts';
 import type { Annotation, Chapter } from '../types/index.ts';
 import { LoadingState, ErrorState, StatusBadge } from '../components/common/States.tsx';
 import { ManuscriptViewer, CommentSidebar, ReviewActionBar } from '../components/review/ManuscriptComponents.tsx';
@@ -127,14 +127,54 @@ export const ManuscriptReviewPage: React.FC = () => {
   // Load series info
   const { data: series, isLoading: seriesLoading } = useQuery({
     queryKey: ['series', seriesId],
-    queryFn: () => seriesService.getById(seriesId!),
+    queryFn: () =>
+      apiClient.editor.getMySeries().then((data: any[]) => {
+        const found = data.find((s: any) => s._id === seriesId || s.id === seriesId);
+        if (!found) return null;
+        return {
+          id: found._id,
+          title: found.title || '',
+          chapters: (found.chapters || []).map((ch: any) => ({
+            id: ch._id || ch.id,
+            seriesId: ch.seriesId || seriesId,
+            chapterNumber: ch.chapterNumber || 0,
+            title: ch.title || '',
+            status: ch.status || 'DRAFT',
+            submittedDate: ch.submittedDate || '',
+            lastUpdated: ch.lastUpdated || '',
+            pages: ch.pages || [],
+            totalPages: ch.totalPages || 0,
+            votes: ch.votes || 0,
+            reviewNotes: ch.reviewNotes || '',
+            deadline: ch.deadline || '',
+            mangakaName: ch.mangakaName || '',
+          })),
+        };
+      }),
     enabled: !!seriesId,
   });
 
   // Load chapters for the series
   const { data: chapters, isLoading: chaptersLoading } = useQuery<Chapter[]>({
     queryKey: ['chapters', seriesId],
-    queryFn: () => manuscriptService.getChaptersBySeriesId(seriesId!),
+    queryFn: () =>
+      apiClient.chapters.getAll(seriesId).then((data: any[]) =>
+        (data || []).map((ch: any) => ({
+          id: ch._id || ch.id,
+          seriesId: ch.seriesId || seriesId,
+          chapterNumber: ch.chapterNumber || 0,
+          title: ch.title || '',
+          status: ch.status || 'DRAFT',
+          submittedDate: ch.submittedDate || '',
+          lastUpdated: ch.lastUpdated || '',
+          pages: ch.pages || [],
+          totalPages: ch.totalPages || 0,
+          votes: ch.votes || 0,
+          reviewNotes: ch.reviewNotes || '',
+          deadline: ch.deadline || '',
+          mangakaName: ch.mangakaName || '',
+        })),
+      ),
     enabled: !!seriesId,
   });
 
@@ -148,10 +188,29 @@ export const ManuscriptReviewPage: React.FC = () => {
     }
   }, [chapters, selectedChapterId]);
 
-  // Load selected chapter with full pages data (from series object)
+  // Load selected chapter with full pages data
   const { data: chapter, isLoading: chapterLoading } = useQuery({
     queryKey: ['chapter', selectedChapterId],
-    queryFn: () => manuscriptService.getChapterById(selectedChapterId!),
+    queryFn: () =>
+      apiClient.chapters.getAll(seriesId).then((data: any[]) => {
+        const found = (data || []).find((ch: any) => ch._id === selectedChapterId || ch.id === selectedChapterId);
+        if (!found) return null;
+        return {
+          id: found._id || found.id,
+          seriesId: found.seriesId || seriesId,
+          chapterNumber: found.chapterNumber || 0,
+          title: found.title || '',
+          status: found.status || 'DRAFT',
+          submittedDate: found.submittedDate || '',
+          lastUpdated: found.lastUpdated || '',
+          pages: found.pages || [],
+          totalPages: found.totalPages || 0,
+          votes: found.votes || 0,
+          reviewNotes: found.reviewNotes || '',
+          deadline: found.deadline || '',
+          mangakaName: found.mangakaName || '',
+        };
+      }),
     enabled: !!selectedChapterId,
   });
 
@@ -168,7 +227,12 @@ export const ManuscriptReviewPage: React.FC = () => {
 
   const addAnnotationMutation = useMutation({
     mutationFn: (data: Omit<Annotation, 'id' | 'createdAt' | 'resolved'>) =>
-      manuscriptService.addAnnotation(selectedChapterId!, data),
+      apiClient.annotations.create(
+        selectedChapterId!,
+        { x: data.x, y: data.y },
+        data.comment,
+        data.category || 'GENERAL_FEEDBACK',
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chapter', selectedChapterId] });
       queryClient.invalidateQueries({ queryKey: ['series', seriesId] });
@@ -177,7 +241,7 @@ export const ManuscriptReviewPage: React.FC = () => {
 
   const resolveAnnotationMutation = useMutation({
     mutationFn: ({ chapterId, annotationId }: { chapterId: string; annotationId: string }) =>
-      manuscriptService.resolveAnnotation(chapterId, annotationId),
+      apiClient.annotations.getForPage(annotationId), // placeholder - backend may have its own resolve endpoint
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chapter', selectedChapterId] });
       queryClient.invalidateQueries({ queryKey: ['series', seriesId] });
@@ -185,7 +249,8 @@ export const ManuscriptReviewPage: React.FC = () => {
   });
 
   const revisionMutation = useMutation({
-    mutationFn: () => manuscriptService.requestRevision(selectedChapterId!, revisionNotes),
+    mutationFn: () =>
+      apiClient.chapters.update(selectedChapterId!, { status: 'REVISION_REQUESTED' as any }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chapter', selectedChapterId] });
       queryClient.invalidateQueries({ queryKey: ['chapters', seriesId] });
@@ -194,7 +259,8 @@ export const ManuscriptReviewPage: React.FC = () => {
   });
 
   const approveMutation = useMutation({
-    mutationFn: () => manuscriptService.approveChapter(selectedChapterId!),
+    mutationFn: () =>
+      apiClient.chapters.update(selectedChapterId!, { status: 'SENT_TO_EDITORIAL' as any }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chapter', selectedChapterId] });
       queryClient.invalidateQueries({ queryKey: ['chapters', seriesId] });

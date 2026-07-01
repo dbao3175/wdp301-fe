@@ -17,7 +17,7 @@ import {
   RotateCcw,
   Eye,
 } from 'lucide-react';
-import { seriesService } from '../services/index.ts';
+import { apiClient } from '../../../api/client.ts';
 import type { ProductionLog, EditorialNote, RevisionHistory } from '../types/index.ts';
 import { LoadingState, ErrorState, StatusBadge } from '../components/common/States.tsx';
 import { RankingChart, VoteTrendChart, ProgressChart } from '../components/analytics/Charts.tsx';
@@ -162,7 +162,63 @@ export const SeriesDetailPage: React.FC = () => {
 
   const { data: series, isLoading, error } = useQuery({
     queryKey: ['series', id],
-    queryFn: () => seriesService.getById(id!),
+    queryFn: () =>
+      apiClient.editor.getMySeries().then((data: any[]) => {
+        const found = data.find((s: any) => s._id === id || s.id === id);
+        if (!found) return null;
+        return {
+          id: found._id,
+          title: found.title,
+          synopsis: found.synopsis || '',
+          genre: found.genre || '',
+          tags: found.tags || [],
+          coverUrl: found.coverImage || 'https://picsum.photos/seed/default/400/560',
+          mangaka: {
+            id: found.mangakaId?._id || found.mangaka?.id || '',
+            name: typeof found.mangakaId === 'object' && found.mangakaId ? found.mangakaId.name : found.mangaka?.name || 'Unknown',
+            avatar: found.mangaka?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default',
+            email: found.mangaka?.email || '',
+            totalSeries: found.mangaka?.totalSeries || 0,
+            joinedDate: found.mangaka?.joinedDate || '',
+          },
+          assignedEditorId: found.assignedEditorId || '',
+          status: found.status || 'ACTIVE',
+          currentStage: found.currentStage || 'STORY_PLANNING',
+          completionPercentage: found.completionPercentage || 0,
+          deadline: found.deadline || '',
+          remainingDays: found.remainingDays || 0,
+          totalChapters: found.totalChapters || 0,
+          publishedChapters: found.publishedChapters || 0,
+          currentRanking: found.currentRanking || 0,
+          previousRanking: found.previousRanking || 0,
+          totalVotes: found.totalVotes || 0,
+          averageVotesPerChapter: found.averageVotesPerChapter || 0,
+          highestVotedChapter: found.highestVotedChapter || '',
+          latestChapterVotes: found.latestChapterVotes || 0,
+          startDate: found.startDate || '',
+          chapters: (found.chapters || []).map((ch: any) => ({
+            id: ch._id || ch.id,
+            seriesId: ch.seriesId || id,
+            chapterNumber: ch.chapterNumber || 0,
+            title: ch.title || '',
+            status: ch.status || 'DRAFT',
+            submittedDate: ch.submittedDate || '',
+            lastUpdated: ch.lastUpdated || '',
+            pages: ch.pages || [],
+            totalPages: ch.totalPages || 0,
+            votes: ch.votes || 0,
+            reviewNotes: ch.reviewNotes || '',
+            deadline: ch.deadline || '',
+            mangakaName: ch.mangakaName || '',
+          })),
+          productionLogs: found.productionLogs || [],
+          editorialNotes: found.editorialNotes || [],
+          revisionHistory: found.revisionHistory || [],
+          rankingHistory: found.rankingHistory || [],
+          voteHistory: found.voteHistory || [],
+          progressHistory: found.progressHistory || [],
+        };
+      }),
     enabled: !!id,
   });
 

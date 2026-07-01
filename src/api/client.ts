@@ -131,17 +131,43 @@ export const apiClient = {
       return responseData.data;
     },
 
-    getAll: async (): Promise<any[]> => {
-      const res = await makeFetchRequest('/api/series/proposal', 'GET');
+    getAll: async (status?: string): Promise<any[]> => {
+      const query = status ? `?status=${status}` : '';
+      const res = await makeFetchRequest(`/api/series/proposal${query}`, 'GET');
       return res.data;
     },
 
-    forward: async (id: string, comment: string): Promise<any> => {
-      return await makeFetchRequest(`/api/series/proposal/${id}/forward`, 'PUT', { comment });
+    getById: async (id: string): Promise<any> => {
+      const res = await makeFetchRequest(`/api/series/proposal/${id}`, 'GET');
+      return res.data;
     },
 
-    reject: async (id: string, comment: string): Promise<any> => {
-      return await makeFetchRequest(`/api/series/proposal/${id}/reject`, 'PUT', { comment });
+    addComment: async (id: string, content: string, isInternal?: boolean): Promise<any> => {
+      return await makeFetchRequest(`/api/series/proposal/${id}/comment`, 'PUT', { content, isInternal });
+    },
+
+    requestRevision: async (id: string, content: string): Promise<any> => {
+      return await makeFetchRequest(`/api/series/proposal/${id}/revision`, 'PUT', { content });
+    },
+
+    forward: async (id: string, content: string): Promise<any> => {
+      return await makeFetchRequest(`/api/series/proposal/${id}/forward`, 'PUT', { content });
+    },
+
+    reject: async (id: string, content: string): Promise<any> => {
+      return await makeFetchRequest(`/api/series/proposal/${id}/reject`, 'PUT', { content });
+    },
+
+    resubmit: async (id: string): Promise<any> => {
+      return await makeFetchRequest(`/api/series/proposal/${id}/resubmit`, 'PUT', {});
+    },
+
+    sendToBoard: async (id: string): Promise<any> => {
+      return await makeFetchRequest(`/api/series/proposal/${id}/send-to-board`, 'PUT', {});
+    },
+
+    approveByBoard: async (id: string): Promise<any> => {
+      return await makeFetchRequest(`/api/series/proposal/${id}/approve`, 'PUT', {});
     }
   },
 
@@ -398,6 +424,38 @@ export const apiClient = {
         throw new Error(responseData.message || `Upload failed with status ${response.status}`);
       }
       return responseData;
+    }
+  },
+
+  // EDITOR DASHBOARD & MANAGEMENT
+  editor: {
+    getDashboard: async (): Promise<any> => {
+      const res = await makeFetchRequest('/api/editor/dashboard', 'GET');
+      return res.data;
+    },
+    getProductionOverview: async (): Promise<any> => {
+      const res = await makeFetchRequest('/api/editor/dashboard/production-overview', 'GET');
+      return res.data;
+    },
+    getMySeries: async (): Promise<any[]> => {
+      const res = await makeFetchRequest('/api/editor/my-series', 'GET');
+      return res.data;
+    },
+    getSeriesStats: async (seriesId: string): Promise<any> => {
+      const res = await makeFetchRequest(`/api/editor/series/${seriesId}/stats`, 'GET');
+      return res.data;
+    },
+    getSeriesProgress: async (seriesId: string): Promise<any> => {
+      const res = await makeFetchRequest(`/api/editor/series/${seriesId}/progress`, 'GET');
+      return res.data;
+    },
+    getTaskStatistics: async (seriesId: string): Promise<any> => {
+      const res = await makeFetchRequest(`/api/editor/series/${seriesId}/tasks/statistics`, 'GET');
+      return res.data;
+    },
+    getOverdueTasks: async (seriesId: string): Promise<any> => {
+      const res = await makeFetchRequest(`/api/editor/series/${seriesId}/overdue-tasks`, 'GET');
+      return res.data;
     }
   }
 };

@@ -15,9 +15,9 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState, useRef, useEffect } from 'react';
-import { User, Series, Chapter, Task } from '../types';
-import { apiClient } from '../api/client';
+import React, { useState, useRef, useEffect } from "react";
+import { User, Series, Chapter, Task } from "../types";
+import { apiClient } from "../api/client";
 import {
   Send,
   UploadCloud,
@@ -33,7 +33,7 @@ import {
   AlertCircle,
   RotateCcw,
   Eye,
-} from 'lucide-react';
+} from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Props — kept identical to old TaskDelegation so App.tsx needs no changes
@@ -65,16 +65,27 @@ interface ProposalDraft {
 }
 
 const GENRES = [
-  'Shonen', 'Shojo', 'Seinen', 'Josei',
-  'Isekai', 'Sci-Fi', 'Fantasy', 'Romance',
-  'Horror', 'Slice of Life', 'Action', 'Mystery',
+  "Shonen",
+  "Shojo",
+  "Seinen",
+  "Josei",
+  "Isekai",
+  "Sci-Fi",
+  "Fantasy",
+  "Romance",
+  "Horror",
+  "Slice of Life",
+  "Action",
+  "Mystery",
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared label style — matches spec requirement exactly
 // ─────────────────────────────────────────────────────────────────────────────
-const LABEL = 'block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5';
-const INPUT  = 'w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2.5 text-sm text-white placeholder:text-slate-700 focus:outline-none focus:border-slate-500 transition-colors';
+const LABEL =
+  "block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5";
+const INPUT =
+  "w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2.5 text-sm text-white placeholder:text-slate-700 focus:outline-none focus:border-slate-500 transition-colors";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MANGAKA VIEW — Submission Form
@@ -87,18 +98,21 @@ function MangakaView({
   currentUser: User;
   onSubmit: (draft: ProposalDraft) => void;
 }) {
-  const [title,    setTitle]    = useState('');
-  const [genre,    setGenre]    = useState('');
-  const [synopsis, setSynopsis] = useState('');
-  const [file,     setFile]     = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [genre, setGenre] = useState("");
+  const [synopsis, setSynopsis] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [dropHover, setDropHover] = useState(false);
-  const [statusMsg, setStatusMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [statusMsg, setStatusMsg] = useState<{
+    text: string;
+    ok: boolean;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Accepted file types for storyboard archive
-  const ACCEPTED = '.zip,.pdf,.png,.jpg,.jpeg,.psd,.clip';
+  const ACCEPTED = ".zip,.pdf,.png,.jpg,.jpeg,.psd,.clip";
 
   const handleFile = (f: File) => {
     setFile(f);
@@ -114,7 +128,7 @@ function MangakaView({
   const handleRemoveFile = () => setFile(null);
 
   const formatSize = (bytes: number) => {
-    if (bytes < 1024)       return `${bytes} B`;
+    if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
@@ -129,7 +143,10 @@ function MangakaView({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !genre || !synopsis.trim() || !file) {
-      setStatusMsg({ text: 'Please fill in all required fields and upload a storyboard file.', ok: false });
+      setStatusMsg({
+        text: "Please fill in all required fields and upload a storyboard file.",
+        ok: false,
+      });
       return;
     }
 
@@ -138,25 +155,23 @@ function MangakaView({
 
     try {
       // ── Real API placeholder ──
-      // const fd = new FormData();
-      // fd.append('title',    title.trim());
-      // fd.append('genre',    genre);
-      // fd.append('synopsis', synopsis.trim());
-      // if (file) fd.append('storyboard', file, file.name);
-      // await axios.post('/api/series/proposal', fd, {
-      //   headers: { 'Content-Type': 'multipart/form-data' }
-      // });
+      // await apiClient.proposals.create(
+      //   title.trim(),
+      //   genre.trim(),
+      //   synopsis.trim(),
+      //   file,
+      // );
 
       // Optimistic local submit
       const draft: ProposalDraft = {
-        title:                title.trim(),
+        title: title.trim(),
         genre,
-        synopsis:             synopsis.trim(),
-        storyboardFile:       file,
-        storyboardPreviewName: file?.name ?? '',
-        storyboardPreviewSize: file ? formatSize(file.size) : '',
-        submittedAt:          new Date().toLocaleString(),
-        submittedBy:          currentUser.name,
+        synopsis: synopsis.trim(),
+        storyboardFile: file,
+        storyboardPreviewName: file?.name ?? "",
+        storyboardPreviewSize: file ? formatSize(file.size) : "",
+        submittedAt: new Date().toLocaleString(),
+        submittedBy: currentUser.name,
       };
 
       onSubmit(draft);
@@ -180,36 +195,41 @@ function MangakaView({
           </h2>
         </div>
         <p className="text-[11px] text-slate-500 leading-relaxed">
-          Submit your series concept and optional storyboard archive to the Tantou Editor for review.
+          Submit your series concept and optional storyboard archive to the
+          Tantou Editor for review.
         </p>
       </div>
 
       {/* ── Status banner ── */}
       {statusMsg && (
-        <div className={`flex items-start gap-2 px-3 py-2.5 rounded-md border mb-5 text-xs font-medium ${
-          statusMsg.ok
-            ? 'bg-white/5 border-white/15 text-white'
-            : 'bg-red-500/10 border-red-500/20 text-red-400'
-        }`}>
-          {statusMsg.ok
-            ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-            : <AlertCircle  className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
-          }
+        <div
+          className={`flex items-start gap-2 px-3 py-2.5 rounded-md border mb-5 text-xs font-medium ${
+            statusMsg.ok
+              ? "bg-white/5 border-white/15 text-white"
+              : "bg-red-500/10 border-red-500/20 text-red-400"
+          }`}
+        >
+          {statusMsg.ok ? (
+            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+          ) : (
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+          )}
           {statusMsg.text}
         </div>
       )}
 
       {/* ── Form ── */}
       <form onSubmit={handleSubmit} className="space-y-5">
-
         {/* Series Title */}
         <div>
-          <label className={LABEL} htmlFor="prop-title">Series Title <span className="text-red-500">*</span></label>
+          <label className={LABEL} htmlFor="prop-title">
+            Series Title <span className="text-red-500">*</span>
+          </label>
           <input
             id="prop-title"
             type="text"
             value={title}
-            onChange={e => setTitle(e.target.value)}
+            onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. Neon Ronin Chronicles"
             className={INPUT}
             required
@@ -218,17 +238,19 @@ function MangakaView({
 
         {/* Genre */}
         <div>
-          <label className={LABEL} htmlFor="prop-genre">Genre <span className="text-red-500">*</span></label>
+          <label className={LABEL} htmlFor="prop-genre">
+            Genre <span className="text-red-500">*</span>
+          </label>
           <div className="flex flex-wrap gap-1.5">
-            {GENRES.map(g => (
+            {GENRES.map((g) => (
               <button
                 key={g}
                 type="button"
                 onClick={() => setGenre(g)}
                 className={`px-3 py-1 rounded-md border text-[11px] font-medium transition-all cursor-pointer ${
                   genre === g
-                    ? 'bg-white/10 border-white/25 text-white'
-                    : 'bg-[#121214] border-[#2d2d34] text-slate-500 hover:text-slate-300 hover:border-slate-600'
+                    ? "bg-white/10 border-white/25 text-white"
+                    : "bg-[#121214] border-[#2d2d34] text-slate-500 hover:text-slate-300 hover:border-slate-600"
                 }`}
               >
                 {g}
@@ -236,7 +258,9 @@ function MangakaView({
             ))}
           </div>
           {!genre && (
-            <p className="text-[9px] text-slate-700 mt-1.5">Select a genre above</p>
+            <p className="text-[9px] text-slate-700 mt-1.5">
+              Select a genre above
+            </p>
           )}
         </div>
 
@@ -248,7 +272,7 @@ function MangakaView({
           <textarea
             id="prop-synopsis"
             value={synopsis}
-            onChange={e => setSynopsis(e.target.value)}
+            onChange={(e) => setSynopsis(e.target.value)}
             rows={5}
             placeholder="Summarise the core concept, target audience, main character arc, and the unique hook of your series..."
             className={`${INPUT} resize-none leading-relaxed`}
@@ -262,8 +286,10 @@ function MangakaView({
         {/* Storyboard Upload */}
         <div>
           <label className={LABEL}>
-            Upload Rough Storyboard / Story Archive{' '}
-            <span className="text-slate-600 normal-case font-normal">(Optional — .zip, .pdf, .png)</span>
+            Upload Rough Storyboard / Story Archive{" "}
+            <span className="text-slate-600 normal-case font-normal">
+              (Optional — .zip, .pdf, .png)
+            </span>
           </label>
 
           {file ? (
@@ -273,8 +299,12 @@ function MangakaView({
                 <FileArchive className="w-4 h-4 text-slate-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-white font-medium truncate">{file.name}</p>
-                <p className="text-[9px] text-slate-600 font-mono">{formatSize(file.size)}</p>
+                <p className="text-sm text-white font-medium truncate">
+                  {file.name}
+                </p>
+                <p className="text-[9px] text-slate-600 font-mono">
+                  {formatSize(file.size)}
+                </p>
               </div>
               <button
                 type="button"
@@ -291,18 +321,25 @@ function MangakaView({
               role="button"
               tabIndex={0}
               onClick={() => fileInputRef.current?.click()}
-              onKeyDown={e => e.key === 'Enter' && fileInputRef.current?.click()}
-              onDragOver={e => { e.preventDefault(); setDropHover(true); }}
+              onKeyDown={(e) =>
+                e.key === "Enter" && fileInputRef.current?.click()
+              }
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDropHover(true);
+              }}
               onDragLeave={() => setDropHover(false)}
               onDrop={handleDrop}
               className={`border-2 border-dashed rounded-md p-6 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors ${
                 dropHover
-                  ? 'border-slate-500 bg-[#1e1e24]'
-                  : 'border-slate-700 bg-[#1e1e24]/50 hover:bg-[#1e1e24] hover:border-slate-600'
+                  ? "border-slate-500 bg-[#1e1e24]"
+                  : "border-slate-700 bg-[#1e1e24]/50 hover:bg-[#1e1e24] hover:border-slate-600"
               }`}
             >
               <div className="w-12 h-12 rounded-full bg-[#2d2d34] flex items-center justify-center">
-                <UploadCloud className={`w-6 h-6 transition-colors ${dropHover ? 'text-slate-300' : 'text-slate-600'}`} />
+                <UploadCloud
+                  className={`w-6 h-6 transition-colors ${dropHover ? "text-slate-300" : "text-slate-600"}`}
+                />
               </div>
               <div className="text-center space-y-1">
                 <p className="text-sm font-medium text-slate-400">
@@ -313,7 +350,9 @@ function MangakaView({
                 </p>
               </div>
               <div className="px-4 py-1.5 rounded-md bg-[#2d2d34] border border-[#3a3a44]">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Browse files</span>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Browse files
+                </span>
               </div>
             </div>
           )}
@@ -322,7 +361,11 @@ function MangakaView({
             ref={fileInputRef}
             type="file"
             accept={ACCEPTED}
-            onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f);
+              e.target.value = "";
+            }}
             className="hidden"
             aria-label="Upload storyboard archive"
           />
@@ -332,14 +375,15 @@ function MangakaView({
         <div className="pt-2">
           <button
             type="submit"
-            disabled={isSubmitting || !title.trim() || !genre || !synopsis.trim()}
+            disabled={
+              isSubmitting || !title.trim() || !genre || !synopsis.trim()
+            }
             className="w-full py-3 rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg"
           >
             <Send className="w-4 h-4" />
-            {isSubmitting ? 'Submitting…' : 'Submit Proposal to Editor'}
+            {isSubmitting ? "Submitting…" : "Submit Proposal to Editor"}
           </button>
         </div>
-
       </form>
     </div>
   );
@@ -357,18 +401,20 @@ function EditorView({
 }: {
   proposal: ProposalDraft;
   onForward: (comment: string) => void;
-  onReject:  (comment: string) => void;
-  onReset:   () => void;
+  onReject: (comment: string) => void;
+  onReset: () => void;
 }) {
-  const [editorComment, setEditorComment] = useState('');
-  const [actionDone, setActionDone]       = useState<'forwarded' | 'rejected' | null>(null);
-  const [isLoading, setIsLoading]         = useState(false);
+  const [editorComment, setEditorComment] = useState("");
+  const [actionDone, setActionDone] = useState<"forwarded" | "rejected" | null>(
+    null,
+  );
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleDownload = async () => {
     if (proposal.storyboardFile) {
       const url = URL.createObjectURL(proposal.storyboardFile);
-      const a   = document.createElement('a');
-      a.href     = url;
+      const a = document.createElement("a");
+      a.href = url;
       a.download = proposal.storyboardPreviewName;
       a.click();
       URL.revokeObjectURL(url);
@@ -381,22 +427,22 @@ function EditorView({
       const config = apiClient.getConfig();
       const url = `${config.baseUrl}/api/series/proposal/${(proposal as any)._id}/storyboard`;
       const headers: HeadersInit = {};
-      const token = localStorage.getItem('mangaflow_token');
+      const token = localStorage.getItem("mangaflow_token");
       if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+        headers["Authorization"] = `Bearer ${token}`;
       }
       const response = await fetch(url, { headers });
-      if (!response.ok) throw new Error('Download failed');
+      if (!response.ok) throw new Error("Download failed");
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = blobUrl;
-      a.download = proposal.storyboardPreviewName || 'storyboard.zip';
+      a.download = proposal.storyboardPreviewName || "storyboard.zip";
       a.click();
       URL.revokeObjectURL(blobUrl);
     } catch (err: any) {
       console.error(err);
-      alert('Failed to download storyboard');
+      alert("Failed to download storyboard");
     } finally {
       setIsLoading(false);
     }
@@ -407,7 +453,7 @@ function EditorView({
     setIsLoading(true);
     try {
       await onForward(editorComment);
-      setActionDone('forwarded');
+      setActionDone("forwarded");
     } catch (err) {
       console.error(err);
     } finally {
@@ -420,7 +466,7 @@ function EditorView({
     setIsLoading(true);
     try {
       await onReject(editorComment);
-      setActionDone('rejected');
+      setActionDone("rejected");
     } catch (err) {
       console.error(err);
     } finally {
@@ -432,20 +478,25 @@ function EditorView({
   if (actionDone) {
     return (
       <div className="flex flex-col items-center justify-center gap-5 py-20 text-center">
-        <div className={`w-14 h-14 rounded-full flex items-center justify-center ${
-          actionDone === 'forwarded' ? 'bg-white/10' : 'bg-red-500/10'
-        }`}>
-          {actionDone === 'forwarded'
-            ? <CheckCircle2 className="w-7 h-7 text-white" />
-            : <XCircle      className="w-7 h-7 text-red-400" />
-          }
+        <div
+          className={`w-14 h-14 rounded-full flex items-center justify-center ${
+            actionDone === "forwarded" ? "bg-white/10" : "bg-red-500/10"
+          }`}
+        >
+          {actionDone === "forwarded" ? (
+            <CheckCircle2 className="w-7 h-7 text-white" />
+          ) : (
+            <XCircle className="w-7 h-7 text-red-400" />
+          )}
         </div>
         <div>
           <h3 className="text-base font-bold text-white mb-1">
-            {actionDone === 'forwarded' ? 'Forwarded to Publishing Board' : 'Revision Requested'}
+            {actionDone === "forwarded"
+              ? "Forwarded to Publishing Board"
+              : "Revision Requested"}
           </h3>
           <p className="text-[11px] text-slate-500">
-            {actionDone === 'forwarded'
+            {actionDone === "forwarded"
               ? `"${proposal.title}" has been escalated to the Editorial Board.`
               : `"${proposal.title}" has been returned to ${proposal.submittedBy} with your feedback.`}
           </p>
@@ -462,25 +513,32 @@ function EditorView({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
-
       {/* ── Left panel: Proposal details (read-only) ── */}
       <div className="lg:col-span-5 flex flex-col gap-4">
         <div className="flex items-center gap-2 mb-1">
           <div className="w-6 h-6 rounded-md bg-[#2d2d34] flex items-center justify-center shrink-0">
             <BookOpen className="w-3.5 h-3.5 text-slate-400" />
           </div>
-          <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Proposal Details</h2>
+          <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+            Proposal Details
+          </h2>
         </div>
 
         {/* Title */}
         <div className="bg-[#121214] border border-[#2d2d34] rounded-md px-4 py-3">
-          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">Series Title</p>
-          <p className="text-lg font-bold text-white leading-snug">{proposal.title}</p>
+          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">
+            Series Title
+          </p>
+          <p className="text-lg font-bold text-white leading-snug">
+            {proposal.title}
+          </p>
         </div>
 
         {/* Genre */}
         <div className="bg-[#121214] border border-[#2d2d34] rounded-md px-4 py-3">
-          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">Genre</p>
+          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">
+            Genre
+          </p>
           <span className="inline-block text-xs font-semibold text-white bg-[#2d2d34] border border-[#3a3a44] px-2.5 py-1 rounded-md">
             {proposal.genre}
           </span>
@@ -488,13 +546,19 @@ function EditorView({
 
         {/* Synopsis */}
         <div className="bg-[#121214] border border-[#2d2d34] rounded-md px-4 py-3 flex-1">
-          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-2">Synopsis</p>
-          <p className="text-sm text-white leading-relaxed">{proposal.synopsis}</p>
+          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-2">
+            Synopsis
+          </p>
+          <p className="text-sm text-white leading-relaxed">
+            {proposal.synopsis}
+          </p>
         </div>
 
         {/* Submission meta */}
         <div className="flex items-center justify-between text-[9px] text-slate-600 font-mono px-1">
-          <span>By <span className="text-slate-400">{proposal.submittedBy}</span></span>
+          <span>
+            By <span className="text-slate-400">{proposal.submittedBy}</span>
+          </span>
           <span>{proposal.submittedAt}</span>
         </div>
       </div>
@@ -505,7 +569,9 @@ function EditorView({
           <div className="w-6 h-6 rounded-md bg-[#2d2d34] flex items-center justify-center shrink-0">
             <FileText className="w-3.5 h-3.5 text-slate-400" />
           </div>
-          <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Storyboard File</h2>
+          <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+            Storyboard File
+          </h2>
         </div>
 
         {proposal.storyboardFile || proposal.storyboardPreviewName ? (
@@ -559,7 +625,9 @@ function EditorView({
           <div className="w-6 h-6 rounded-md bg-[#2d2d34] flex items-center justify-center shrink-0">
             <Brush className="w-3.5 h-3.5 text-slate-400" />
           </div>
-          <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Editor's Decision</h2>
+          <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+            Editor's Decision
+          </h2>
         </div>
 
         {/* Comment textarea */}
@@ -570,13 +638,15 @@ function EditorView({
           <textarea
             id="editor-comment"
             value={editorComment}
-            onChange={e => setEditorComment(e.target.value)}
+            onChange={(e) => setEditorComment(e.target.value)}
             rows={7}
             placeholder="Provide detailed feedback on plot coherence, visual style, target demographic fit, commercial viability…"
             className={`${INPUT} resize-none leading-relaxed flex-1`}
           />
           {!editorComment.trim() && (
-            <p className="text-[9px] text-slate-700">A comment is required before taking action.</p>
+            <p className="text-[9px] text-slate-700">
+              A comment is required before taking action.
+            </p>
           )}
         </div>
 
@@ -589,7 +659,7 @@ function EditorView({
             className="w-full py-3 rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-2"
           >
             <ChevronRight className="w-4 h-4" />
-            {isLoading ? 'Processing…' : 'Forward to Publishing Board'}
+            {isLoading ? "Processing…" : "Forward to Publishing Board"}
           </button>
 
           {/* Reject / Request Revision — dark slate */}
@@ -603,7 +673,6 @@ function EditorView({
           </button>
         </div>
       </div>
-
     </div>
   );
 }
@@ -621,10 +690,12 @@ export default function TaskDelegation({
   onSelectSeries,
   onSelectChapter,
 }: TaskDelegationProps) {
-
   // Toast status
-  const [toast, setToast] = useState<{ msg: string, type: 'success' | 'warn' } | null>(null);
-  const showToast = (msg: string, type: 'success' | 'warn' = 'success') => {
+  const [toast, setToast] = useState<{
+    msg: string;
+    type: "success" | "warn";
+  } | null>(null);
+  const showToast = (msg: string, type: "success" | "warn" = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
@@ -632,16 +703,20 @@ export default function TaskDelegation({
   // Which view is active:
   //   null     = initial / pick a role
   //   'submit' = mangaka has submitted; editor is reviewing
-  const [submittedProposal, setSubmittedProposal] = useState<ProposalDraft | null>(null);
-  const [finalStatus, setFinalStatus] = useState<'forwarded' | 'rejected' | null>(null);
+  const [submittedProposal, setSubmittedProposal] =
+    useState<ProposalDraft | null>(null);
+  const [finalStatus, setFinalStatus] = useState<
+    "forwarded" | "rejected" | null
+  >(null);
 
   // Real backend pending proposal list for Editor
   const [proposalsList, setProposalsList] = useState<any[]>([]);
   const [loadingProposals, setLoadingProposals] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
 
-  const isMangaka = currentUser.role === 'MANGAKA';
-  const isEditor  = currentUser.role === 'EDITOR' || currentUser.role === 'BOARD_MEMBER';
+  const isMangaka = currentUser.role === "MANGAKA";
+  const isEditor =
+    currentUser.role === "EDITOR" || currentUser.role === "BOARD_MEMBER";
 
   const fetchProposals = async () => {
     if (!isEditor) return;
@@ -650,7 +725,7 @@ export default function TaskDelegation({
       const data = await apiClient.proposals.getAll();
       setProposalsList(data || []);
     } catch (err) {
-      console.error('Failed to fetch proposals:', err);
+      console.error("Failed to fetch proposals:", err);
     } finally {
       setLoadingProposals(false);
     }
@@ -660,14 +735,17 @@ export default function TaskDelegation({
     fetchProposals();
   }, [currentUser]);
 
-  const pendingProposals = proposalsList.filter(p => p.status === 'PENDING');
-  const selectedProposal = pendingProposals.find(p => p._id === selectedSeriesId) || pendingProposals[0] || null;
+  const pendingProposals = proposalsList.filter((p) => p.status === "PENDING");
+  const selectedProposal =
+    pendingProposals.find((p) => p._id === selectedSeriesId) ||
+    pendingProposals[0] ||
+    null;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleMangakaSubmit = async (draft: ProposalDraft) => {
     if (!draft.storyboardFile) {
-      showToast('Storyboard file is required', 'warn');
+      showToast("Storyboard file is required", "warn");
       return;
     }
     try {
@@ -675,13 +753,13 @@ export default function TaskDelegation({
         draft.title,
         draft.genre,
         draft.synopsis,
-        draft.storyboardFile
+        draft.storyboardFile,
       );
       setSubmittedProposal(draft);
-      showToast('Proposal submitted successfully!', 'success');
+      showToast("Proposal submitted successfully!", "success");
       onRefreshAll();
     } catch (err: any) {
-      showToast(err.message || 'Submission failed', 'warn');
+      showToast(err.message || "Submission failed", "warn");
     }
   };
 
@@ -692,28 +770,40 @@ export default function TaskDelegation({
       await apiClient.proposals.forward(selectedProposal._id, comment);
 
       // 2. Create the Series stub (initially PENDING in database)
-      const newSeries = await apiClient.series.create(selectedProposal.title, selectedProposal.synopsis);
-
-      // 3. Create the Voting Session (SeriesSubmission) on the Board for this Series
-      await apiClient.submissions.create(newSeries._id, 'PITCH', 'APPROVE_WEEKLY');
-      
-      const mangakaIdStr = typeof selectedProposal.mangakaId === 'object' && selectedProposal.mangakaId !== null 
-        ? (selectedProposal.mangakaId as any)._id 
-        : selectedProposal.mangakaId;
-      
-      await apiClient.notifications.create(
-        mangakaIdStr,
-        'Đề xuất Series mới đã được chuyển tiếp lên Board!',
-        `Biên tập viên ${currentUser.name} đã chuyển tiếp đề xuất Series "${selectedProposal.title}" của bạn lên Hội đồng để bỏ phiếu. Nhận xét: ${comment}`,
-        'INFO'
+      const newSeries = await apiClient.series.create(
+        selectedProposal.title,
+        selectedProposal.synopsis,
       );
 
-      showToast('Đã chuyển tiếp đề xuất lên Hội đồng biên tập và khởi tạo Voting Session.', 'success');
+      // 3. Create the Voting Session (SeriesSubmission) on the Board for this Series
+      await apiClient.submissions.create(
+        newSeries._id,
+        "PITCH",
+        "APPROVE_WEEKLY",
+      );
+
+      const mangakaIdStr =
+        typeof selectedProposal.mangakaId === "object" &&
+        selectedProposal.mangakaId !== null
+          ? (selectedProposal.mangakaId as any)._id
+          : selectedProposal.mangakaId;
+
+      await apiClient.notifications.create(
+        mangakaIdStr,
+        "Đề xuất Series mới đã được chuyển tiếp lên Board!",
+        `Biên tập viên ${currentUser.name} đã chuyển tiếp đề xuất Series "${selectedProposal.title}" của bạn lên Hội đồng để bỏ phiếu. Nhận xét: ${comment}`,
+        "INFO",
+      );
+
+      showToast(
+        "Đã chuyển tiếp đề xuất lên Hội đồng biên tập và khởi tạo Voting Session.",
+        "success",
+      );
       fetchProposals();
       onRefreshAll();
       handleReset();
     } catch (err: any) {
-      showToast(err.message || 'Chuyển tiếp thất bại', 'warn');
+      showToast(err.message || "Chuyển tiếp thất bại", "warn");
     }
   };
 
@@ -721,24 +811,26 @@ export default function TaskDelegation({
     if (!selectedProposal) return;
     try {
       await apiClient.proposals.reject(selectedProposal._id, comment);
-      
-      const mangakaIdStr = typeof selectedProposal.mangakaId === 'object' && selectedProposal.mangakaId !== null 
-        ? (selectedProposal.mangakaId as any)._id 
-        : selectedProposal.mangakaId;
-      
+
+      const mangakaIdStr =
+        typeof selectedProposal.mangakaId === "object" &&
+        selectedProposal.mangakaId !== null
+          ? (selectedProposal.mangakaId as any)._id
+          : selectedProposal.mangakaId;
+
       await apiClient.notifications.create(
         mangakaIdStr,
-        'Yêu cầu chỉnh sửa đề xuất Series mới',
+        "Yêu cầu chỉnh sửa đề xuất Series mới",
         `Biên tập viên ${currentUser.name} yêu cầu chỉnh sửa đề xuất Series "${selectedProposal.title}". Nhận xét: ${comment}`,
-        'WARNING'
+        "WARNING",
       );
 
-      showToast('Đã từ chối đề xuất và gửi nhận xét cho tác giả.', 'warn');
+      showToast("Đã từ chối đề xuất và gửi nhận xét cho tác giả.", "warn");
       fetchProposals();
       onRefreshAll();
       handleReset();
     } catch (err: any) {
-      showToast(err.message || 'Từ chối đề xuất thất bại', 'warn');
+      showToast(err.message || "Từ chối đề xuất thất bại", "warn");
     }
   };
 
@@ -749,28 +841,36 @@ export default function TaskDelegation({
   };
 
   // Map backend selectedProposal to EditorView proposal input
-  const activeProposal = selectedProposal ? {
-    _id: selectedProposal._id,
-    title: selectedProposal.title,
-    genre: selectedProposal.genre || 'Shonen',
-    synopsis: selectedProposal.synopsis,
-    storyboardFile: null,
-    storyboardPreviewName: selectedProposal.storyboardOriginalName || 'storyboard.zip',
-    storyboardPreviewSize: 'N/A',
-    submittedAt: selectedProposal.submittedAt ? new Date(selectedProposal.submittedAt).toLocaleString() : new Date().toLocaleString(),
-    submittedBy: typeof selectedProposal.mangakaId === 'object' && selectedProposal.mangakaId !== null ? (selectedProposal.mangakaId as any).name : 'Unknown Mangaka',
-  } : null;
+  const activeProposal = selectedProposal
+    ? {
+        _id: selectedProposal._id,
+        title: selectedProposal.title,
+        genre: selectedProposal.genre || "Shonen",
+        synopsis: selectedProposal.synopsis,
+        storyboardFile: null,
+        storyboardPreviewName:
+          selectedProposal.storyboardOriginalName || "storyboard.zip",
+        storyboardPreviewSize: "N/A",
+        submittedAt: selectedProposal.submittedAt
+          ? new Date(selectedProposal.submittedAt).toLocaleString()
+          : new Date().toLocaleString(),
+        submittedBy:
+          typeof selectedProposal.mangakaId === "object" &&
+          selectedProposal.mangakaId !== null
+            ? (selectedProposal.mangakaId as any).name
+            : "Unknown Mangaka",
+      }
+    : null;
 
   // ── Determine which content to show ───────────────────────────────────────
-  const showMangakaForm    = isMangaka && !submittedProposal;
+  const showMangakaForm = isMangaka && !submittedProposal;
   const showMangakaSuccess = isMangaka && !!submittedProposal;
-  const showEditorReview   = isEditor  && pendingProposals.length > 0;
-  const showEditorEmpty    = isEditor  && pendingProposals.length === 0;
+  const showEditorReview = isEditor && pendingProposals.length > 0;
+  const showEditorEmpty = isEditor && pendingProposals.length === 0;
 
   return (
     /* Outer container — dark matte black shell, matching WorkspaceCanvas */
     <div className="min-h-[calc(100vh-8rem)] bg-[#121214] rounded-md border border-[#2d2d34] shadow-2xl shadow-black overflow-hidden flex flex-col">
-
       {/* ── Page header ── */}
       <header className="flex items-center justify-between px-6 py-4 bg-[#181820] border-b border-[#2d2d34] shrink-0">
         <div className="flex items-center gap-3">
@@ -779,38 +879,42 @@ export default function TaskDelegation({
           </div>
           <div>
             <h1 className="text-[13px] font-bold text-white leading-none uppercase tracking-wide">
-              Series Proposal{isEditor ? ' — Review Queue' : ' — Submission'}
+              Series Proposal{isEditor ? " — Review Queue" : " — Submission"}
             </h1>
             <p className="text-[10px] text-slate-500 mt-0.5">
-              {currentUser.role} · <span className="text-slate-400">{currentUser.name}</span>
+              {currentUser.role} ·{" "}
+              <span className="text-slate-400">{currentUser.name}</span>
             </p>
           </div>
         </div>
 
         {/* Toast status banner */}
         {toast && (
-          <div className={`px-3 py-1.5 rounded-md text-xs font-semibold ${
-            toast.type === 'success'
-              ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-              : 'bg-red-500/10 text-red-400 border border-red-500/20'
-          }`}>
+          <div
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold ${
+              toast.type === "success"
+                ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                : "bg-red-500/10 text-red-400 border border-red-500/20"
+            }`}
+          >
             {toast.msg}
           </div>
         )}
 
         {/* Role indicator badge */}
-        <div className={`px-2.5 py-1 rounded-md border text-[10px] font-bold uppercase tracking-wider ${
-          isMangaka
-            ? 'bg-[#2d2d34] border-[#3a3a44] text-slate-300'
-            : 'bg-red-600/10 border-red-600/20 text-red-400'
-        }`}>
-          {isMangaka ? '✏ Mangaka View' : '👁 Editor View'}
+        <div
+          className={`px-2.5 py-1 rounded-md border text-[10px] font-bold uppercase tracking-wider ${
+            isMangaka
+              ? "bg-[#2d2d34] border-[#3a3a44] text-slate-300"
+              : "bg-red-600/10 border-red-600/20 text-red-400"
+          }`}
+        >
+          {isMangaka ? "✏ Mangaka View" : "👁 Editor View"}
         </div>
       </header>
 
       {/* ── Main content ── */}
       <div className="flex-1 overflow-y-auto px-6 py-8">
-
         {/* MANGAKA: Submission form */}
         {showMangakaForm && (
           <MangakaView
@@ -826,12 +930,23 @@ export default function TaskDelegation({
               <CheckCircle2 className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white mb-2">Proposal Submitted!</h2>
+              <h2 className="text-base font-bold text-white mb-2">
+                Proposal Submitted!
+              </h2>
               <p className="text-sm text-slate-400 leading-relaxed">
-                <span className="text-white font-semibold">"{submittedProposal!.title}"</span> has been sent to
-                the Tantou Editor for review.
+                <span className="text-white font-semibold">
+                  "{submittedProposal!.title}"
+                </span>{" "}
+                has been sent to the Tantou Editor for review.
                 {submittedProposal!.storyboardPreviewName && (
-                  <> The storyboard archive <span className="text-white font-medium">{submittedProposal!.storyboardPreviewName}</span> was attached.</>
+                  <>
+                    {" "}
+                    The storyboard archive{" "}
+                    <span className="text-white font-medium">
+                      {submittedProposal!.storyboardPreviewName}
+                    </span>{" "}
+                    was attached.
+                  </>
                 )}
               </p>
             </div>
@@ -839,17 +954,28 @@ export default function TaskDelegation({
             {/* Proposal summary card */}
             <div className="w-full bg-[#1e1e24] border border-[#2d2d34] rounded-md px-5 py-4 text-left space-y-3">
               <div>
-                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">Title</p>
-                <p className="text-sm text-white font-semibold">{submittedProposal!.title}</p>
+                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">
+                  Title
+                </p>
+                <p className="text-sm text-white font-semibold">
+                  {submittedProposal!.title}
+                </p>
               </div>
               <div>
-                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">Genre</p>
+                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">
+                  Genre
+                </p>
                 <p className="text-sm text-white">{submittedProposal!.genre}</p>
               </div>
               {submittedProposal!.storyboardPreviewName && (
                 <div>
-                  <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">Attachment</p>
-                  <p className="text-sm text-white font-mono">{submittedProposal!.storyboardPreviewName} ({submittedProposal!.storyboardPreviewSize})</p>
+                  <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">
+                    Attachment
+                  </p>
+                  <p className="text-sm text-white font-mono">
+                    {submittedProposal!.storyboardPreviewName} (
+                    {submittedProposal!.storyboardPreviewSize})
+                  </p>
                 </div>
               )}
             </div>
@@ -868,20 +994,26 @@ export default function TaskDelegation({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
             {/* Sidebar list of pending proposals */}
             <div className="lg:col-span-3 bg-[#1e1e24] border border-[#2d2d34] rounded-md p-4 space-y-2 max-h-[500px] overflow-y-auto">
-              <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Pending Proposals</h3>
-              {pendingProposals.map(s => (
+              <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
+                Pending Proposals
+              </h3>
+              {pendingProposals.map((s) => (
                 <button
                   key={s._id}
                   onClick={() => setSelectedSeriesId(s._id)}
                   className={`w-full text-left px-3 py-2.5 rounded border transition-all ${
-                    (selectedSeriesId === s._id || (!selectedSeriesId && pendingProposals[0]?._id === s._id))
-                      ? 'bg-red-600/10 border-red-600/50 text-red-400 font-bold'
-                      : 'bg-[#121214] border-[#2d2d34] text-slate-400 hover:border-slate-500'
+                    selectedSeriesId === s._id ||
+                    (!selectedSeriesId && pendingProposals[0]?._id === s._id)
+                      ? "bg-red-600/10 border-red-600/50 text-red-400 font-bold"
+                      : "bg-[#121214] border-[#2d2d34] text-slate-400 hover:border-slate-500"
                   }`}
                 >
                   <p className="text-xs truncate">{s.title}</p>
                   <p className="text-[9px] text-slate-500 mt-1 uppercase">
-                    By {typeof s.mangakaId === 'object' && s.mangakaId !== null ? (s.mangakaId as any).name : 'Author'}
+                    By{" "}
+                    {typeof s.mangakaId === "object" && s.mangakaId !== null
+                      ? (s.mangakaId as any).name
+                      : "Author"}
                   </p>
                 </button>
               ))}
@@ -906,7 +1038,9 @@ export default function TaskDelegation({
               <BookOpen className="w-7 h-7 stroke-[1] text-slate-700" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-500">No proposals in queue</p>
+              <p className="text-sm font-semibold text-slate-500">
+                No proposals in queue
+              </p>
               <p className="text-[11px] text-slate-700 mt-1">
                 Waiting for a Mangaka to submit a new series proposal.
               </p>
@@ -918,10 +1052,11 @@ export default function TaskDelegation({
         {!isMangaka && !isEditor && (
           <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
             <AlertCircle className="w-10 h-10 stroke-[1] text-slate-700" />
-            <p className="text-sm text-slate-600">This section is available to Mangaka and Editor roles only.</p>
+            <p className="text-sm text-slate-600">
+              This section is available to Mangaka and Editor roles only.
+            </p>
           </div>
         )}
-
       </div>
     </div>
   );

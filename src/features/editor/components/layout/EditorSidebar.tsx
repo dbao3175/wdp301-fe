@@ -3,15 +3,16 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   FileText,
-  BookOpen,
   Library,
   ChevronLeft,
   ChevronRight,
   PenTool,
   LogOut,
   Bell,
-  Sparkles,
 } from 'lucide-react';
+import { getStoredUser } from '@/src/api/base';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/src/api/client';
 
 interface NavItem {
   path: string;
@@ -30,7 +31,6 @@ const navItems: NavItem[] = [
     path: '/editor/proposals',
     label: 'Proposals',
     icon: <FileText className="w-4 h-4" />,
-    badge: 2,
   },
   {
     path: '/editor/series',
@@ -45,6 +45,13 @@ interface EditorSidebarProps {
 
 export const EditorSidebar: React.FC<EditorSidebarProps> = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const { data: pendingCountData } = useQuery({
+    queryKey: ['pending-count'],
+    queryFn: () => apiClient.proposals.getAll('SUBMITTED'),
+    staleTime: 5 * 1000,
+  })
+  const pendingCount = pendingCountData?.length || 0;
+  const currentUser = getStoredUser();
   const location = useLocation();
 
   return (
@@ -77,10 +84,10 @@ export const EditorSidebar: React.FC<EditorSidebarProps> = ({ onLogout }) => {
             <img
               src="https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi"
               alt="Editor"
-              className="w-8 h-8 border-2 border-[#E63946] flex-shrink-0"
+              className="w-8 h-8 border-2 border-[#E63946] shrink-0"
             />
             <div className="overflow-hidden">
-              <p className="font-syne font-bold text-white text-xs truncate">Tanaka Hiroshi</p>
+              <p className="font-syne font-bold text-white text-xs truncate">{currentUser?.name || 'Unknown'}</p>
               <p className="font-mono text-[9px] text-[#E63946] uppercase tracking-widest">Tantou Editor</p>
             </div>
           </div>
@@ -107,13 +114,18 @@ export const EditorSidebar: React.FC<EditorSidebarProps> = ({ onLogout }) => {
                     : 'text-neutral-400 hover:text-white hover:bg-neutral-800 border-l-4 border-transparent'
                 } ${collapsed ? 'justify-center' : ''}`}
               >
-                <span className="flex-shrink-0">{item.icon}</span>
+                <span className="shrink-0">{item.icon}</span>
                 {!collapsed && (
                   <span className="font-sans font-semibold text-xs">{item.label}</span>
                 )}
                 {!collapsed && item.badge !== undefined && item.badge > 0 && (
                   <span className="ml-auto bg-[#E63946] text-white text-[9px] font-mono font-bold w-5 h-5 flex items-center justify-center border border-red-400">
                     {item.badge}
+                  </span>
+                )}
+                {item.path === '/editor/proposals' && (pendingCount ?? 0) > 0 && (
+                  <span className="ml-auto bg-[#E63946] text-white text-[9px] font-mono font-bold w-5 h-5 flex items-center justify-center border border-red-400">
+                    {pendingCount}
                   </span>
                 )}
                 {/* Tooltip for collapsed */}

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import React, { useState } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   ArrowLeft,
   MessageSquarePlus,
@@ -18,37 +18,46 @@ import {
   Users,
   Send,
   Clock,
-} from 'lucide-react';
-import { proposalService } from '../services/index.ts';
-import type { Proposal, ProposalStatus, ReviewCommentForm } from '../types/index.ts';
-import { LoadingState, ErrorState, StatusBadge } from '../components/common/States.tsx';
-import { Modal, ConfirmDialog } from '../components/common/Modal.tsx';
+  XCircle,
+} from "lucide-react";
+import { apiClient } from "../../../api/client.ts";
+import type {
+  Proposal,
+  ProposalStatus,
+  ReviewCommentForm,
+} from "../types/index.ts";
+import {
+  LoadingState,
+  ErrorState,
+  StatusBadge,
+} from "../components/common/States.tsx";
+import { Modal, ConfirmDialog } from "../components/common/Modal.tsx";
 
 // =========================================================
 // STATUS FLOW DISPLAY
 // =========================================================
 
 const STATUS_FLOW: ProposalStatus[] = [
-  'SUBMITTED',
-  'UNDER_REVIEW',
-  'REVISION_REQUESTED',
-  'RESUBMITTED',
-  'APPROVED_BY_TANTOU',
-  'SENT_TO_EDITORIAL_BOARD',
-  'APPROVED',
-  'SERIES_CREATED',
+  "SUBMITTED",
+  "UNDER_REVIEW",
+  "REVISION_REQUESTED",
+  "RESUBMITTED",
+  "APPROVED_BY_TANTOU",
+  "SENT_TO_EDITORIAL_BOARD",
+  "APPROVED",
+  "SERIES_CREATED",
 ];
 
 const STATUS_LABELS: Record<ProposalStatus, string> = {
-  SUBMITTED: 'Submitted',
-  UNDER_REVIEW: 'Under Review',
-  REVISION_REQUESTED: 'Revision Requested',
-  RESUBMITTED: 'Resubmitted',
-  APPROVED_BY_TANTOU: 'Tantou Approved',
-  SENT_TO_EDITORIAL_BOARD: 'Sent to Board',
-  APPROVED: 'Board Approved',
-  SERIES_CREATED: 'Series Created',
-  REJECTED: 'Rejected',
+  SUBMITTED: "Submitted",
+  UNDER_REVIEW: "Under Review",
+  REVISION_REQUESTED: "Revision Requested",
+  RESUBMITTED: "Resubmitted",
+  APPROVED_BY_TANTOU: "Tantou Approved",
+  SENT_TO_EDITORIAL_BOARD: "Sent to Board",
+  APPROVED: "Board Approved",
+  SERIES_CREATED: "Series Created",
+  REJECTED: "Rejected",
 };
 
 // =========================================================
@@ -56,12 +65,15 @@ const STATUS_LABELS: Record<ProposalStatus, string> = {
 // =========================================================
 
 const commentSchema = z.object({
-  content: z.string().min(5, 'Comment must be at least 5 characters').max(500),
+  content: z.string().min(5, "Comment must be at least 5 characters").max(500),
   isInternal: z.boolean(),
 });
 
 const revisionSchema = z.object({
-  reason: z.string().min(10, 'Please provide a detailed reason (min 10 chars)').max(500),
+  reason: z
+    .string()
+    .min(10, "Please provide a detailed reason (min 10 chars)")
+    .max(500),
 });
 
 type CommentFormData = z.infer<typeof commentSchema>;
@@ -72,12 +84,22 @@ type RevisionFormData = z.infer<typeof revisionSchema>;
 // =========================================================
 
 interface SamplePageViewerProps {
-  pages: { id: string; pageNumber: number; imageUrl: string; caption?: string }[];
+  pages: {
+    id: string;
+    pageNumber: number;
+    imageUrl: string;
+    caption?: string;
+  }[];
 }
 
 const SamplePageViewer: React.FC<SamplePageViewerProps> = ({ pages }) => {
   const [current, setCurrent] = useState(0);
-  if (!pages.length) return <p className="font-mono text-xs text-neutral-400">No sample pages available.</p>;
+  if (!pages.length)
+    return (
+      <p className="font-mono text-xs text-neutral-400">
+        No sample pages available.
+      </p>
+    );
 
   return (
     <div className="space-y-2">
@@ -89,7 +111,9 @@ const SamplePageViewer: React.FC<SamplePageViewerProps> = ({ pages }) => {
         />
         {pages[current].caption && (
           <div className="absolute bottom-0 left-0 right-0 bg-ink-black/80 px-3 py-1.5">
-            <p className="font-mono text-[10px] text-white">{pages[current].caption}</p>
+            <p className="font-mono text-[10px] text-white">
+              {pages[current].caption}
+            </p>
           </div>
         )}
       </div>
@@ -128,55 +152,104 @@ export const ProposalReviewPage: React.FC = () => {
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
 
-  const { data: proposal, isLoading, error } = useQuery({
-    queryKey: ['proposal', id],
-    queryFn: () => proposalService.getById(id!),
+  const mapProposal = (p: any) => ({
+    id: p._id || p.id,
+    title: p.title || "",
+    synopsis: p.synopsis || "",
+    genre: p.genre || "",
+    tags: p.tags || [],
+    mangaka: {
+      id: p.mangakaId?._id || p.mangaka?.id || "",
+      name: p.mangakaId?.name || p.mangaka?.name || "Unknown",
+      avatar:
+        p.mangaka?.avatar ||
+        "https://api.dicebear.com/7.x/avataaars/svg?seed=default",
+      email: p.mangakaId?.email || p.mangaka?.email || "",
+      totalSeries: p.mangaka?.totalSeries || 0,
+      joinedDate: p.mangaka?.joinedDate || "",
+    },
+    submittedDate: p.submittedAt || p.submittedDate || "",
+    lastUpdated: p.lastUpdated || p.submittedAt || "",
+    status: p.status || "",
+    storyDraft: p.storyDraft || {
+      description: p.synopsis || "",
+      samplePages: [],
+    },
+    characterDesigns: p.characterDesigns || [],
+    comments: p.comments || [],
+    assignedEditorId: p.assignedEditorId || "",
+    targetAudience: p.targetAudience || "",
+    estimatedChapters: p.estimatedChapters || 0,
+    scheduledFrequency: p.scheduledFrequency || "",
+  });
+
+  const {
+    data: proposal,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["proposal", id],
+    queryFn: () =>
+      apiClient.proposals.getById(id!).then((data: any) => {
+        return data ? mapProposal(data) : null;
+      }),
     enabled: !!id,
   });
 
   const addCommentMutation = useMutation({
     mutationFn: (data: CommentFormData) =>
-      proposalService.addComment(id!, {
-        ...data,
-        authorId: 'ed-001',
-        authorName: 'Tanaka Hiroshi (Tantou)',
-        authorAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi',
-      }),
+      apiClient.proposals.addComment(id!, data.content, data.isInternal),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['proposal', id] });
-      queryClient.invalidateQueries({ queryKey: ['proposals'] });
+      queryClient.invalidateQueries({ queryKey: ["proposal", id] });
+      queryClient.invalidateQueries({ queryKey: ["proposals"] });
       setShowCommentModal(false);
       commentForm.reset();
     },
   });
 
   const revisionMutation = useMutation({
-    mutationFn: (data: RevisionFormData) => proposalService.requestRevision(id!, data.reason),
+    mutationFn: (data: RevisionFormData) =>
+      apiClient.proposals.requestRevision(id!, data.reason),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['proposal', id] });
-      queryClient.invalidateQueries({ queryKey: ['proposals'] });
+      queryClient.invalidateQueries({ queryKey: ["proposal", id] });
+      queryClient.invalidateQueries({ queryKey: ["proposals"] });
       setShowRevisionModal(false);
     },
   });
 
   const approveMutation = useMutation({
-    mutationFn: () => proposalService.approveAndSubmit(id!),
+    mutationFn: () =>
+      apiClient.proposals.forward(
+        id!,
+        "Approved by Tantou, submitting to Editorial Board.",
+      ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['proposal', id] });
-      queryClient.invalidateQueries({ queryKey: ['proposals'] });
+      queryClient.invalidateQueries({ queryKey: ["proposal", id] });
+      queryClient.invalidateQueries({ queryKey: ["proposals"] });
       setShowApproveDialog(false);
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: () =>
+      apiClient.proposals.reject(id!, "Proposal rejected by editor."),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["proposal", id] });
+      queryClient.invalidateQueries({ queryKey: ["proposals"] });
+      setShowRejectDialog(false);
     },
   });
 
   const commentForm = useForm<CommentFormData>({
     resolver: zodResolver(commentSchema),
-    defaultValues: { content: '', isInternal: false },
+    defaultValues: { content: "", isInternal: false },
   });
 
   const revisionForm = useForm<RevisionFormData>({
     resolver: zodResolver(revisionSchema),
-    defaultValues: { reason: '' },
+    defaultValues: { reason: "" },
   });
 
   if (isLoading) return <LoadingState message="Loading proposal..." />;
@@ -184,16 +257,16 @@ export const ProposalReviewPage: React.FC = () => {
 
   const currentStatusIdx = STATUS_FLOW.indexOf(proposal.status);
   const canTakeAction =
-    proposal.status === 'SUBMITTED' ||
-    proposal.status === 'UNDER_REVIEW' ||
-    proposal.status === 'RESUBMITTED';
+    proposal.status === "SUBMITTED" ||
+    proposal.status === "UNDER_REVIEW" ||
+    proposal.status === "RESUBMITTED";
 
   return (
     <div className="space-y-6 max-w-6xl">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => navigate('/editor/proposals')}
+          onClick={() => navigate("/editor/proposals")}
           className="flex items-center gap-1.5 px-3 py-2 bg-white border-2 border-ink-black text-xs font-mono font-bold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-50 transition-colors cursor-pointer flex-shrink-0"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back
@@ -206,19 +279,22 @@ export const ProposalReviewPage: React.FC = () => {
             <StatusBadge
               label={STATUS_LABELS[proposal.status] ?? proposal.status}
               variant={
-                proposal.status === 'SENT_TO_EDITORIAL_BOARD' || proposal.status === 'APPROVED'
-                  ? 'sent'
-                  : proposal.status === 'APPROVED_BY_TANTOU'
-                  ? 'approved'
-                  : proposal.status === 'REVISION_REQUESTED'
-                  ? 'revision'
-                  : proposal.status === 'SUBMITTED' || proposal.status === 'UNDER_REVIEW'
-                  ? 'under_review'
-                  : 'default'
+                proposal.status === "SENT_TO_EDITORIAL_BOARD" ||
+                proposal.status === "APPROVED"
+                  ? "sent"
+                  : proposal.status === "APPROVED_BY_TANTOU"
+                    ? "approved"
+                    : proposal.status === "REVISION_REQUESTED"
+                      ? "revision"
+                      : proposal.status === "SUBMITTED" ||
+                          proposal.status === "UNDER_REVIEW"
+                        ? "under_review"
+                        : "default"
               }
             />
             <span className="font-mono text-[9px] text-neutral-400">
-              Last updated: {new Date(proposal.lastUpdated).toLocaleDateString()}
+              Last updated:{" "}
+              {new Date(proposal.lastUpdated).toLocaleDateString()}
             </span>
           </div>
         </div>
@@ -230,7 +306,7 @@ export const ProposalReviewPage: React.FC = () => {
           Status Flow
         </p>
         <div className="flex items-center overflow-x-auto">
-          {STATUS_FLOW.filter(s => s !== 'REJECTED').map((status, idx) => {
+          {STATUS_FLOW.filter((s) => s !== "REJECTED").map((status, idx) => {
             const isCurrent = status === proposal.status;
             const isDone = currentStatusIdx > idx;
             return (
@@ -239,23 +315,28 @@ export const ProposalReviewPage: React.FC = () => {
                   <div
                     className={`w-4 h-4 border-2 transition-all ${
                       isDone
-                        ? 'bg-emerald-500 border-emerald-600'
+                        ? "bg-emerald-500 border-emerald-600"
                         : isCurrent
-                        ? 'bg-[#E63946] border-ink-black'
-                        : 'bg-white border-neutral-300'
+                          ? "bg-[#E63946] border-ink-black"
+                          : "bg-white border-neutral-300"
                     }`}
                   />
                   <span
                     className={`font-mono text-[8px] uppercase font-bold text-center max-w-16 leading-tight ${
-                      isCurrent ? 'text-[#E63946]' : isDone ? 'text-emerald-600' : 'text-neutral-400'
+                      isCurrent
+                        ? "text-[#E63946]"
+                        : isDone
+                          ? "text-emerald-600"
+                          : "text-neutral-400"
                     }`}
                   >
                     {STATUS_LABELS[status]}
                   </span>
                 </div>
-                {idx < STATUS_FLOW.filter(s => s !== 'REJECTED').length - 1 && (
+                {idx <
+                  STATUS_FLOW.filter((s) => s !== "REJECTED").length - 1 && (
                   <div
-                    className={`flex-1 h-0.5 mx-1 ${isDone ? 'bg-emerald-400' : 'bg-neutral-200'}`}
+                    className={`flex-1 h-0.5 mx-1 ${isDone ? "bg-emerald-400" : "bg-neutral-200"}`}
                   />
                 )}
               </React.Fragment>
@@ -266,10 +347,8 @@ export const ProposalReviewPage: React.FC = () => {
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
         {/* LEFT: Proposal Info */}
         <div className="lg:col-span-2 space-y-5">
-
           {/* Proposal Info Card */}
           <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
             <div className="px-5 py-3 border-b-2 border-ink-black bg-ink-black">
@@ -280,28 +359,44 @@ export const ProposalReviewPage: React.FC = () => {
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">Genre</p>
+                  <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">
+                    Genre
+                  </p>
                   <span className="inline-block px-2 py-1 bg-ink-black text-white font-mono text-[10px] font-bold uppercase">
                     {proposal.genre}
                   </span>
                 </div>
                 <div>
-                  <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">Target Audience</p>
-                  <p className="font-sans text-xs text-ink-black font-medium">{proposal.targetAudience}</p>
+                  <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">
+                    Target Audience
+                  </p>
+                  <p className="font-sans text-xs text-ink-black font-medium">
+                    {proposal.targetAudience}
+                  </p>
                 </div>
                 <div>
-                  <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">Est. Chapters</p>
-                  <p className="font-syne font-extrabold text-lg text-ink-black">{proposal.estimatedChapters}</p>
+                  <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">
+                    Est. Chapters
+                  </p>
+                  <p className="font-syne font-extrabold text-lg text-ink-black">
+                    {proposal.estimatedChapters}
+                  </p>
                 </div>
                 <div>
-                  <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">Frequency</p>
-                  <p className="font-sans text-xs text-ink-black font-medium">{proposal.scheduledFrequency}</p>
+                  <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">
+                    Frequency
+                  </p>
+                  <p className="font-sans text-xs text-ink-black font-medium">
+                    {proposal.scheduledFrequency}
+                  </p>
                 </div>
               </div>
               <div>
-                <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">Tags</p>
+                <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">
+                  Tags
+                </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {proposal.tags.map((tag) => (
+                  {proposal.tags.map((tag: string) => (
                     <span
                       key={tag}
                       className="px-2 py-0.5 bg-neutral-100 border border-neutral-300 text-[10px] font-mono text-neutral-600 uppercase"
@@ -312,7 +407,9 @@ export const ProposalReviewPage: React.FC = () => {
                 </div>
               </div>
               <div>
-                <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-2">Synopsis</p>
+                <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-2">
+                  Synopsis
+                </p>
                 <p className="font-sans text-sm text-ink-black leading-relaxed bg-neutral-50 border border-neutral-200 p-3">
                   {proposal.synopsis}
                 </p>
@@ -329,7 +426,9 @@ export const ProposalReviewPage: React.FC = () => {
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-2">Description</p>
+                <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-2">
+                  Description
+                </p>
                 <p className="font-sans text-sm text-ink-black leading-relaxed bg-neutral-50 border border-neutral-200 p-3">
                   {proposal.storyDraft.description}
                 </p>
@@ -351,7 +450,7 @@ export const ProposalReviewPage: React.FC = () => {
               </h2>
             </div>
             <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {proposal.characterDesigns.map((char) => (
+              {proposal.characterDesigns.map((char: any) => (
                 <div
                   key={char.id}
                   className="border-2 border-neutral-200 overflow-hidden hover:border-ink-black transition-colors"
@@ -365,15 +464,23 @@ export const ProposalReviewPage: React.FC = () => {
                   </div>
                   <div className="p-3">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-syne font-extrabold text-xs text-ink-black">{char.name}</span>
-                      <span className="px-1.5 py-0.5 bg-ink-black text-white text-[8px] font-mono uppercase">{char.role}</span>
+                      <span className="font-syne font-extrabold text-xs text-ink-black">
+                        {char.name}
+                      </span>
+                      <span className="px-1.5 py-0.5 bg-ink-black text-white text-[8px] font-mono uppercase">
+                        {char.role}
+                      </span>
                     </div>
-                    <p className="font-sans text-[11px] text-neutral-600 leading-relaxed">{char.description}</p>
+                    <p className="font-sans text-[11px] text-neutral-600 leading-relaxed">
+                      {char.description}
+                    </p>
                   </div>
                 </div>
               ))}
               {proposal.characterDesigns.length === 0 && (
-                <p className="font-mono text-xs text-neutral-400 col-span-2">No character designs submitted.</p>
+                <p className="font-mono text-xs text-neutral-400 col-span-2">
+                  No character designs submitted.
+                </p>
               )}
             </div>
           </div>
@@ -381,7 +488,6 @@ export const ProposalReviewPage: React.FC = () => {
 
         {/* RIGHT: Sidebar */}
         <div className="space-y-4">
-
           {/* Mangaka Info */}
           <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
             <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black">
@@ -396,13 +502,23 @@ export const ProposalReviewPage: React.FC = () => {
                 className="w-12 h-12 border-2 border-ink-black flex-shrink-0"
               />
               <div>
-                <p className="font-syne font-extrabold text-sm text-ink-black">{proposal.mangaka.name}</p>
-                <p className="font-mono text-[9px] text-neutral-400 mb-2">{proposal.mangaka.email}</p>
+                <p className="font-syne font-extrabold text-sm text-ink-black">
+                  {proposal.mangaka.name}
+                </p>
+                <p className="font-mono text-[9px] text-neutral-400 mb-2">
+                  {proposal.mangaka.email}
+                </p>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[9px] text-neutral-500">{proposal.mangaka.totalSeries} total series</span>
+                  <span className="font-mono text-[9px] text-neutral-500">
+                    {proposal.mangaka.totalSeries} total series
+                  </span>
                 </div>
                 <p className="font-mono text-[9px] text-neutral-400 mt-1">
-                  Joined: {new Date(proposal.mangaka.joinedDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  Joined:{" "}
+                  {new Date(proposal.mangaka.joinedDate).toLocaleDateString(
+                    "en-US",
+                    { month: "short", year: "numeric" },
+                  )}
                 </p>
               </div>
             </div>
@@ -439,9 +555,18 @@ export const ProposalReviewPage: React.FC = () => {
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Approve & Submit to Board
               </button>
+              <button
+                disabled={!canTakeAction || rejectMutation.isPending}
+                onClick={() => setShowRejectDialog(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 text-white border-2 border-red-700 text-xs font-mono font-extrabold uppercase shadow-[2px_2px_0px_#141414] hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                Reject Proposal
+              </button>
               {!canTakeAction && (
                 <p className="text-[9px] font-mono text-neutral-400 text-center uppercase">
-                  Actions locked — current status: {STATUS_LABELS[proposal.status]}
+                  Actions locked — current status:{" "}
+                  {STATUS_LABELS[proposal.status]}
                 </p>
               )}
             </div>
@@ -454,43 +579,68 @@ export const ProposalReviewPage: React.FC = () => {
                 Review Comments
               </h3>
               <span className="bg-neutral-700 text-white text-[9px] font-mono px-1.5 py-0.5">
-                {proposal.reviewComments.length}
+                {proposal.comments.length}
               </span>
             </div>
             <div className="max-h-80 overflow-y-auto divide-y divide-neutral-100">
-              {proposal.reviewComments.length === 0 ? (
+              {proposal.comments.length === 0 ? (
                 <div className="p-4 text-center">
-                  <p className="font-mono text-[10px] text-neutral-400 uppercase">No comments yet</p>
+                  <p className="font-mono text-[10px] text-neutral-400 uppercase">
+                    No comments yet
+                  </p>
                 </div>
               ) : (
-                proposal.reviewComments.map((comment) => (
-                  <div key={comment.id} className="p-3">
+                proposal.comments.map((comment: any, idx: number) => (
+                  <div key={idx} className="p-3">
                     <div className="flex items-start gap-2">
-                      <img
-                        src={comment.authorAvatar}
-                        alt={comment.authorName}
-                        className="w-7 h-7 border border-neutral-200 flex-shrink-0"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-1 mb-0.5">
+                      <div
+                        className={`w-7 h-7 border flex items-center justify-center text-[10px] font-mono font-bold uppercase shrink-0 ${
+                          comment.authorRole === "editor"
+                            ? "bg-blue-100 border-blue-300 text-blue-700"
+                            : comment.authorRole === "board"
+                              ? "bg-purple-100 border-purple-300 text-purple-700"
+                              : "bg-neutral-100 border-neutral-300 text-neutral-700"
+                        }`}
+                      >
+                        {comment.authorRole === "editor"
+                          ? "E"
+                          : comment.authorRole === "board"
+                            ? "B"
+                            : "M"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                           <span className="font-mono text-[9px] font-bold text-ink-black">
-                            {comment.authorName.split('(')[0].trim()}
+                            {comment.authorName}
+                          </span>
+                          <span
+                            className={`text-[8px] font-mono uppercase px-1 py-0.5 ${
+                              comment.authorRole === "editor"
+                                ? "bg-blue-100 text-blue-700"
+                                : comment.authorRole === "board"
+                                  ? "bg-purple-100 text-purple-700"
+                                  : "bg-neutral-100 text-neutral-600"
+                            }`}
+                          >
+                            {comment.authorRole}
                           </span>
                           {comment.isInternal && (
-                            <span className="text-[8px] font-mono bg-yellow-100 text-yellow-700 px-1 border border-yellow-300">
-                              INTERNAL
+                            <span className="text-[8px] font-mono uppercase px-1 py-0.5 bg-yellow-100 text-yellow-700">
+                              Internal
                             </span>
                           )}
                         </div>
-                        <p className="font-sans text-xs text-neutral-700 leading-relaxed">
+                        <p className="font-sans text-xs text-neutral-700 leading-relaxed break-words">
                           {comment.content}
                         </p>
                         <p className="font-mono text-[9px] text-neutral-400 mt-1">
-                          {new Date(comment.createdAt).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
+                          {new Date(
+                            comment.createdAt || proposal.lastUpdated,
+                          ).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
                           })}
                         </p>
                       </div>
@@ -513,7 +663,9 @@ export const ProposalReviewPage: React.FC = () => {
         size="md"
       >
         <form
-          onSubmit={commentForm.handleSubmit((data) => addCommentMutation.mutate(data))}
+          onSubmit={commentForm.handleSubmit((data) =>
+            addCommentMutation.mutate(data),
+          )}
           className="space-y-4"
         >
           <div>
@@ -521,7 +673,7 @@ export const ProposalReviewPage: React.FC = () => {
               Comment
             </label>
             <textarea
-              {...commentForm.register('content')}
+              {...commentForm.register("content")}
               rows={4}
               placeholder="Write your review comment..."
               className="w-full border-2 border-ink-black px-3 py-2 text-xs font-sans outline-none focus:border-[#E63946] resize-none"
@@ -535,7 +687,7 @@ export const ProposalReviewPage: React.FC = () => {
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              {...commentForm.register('isInternal')}
+              {...commentForm.register("isInternal")}
               className="w-4 h-4 accent-ink-black"
             />
             <span className="font-mono text-[10px] font-bold uppercase text-neutral-600">
@@ -556,7 +708,7 @@ export const ProposalReviewPage: React.FC = () => {
               className="px-4 py-2 bg-ink-black text-white border-2 border-ink-black text-xs font-mono font-bold uppercase hover:bg-neutral-800 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
             >
               <Send className="w-3 h-3" />
-              {addCommentMutation.isPending ? 'Posting...' : 'Post Comment'}
+              {addCommentMutation.isPending ? "Posting..." : "Post Comment"}
             </button>
           </div>
         </form>
@@ -570,18 +722,21 @@ export const ProposalReviewPage: React.FC = () => {
         size="md"
       >
         <form
-          onSubmit={revisionForm.handleSubmit((data) => revisionMutation.mutate(data))}
+          onSubmit={revisionForm.handleSubmit((data) =>
+            revisionMutation.mutate(data),
+          )}
           className="space-y-4"
         >
           <p className="font-sans text-xs text-neutral-600">
-            Provide specific feedback for the mangaka. This will change the proposal status to <strong>Revision Requested</strong>.
+            Provide specific feedback for the mangaka. This will change the
+            proposal status to <strong>Revision Requested</strong>.
           </p>
           <div>
             <label className="block font-mono text-[9px] font-extrabold uppercase text-neutral-500 mb-1">
               Revision Reason
             </label>
             <textarea
-              {...revisionForm.register('reason')}
+              {...revisionForm.register("reason")}
               rows={4}
               placeholder="Explain what needs to be revised..."
               className="w-full border-2 border-ink-black px-3 py-2 text-xs font-sans outline-none focus:border-[#E63946] resize-none"
@@ -606,7 +761,7 @@ export const ProposalReviewPage: React.FC = () => {
               className="px-4 py-2 bg-orange-500 text-white border-2 border-orange-600 text-xs font-mono font-bold uppercase hover:bg-orange-600 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
             >
               <RotateCcw className="w-3 h-3" />
-              {revisionMutation.isPending ? 'Sending...' : 'Request Revision'}
+              {revisionMutation.isPending ? "Sending..." : "Request Revision"}
             </button>
           </div>
         </form>
@@ -622,6 +777,18 @@ export const ProposalReviewPage: React.FC = () => {
         confirmLabel="Approve & Submit"
         variant="default"
         loading={approveMutation.isPending}
+      />
+
+      {/* Reject Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={showRejectDialog}
+        onClose={() => setShowRejectDialog(false)}
+        onConfirm={() => rejectMutation.mutate()}
+        title="Reject Proposal"
+        message={`Are you sure you want to reject "${proposal.title}"? This action cannot be undone.`}
+        confirmLabel="Reject"
+        variant="danger"
+        loading={rejectMutation.isPending}
       />
     </div>
   );
