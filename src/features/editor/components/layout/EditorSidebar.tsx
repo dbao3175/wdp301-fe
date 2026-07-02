@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -13,6 +13,7 @@ import {
 import { getStoredUser } from '@/src/api/base';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/src/api/client';
+import { useSidebar } from './SidebarContext';
 
 interface NavItem {
   path: string;
@@ -44,13 +45,19 @@ interface EditorSidebarProps {
 }
 
 export const EditorSidebar: React.FC<EditorSidebarProps> = ({ onLogout }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const { collapsed, setCollapsed, pendingCount, setPendingCount } = useSidebar();
   const { data: pendingCountData } = useQuery({
     queryKey: ['pending-count'],
     queryFn: () => apiClient.proposals.getAll('SUBMITTED'),
     staleTime: 5 * 1000,
   })
-  const pendingCount = pendingCountData?.length || 0;
+  
+  React.useEffect(() => {
+    if (pendingCountData) {
+      setPendingCount(pendingCountData.length || 0);
+    }
+  }, [pendingCountData, setPendingCount]);
+  
   const currentUser = getStoredUser();
   const location = useLocation();
 
@@ -62,7 +69,7 @@ export const EditorSidebar: React.FC<EditorSidebarProps> = ({ onLogout }) => {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 p-4 border-b-2 border-neutral-700 min-h-[64px]">
-        <div className="w-8 h-8 bg-[#E63946] flex items-center justify-center border-2 border-white flex-shrink-0">
+        <div className="w-8 h-8 bg-[#E63946] flex items-center justify-center border-2 border-white shrink-0">
           <PenTool className="w-4 h-4 text-white" />
         </div>
         {!collapsed && (
@@ -82,13 +89,13 @@ export const EditorSidebar: React.FC<EditorSidebarProps> = ({ onLogout }) => {
         <div className="px-4 py-3 border-b border-neutral-700 bg-neutral-900">
           <div className="flex items-center gap-2">
             <img
-              src="https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi"
-              alt="Editor"
+              src={currentUser?.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=default"}
+              alt={currentUser?.name || 'Editor'}
               className="w-8 h-8 border-2 border-[#E63946] shrink-0"
             />
             <div className="overflow-hidden">
               <p className="font-syne font-bold text-white text-xs truncate">{currentUser?.name || 'Unknown'}</p>
-              <p className="font-mono text-[9px] text-[#E63946] uppercase tracking-widest">Tantou Editor</p>
+              <p className="font-mono text-[9px] text-[#E63946] uppercase tracking-widest">{currentUser?.role || 'Editor'}</p>
             </div>
           </div>
         </div>

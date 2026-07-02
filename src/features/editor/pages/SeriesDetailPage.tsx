@@ -58,7 +58,7 @@ const chapterStatusVariant: Record<string, string> = {
 const ProductionLogItem: React.FC<{ log: ProductionLog }> = ({ log }) => (
   <div className="flex gap-3 pb-4 relative">
     {/* Timeline dot */}
-    <div className="flex flex-col items-center flex-shrink-0">
+    <div className="flex flex-col items-center shrink-0">
       <div className="w-3 h-3 bg-[#E63946] border-2 border-ink-black mt-0.5" />
       <div className="w-px flex-1 bg-neutral-200 mt-1" />
     </div>
@@ -94,9 +94,9 @@ const EditorialNoteItem: React.FC<{ note: EditorialNote }> = ({ note }) => (
   <div className={`p-4 border-2 ${note.isImportant ? 'border-[#E63946] bg-red-50' : 'border-neutral-200 bg-white'}`}>
     <div className="flex items-start gap-2">
       {note.isImportant ? (
-        <AlertCircle className="w-4 h-4 text-[#E63946] flex-shrink-0 mt-0.5" />
+        <AlertCircle className="w-4 h-4 text-[#E63946] shrink-0 mt-0.5" />
       ) : (
-        <StickyNote className="w-4 h-4 text-neutral-400 flex-shrink-0 mt-0.5" />
+        <StickyNote className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
       )}
       <div className="flex-1">
         <p className="font-sans text-xs text-ink-black leading-relaxed">{note.content}</p>
@@ -122,7 +122,7 @@ const EditorialNoteItem: React.FC<{ note: EditorialNote }> = ({ note }) => (
 const RevisionItem: React.FC<{ revision: RevisionHistory }> = ({ revision }) => (
   <div className="flex items-start gap-3 p-3 border-b border-neutral-100 last:border-b-0">
     <div
-      className={`w-2 h-2 mt-1.5 flex-shrink-0 ${
+      className={`w-2 h-2 mt-1.5 shrink-0 ${
         revision.status === 'RESOLVED' ? 'bg-emerald-500' : 'bg-orange-500'
       }`}
     />
@@ -140,7 +140,7 @@ const RevisionItem: React.FC<{ revision: RevisionHistory }> = ({ revision }) => 
       </div>
     </div>
     <span
-      className={`flex-shrink-0 text-[8px] font-mono font-extrabold uppercase px-1.5 py-0.5 border ${
+      className={`shrink-0 text-[8px] font-mono font-extrabold uppercase px-1.5 py-0.5 border ${
         revision.status === 'RESOLVED'
           ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
           : 'bg-orange-50 text-orange-700 border-orange-300'
@@ -196,21 +196,7 @@ export const SeriesDetailPage: React.FC = () => {
           highestVotedChapter: found.highestVotedChapter || '',
           latestChapterVotes: found.latestChapterVotes || 0,
           startDate: found.startDate || '',
-          chapters: (found.chapters || []).map((ch: any) => ({
-            id: ch._id || ch.id,
-            seriesId: ch.seriesId || id,
-            chapterNumber: ch.chapterNumber || 0,
-            title: ch.title || '',
-            status: ch.status || 'DRAFT',
-            submittedDate: ch.submittedDate || '',
-            lastUpdated: ch.lastUpdated || '',
-            pages: ch.pages || [],
-            totalPages: ch.totalPages || 0,
-            votes: ch.votes || 0,
-            reviewNotes: ch.reviewNotes || '',
-            deadline: ch.deadline || '',
-            mangakaName: ch.mangakaName || '',
-          })),
+          chapters: [], // Will be fetched separately
           productionLogs: found.productionLogs || [],
           editorialNotes: found.editorialNotes || [],
           revisionHistory: found.revisionHistory || [],
@@ -222,10 +208,45 @@ export const SeriesDetailPage: React.FC = () => {
     enabled: !!id,
   });
 
-  if (isLoading) return <LoadingState message="Loading series..." />;
-  if (error || !series) return <ErrorState message="Series not found" />;
+  // Fetch chapters separately
+  const { data: chaptersData } = useQuery({
+    queryKey: ['chapters', id],
+    queryFn: () => apiClient.chapters.getAll(id),
+    enabled: !!id,
+  });
 
-  const rankChange = series.previousRanking - series.currentRanking;
+  // Update series with fetched chapters
+  const seriesWithChapters = series ? {
+    ...series,
+    chapters: (chaptersData || []).map((ch: any) => ({
+      id: ch._id || ch.id,
+      seriesId: ch.seriesId || id,
+      chapterNumber: ch.chapterNumber || 0,
+      title: ch.title || '',
+      status: ch.status || 'DRAFT',
+      submittedDate: ch.submittedDate || '',
+      lastUpdated: ch.lastUpdated || '',
+      pages: ch.pages || [],
+      totalPages: ch.totalPages || 0,
+      votes: ch.votes || 0,
+      reviewNotes: ch.reviewNotes || '',
+      dueAt: ch.dueAt || '',
+      mangakaName: ch.mangakaName || '',
+    })),
+  } : series;
+
+  if (isLoading) return <LoadingState message="Loading series..." />;
+  if (error || !seriesWithChapters) return <ErrorState message="Series not found" />;
+
+  const rankChange = seriesWithChapters.previousRanking - seriesWithChapters.currentRanking;
+  
+  // Find closest upcoming chapter deadline using dueAt field
+  const now = new Date();
+  const upcomingChapters = seriesWithChapters.chapters
+    .filter((ch) => ch.dueAt && new Date(ch.dueAt) >= now)
+    .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+  
+  const closestChapter = upcomingChapters[0];
 
   return (
     <div className="space-y-6 max-w-7xl">
@@ -233,13 +254,13 @@ export const SeriesDetailPage: React.FC = () => {
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate('/editor/series')}
-          className="flex items-center gap-1.5 px-3 py-2 bg-white border-2 border-ink-black text-xs font-mono font-bold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-50 transition-colors cursor-pointer flex-shrink-0"
+          className="flex items-center gap-1.5 px-3 py-2 bg-white border-2 border-ink-black text-xs font-mono font-bold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-50 transition-colors cursor-pointer shrink-0"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back
         </button>
         <Link
-          to={`/editor/review/${series.id}`}
-          className="flex items-center gap-1.5 px-3 py-2 bg-[#E63946] text-white border-2 border-red-700 text-xs font-mono font-bold uppercase shadow-[2px_2px_0px_#141414] hover:bg-red-600 transition-colors cursor-pointer flex-shrink-0"
+          to={`/editor/review/${seriesWithChapters.id}`}
+          className="flex items-center gap-1.5 px-3 py-2 bg-[#E63946] text-white border-2 border-red-700 text-xs font-mono font-bold uppercase shadow-[2px_2px_0px_#141414] hover:bg-red-600 transition-colors cursor-pointer shrink-0"
         >
           <Eye className="w-3.5 h-3.5" /> Review Chapters
         </Link>
@@ -249,10 +270,10 @@ export const SeriesDetailPage: React.FC = () => {
       <div className="bg-white border-2 border-ink-black shadow-[6px_6px_0px_#141414] overflow-hidden">
         <div className="flex gap-0">
           {/* Cover */}
-          <div className="w-32 md:w-48 flex-shrink-0 overflow-hidden">
+          <div className="w-32 md:w-48 shrink-0 overflow-hidden">
             <img
-              src={series.coverUrl}
-              alt={series.title}
+              src={seriesWithChapters.coverUrl}
+              alt={seriesWithChapters.title}
               className="w-full h-full object-cover"
             />
           </div>
@@ -262,37 +283,37 @@ export const SeriesDetailPage: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <h1 className="font-syne font-extrabold text-xl md:text-2xl text-ink-black tracking-tight">
-                    {series.title}
+                    {seriesWithChapters.title}
                   </h1>
                   <StatusBadge
-                    label={series.status.replace('_', ' ')}
-                    variant={series.status === 'ACTIVE' ? 'active' : series.status === 'ON_HIATUS' ? 'hiatus' : 'completed'}
+                    label={seriesWithChapters.status.replace('_', ' ')}
+                    variant={seriesWithChapters.status === 'ACTIVE' ? 'active' : seriesWithChapters.status === 'ON_HIATUS' ? 'hiatus' : 'completed'}
                   />
                 </div>
                 <div className="flex items-center gap-3 mb-3">
                   <img
-                    src={series.mangaka.avatar}
-                    alt={series.mangaka.name}
+                    src={seriesWithChapters.mangaka.avatar}
+                    alt={seriesWithChapters.mangaka.name}
                     className="w-6 h-6 border border-neutral-200"
                   />
-                  <span className="font-sans text-sm text-neutral-600 font-medium">{series.mangaka.name}</span>
+                  <span className="font-sans text-sm text-neutral-600 font-medium">{seriesWithChapters.mangaka.name}</span>
                   <span className="font-mono text-[10px] bg-neutral-100 px-2 py-0.5 border border-neutral-200 uppercase">
-                    {series.genre}
+                    {seriesWithChapters.genre}
                   </span>
                 </div>
                 <p className="font-sans text-xs text-neutral-600 leading-relaxed max-w-2xl line-clamp-3">
-                  {series.synopsis}
+                  {seriesWithChapters.synopsis}
                 </p>
               </div>
               {/* Key Stats */}
-              <div className="flex-shrink-0 space-y-2 hidden md:block">
-                <RankingBadge rank={series.currentRanking} previous={series.previousRanking} size="lg" />
-                <VoteCounter votes={series.totalVotes} />
+              <div className="shrink-0 space-y-2 hidden md:block">
+                <RankingBadge rank={seriesWithChapters.currentRanking} previous={seriesWithChapters.previousRanking} size="lg" />
+                <VoteCounter votes={seriesWithChapters.totalVotes} />
               </div>
             </div>
             {/* Tags */}
             <div className="flex flex-wrap gap-1.5 mt-3">
-              {series.tags.map((tag) => (
+              {seriesWithChapters.tags.map((tag) => (
                 <span
                   key={tag}
                   className="px-2 py-0.5 bg-neutral-100 border border-neutral-300 text-[9px] font-mono text-neutral-600 uppercase"
@@ -310,29 +331,44 @@ export const SeriesDetailPage: React.FC = () => {
         {/* Production Stage */}
         <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414] p-4">
           <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-2">Current Stage</p>
-          <p className="font-syne font-extrabold text-sm text-ink-black">{STAGE_LABELS[series.currentStage]}</p>
+          <p className="font-syne font-extrabold text-sm text-ink-black">{STAGE_LABELS[seriesWithChapters.currentStage]}</p>
           <div className="mt-2 h-1.5 bg-neutral-200">
-            <div className="h-full bg-[#E63946]" style={{ width: `${series.completionPercentage}%` }} />
+            <div className="h-full bg-[#E63946]" style={{ width: `${seriesWithChapters.completionPercentage}%` }} />
           </div>
-          <p className="font-mono text-xs font-bold text-[#E63946] mt-1">{series.completionPercentage}%</p>
+          <p className="font-mono text-xs font-bold text-[#E63946] mt-1">{seriesWithChapters.completionPercentage}%</p>
         </div>
 
         {/* Deadline */}
-        <div className={`bg-white border-2 shadow-[4px_4px_0px_#141414] p-4 ${series.remainingDays <= 7 ? 'border-red-400 bg-red-50' : 'border-ink-black'}`}>
-          <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-2">Deadline</p>
-          <p className="font-syne font-extrabold text-sm text-ink-black">
-            {new Date(series.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </p>
-          <p className={`font-mono text-xs font-bold mt-1 ${series.remainingDays <= 0 ? 'text-red-600' : series.remainingDays <= 7 ? 'text-orange-500' : 'text-neutral-500'}`}>
-            {series.remainingDays <= 0 ? `${Math.abs(series.remainingDays)}d overdue` : `${series.remainingDays} days left`}
-          </p>
+        <div className={`bg-white border-2 shadow-[4px_4px_0px_#141414] p-4 ${closestChapter ? Math.ceil((new Date(closestChapter.dueAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) <= 7 ? 'border-red-400 bg-red-50' : 'border-ink-black' : 'border-ink-black'}`}>
+          <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-2">Next Chapter Deadline</p>
+          {closestChapter ? (
+            <>
+              <p className="font-syne font-extrabold text-sm text-ink-black">
+                Ch.{closestChapter.chapterNumber} — {new Date(closestChapter.dueAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </p>
+              <p className={`font-mono text-xs font-bold mt-1 ${Math.ceil((new Date(closestChapter.dueAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) <= 0 ? 'text-red-600' : Math.ceil((new Date(closestChapter.dueAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) <= 7 ? 'text-orange-500' : 'text-neutral-500'}`}>
+                {Math.ceil((new Date(closestChapter.dueAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) <= 0 
+                  ? `${Math.abs(Math.ceil((new Date(closestChapter.dueAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))}d overdue` 
+                  : `${Math.ceil((new Date(closestChapter.dueAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))} days left`}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-syne font-extrabold text-sm text-ink-black">
+                {new Date(seriesWithChapters.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </p>
+              <p className={`font-mono text-xs font-bold mt-1 ${seriesWithChapters.remainingDays <= 0 ? 'text-red-600' : seriesWithChapters.remainingDays <= 7 ? 'text-orange-500' : 'text-neutral-500'}`}>
+                {seriesWithChapters.remainingDays <= 0 ? `${Math.abs(seriesWithChapters.remainingDays)}d overdue` : `${seriesWithChapters.remainingDays} days left`}
+              </p>
+            </>
+          )}
         </div>
 
         {/* Chapters */}
         <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414] p-4">
           <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-2">Chapters</p>
           <p className="font-syne font-extrabold text-sm text-ink-black">
-            {series.publishedChapters} / {series.totalChapters}
+            {seriesWithChapters.publishedChapters} / {seriesWithChapters.totalChapters}
           </p>
           <p className="font-mono text-[9px] text-neutral-400 mt-1">Published</p>
         </div>
@@ -341,9 +377,9 @@ export const SeriesDetailPage: React.FC = () => {
         <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414] p-4">
           <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-2">Avg. Votes/Chapter</p>
           <p className="font-syne font-extrabold text-sm text-ink-black">
-            {series.averageVotesPerChapter.toLocaleString()}
+            {seriesWithChapters.averageVotesPerChapter.toLocaleString()}
           </p>
-          <p className="font-mono text-[9px] text-neutral-400 mt-1">Highest: {series.highestVotedChapter}</p>
+          <p className="font-mono text-[9px] text-neutral-400 mt-1">Highest: {seriesWithChapters.highestVotedChapter}</p>
         </div>
       </div>
 
@@ -353,16 +389,16 @@ export const SeriesDetailPage: React.FC = () => {
           Production Stage Progress
         </p>
         <ProgressTimeline
-          currentStage={series.currentStage}
-          completionPercentage={series.completionPercentage}
+          currentStage={seriesWithChapters.currentStage}
+          completionPercentage={seriesWithChapters.completionPercentage}
         />
       </div>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <RankingChart data={series.rankingHistory} title="Ranking Trend" />
-        <VoteTrendChart data={series.voteHistory} title="Vote Trend" />
-        <ProgressChart data={series.progressHistory} title="Production Progress" />
+        <RankingChart data={seriesWithChapters.rankingHistory} title="Ranking Trend" />
+        <VoteTrendChart data={seriesWithChapters.voteHistory} title="Vote Trend" />
+        <ProgressChart data={seriesWithChapters.progressHistory} title="Production Progress" />
       </div>
 
       {/* Tabbed Sections */}
@@ -394,26 +430,26 @@ export const SeriesDetailPage: React.FC = () => {
                 <div>
                   <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">Full Synopsis</p>
                   <p className="font-sans text-sm text-neutral-700 leading-relaxed bg-neutral-50 border border-neutral-200 p-3">
-                    {series.synopsis}
+                    {seriesWithChapters.synopsis}
                   </p>
                 </div>
                 <div className="space-y-3">
                   <div>
                     <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">Start Date</p>
-                    <p className="font-sans text-sm text-ink-black">{new Date(series.startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                    <p className="font-sans text-sm text-ink-black">{new Date(seriesWithChapters.startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
                   </div>
                   <div>
                     <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">Highest Voted Chapter</p>
-                    <p className="font-sans text-sm text-ink-black">{series.highestVotedChapter}</p>
+                    <p className="font-sans text-sm text-ink-black">{seriesWithChapters.highestVotedChapter}</p>
                   </div>
                   <div>
                     <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">Latest Chapter Votes</p>
-                    <VoteCounter votes={series.latestChapterVotes} />
+                    <VoteCounter votes={seriesWithChapters.latestChapterVotes} />
                   </div>
                   <div>
                     <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">Previous Ranking</p>
                     <div className="flex items-center gap-2">
-                      <span className="font-syne font-extrabold text-base text-neutral-500">#{series.previousRanking}</span>
+                      <span className="font-syne font-extrabold text-base text-neutral-500">#{seriesWithChapters.previousRanking}</span>
                       <span className={`font-mono text-xs font-bold flex items-center gap-0.5 ${rankChange > 0 ? 'text-emerald-600' : rankChange < 0 ? 'text-red-600' : 'text-neutral-400'}`}>
                         {rankChange > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : rankChange < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : null}
                         {rankChange !== 0 ? Math.abs(rankChange) + ' positions' : 'No change'}
@@ -428,26 +464,27 @@ export const SeriesDetailPage: React.FC = () => {
           {/* Chapters Tab */}
           {activeTab === 'chapters' && (
             <div className="space-y-2">
-              {series.chapters.length === 0 ? (
+              {seriesWithChapters.chapters.length === 0 ? (
                 <div className="py-10 text-center">
                   <BookOpen className="w-10 h-10 text-neutral-300 mx-auto mb-2" />
                   <p className="font-mono text-xs text-neutral-400 uppercase">No chapters submitted</p>
                 </div>
               ) : (
-                [...series.chapters]
-                  .sort((a, b) => b.chapterNumber - a.chapterNumber)
+                [...seriesWithChapters.chapters]
+                  .sort((a, b) => a.chapterNumber - b.chapterNumber)
                   .map((ch) => (
                     <div
                       key={ch.id}
                       className="flex items-center gap-4 p-3 border border-neutral-200 hover:border-ink-black hover:bg-neutral-50 transition-colors"
                     >
-                      <span className="font-syne font-extrabold text-sm text-neutral-400 w-10 flex-shrink-0">
+                      <span className="font-syne font-extrabold text-sm text-neutral-400 w-10 shrink-0">
                         #{ch.chapterNumber}
                       </span>
                       <div className="flex-1 min-w-0">
                         <p className="font-sans font-bold text-xs text-ink-black truncate">{ch.title}</p>
                         <p className="font-mono text-[9px] text-neutral-400">
-                          {ch.totalPages} pages · {new Date(ch.submittedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {ch.totalPages} pages
+                          {ch.dueAt && ` · Due ${new Date(ch.dueAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
                         </p>
                       </div>
                       <StatusBadge
@@ -459,8 +496,8 @@ export const SeriesDetailPage: React.FC = () => {
                       )}
                       {(ch.status === 'SUBMITTED' || ch.status === 'UNDER_REVIEW') && (
                         <Link
-                          to={`/editor/review/${series.id}`}
-                          className="px-2 py-1 bg-[#E63946] text-white text-[9px] font-mono font-extrabold uppercase border border-red-600 hover:bg-red-600 transition-colors cursor-pointer flex-shrink-0"
+                          to={`/editor/review/${seriesWithChapters.id}`}
+                          className="px-2 py-1 bg-[#E63946] text-white text-[9px] font-mono font-extrabold uppercase border border-red-600 hover:bg-red-600 transition-colors cursor-pointer shrink-0"
                         >
                           Review
                         </Link>
@@ -474,14 +511,14 @@ export const SeriesDetailPage: React.FC = () => {
           {/* Production Logs Tab */}
           {activeTab === 'production' && (
             <div>
-              {series.productionLogs.length === 0 ? (
+              {seriesWithChapters.productionLogs.length === 0 ? (
                 <div className="py-10 text-center">
                   <FileEdit className="w-10 h-10 text-neutral-300 mx-auto mb-2" />
                   <p className="font-mono text-xs text-neutral-400 uppercase">No production logs</p>
                 </div>
               ) : (
                 <div className="pt-2">
-                  {[...series.productionLogs]
+                  {[...seriesWithChapters.productionLogs]
                     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                     .map((log) => (
                       <ProductionLogItem key={log.id} log={log} />
@@ -494,13 +531,13 @@ export const SeriesDetailPage: React.FC = () => {
           {/* Revision History Tab */}
           {activeTab === 'revisions' && (
             <div className="border-2 border-neutral-200">
-              {series.revisionHistory.length === 0 ? (
+              {seriesWithChapters.revisionHistory.length === 0 ? (
                 <div className="py-10 text-center">
                   <RotateCcw className="w-10 h-10 text-neutral-300 mx-auto mb-2" />
                   <p className="font-mono text-xs text-neutral-400 uppercase">No revision history</p>
                 </div>
               ) : (
-                series.revisionHistory.map((rev) => (
+                seriesWithChapters.revisionHistory.map((rev) => (
                   <RevisionItem key={rev.id} revision={rev} />
                 ))
               )}
@@ -510,13 +547,13 @@ export const SeriesDetailPage: React.FC = () => {
           {/* Editorial Notes Tab */}
           {activeTab === 'notes' && (
             <div className="space-y-3">
-              {series.editorialNotes.length === 0 ? (
+              {seriesWithChapters.editorialNotes.length === 0 ? (
                 <div className="py-10 text-center">
                   <StickyNote className="w-10 h-10 text-neutral-300 mx-auto mb-2" />
                   <p className="font-mono text-xs text-neutral-400 uppercase">No editorial notes</p>
                 </div>
               ) : (
-                series.editorialNotes.map((note) => (
+                seriesWithChapters.editorialNotes.map((note) => (
                   <EditorialNoteItem key={note.id} note={note} />
                 ))
               )}

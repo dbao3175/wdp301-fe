@@ -22,7 +22,10 @@ const STATUS_OPTIONS = [
   { value: 'ALL', label: 'All Statuses' },
   { value: 'ACTIVE', label: 'Active' },
   { value: 'ON_HIATUS', label: 'On Hiatus' },
+  { value: 'IN_PRODUCTION', label: 'In Production' },
+  { value: 'PUBLISHED', label: 'Published' },
   { value: 'COMPLETED', label: 'Completed' },
+  { value: 'REJECTED', label: 'Rejected' },
   { value: 'CANCELLED', label: 'Cancelled' },
 ];
 

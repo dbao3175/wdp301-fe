@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight, Home } from 'lucide-react';
+import { SidebarProvider, useSidebar } from './SidebarContext';
 
 const routeLabels: Record<string, string> = {
   editor: 'Editor',
@@ -59,13 +60,15 @@ interface EditorLayoutProps {
   onLogout?: () => void;
 }
 
-export const EditorLayout: React.FC<EditorLayoutProps> = ({ children, onLogout }) => {
+const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => void }> = ({ children, onLogout }) => {
+  const { collapsed } = useSidebar();
+  
   return (
     <div className="min-h-screen bg-manuscript-gray flex">
       <EditorSidebar onLogout={onLogout} />
 
       {/* Main content — offset by sidebar width (64px collapsed, 256px expanded) */}
-      <div className="flex-1 ml-64 flex flex-col min-h-screen transition-all duration-300">
+      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${collapsed ? 'ml-16' : 'ml-64'}`}>
         {/* Top Bar */}
         <header className="sticky top-0 z-30 bg-ink-black border-b-2 border-neutral-700 px-6 py-3 flex items-center justify-between min-h-[64px]">
           <Breadcrumb />
@@ -107,5 +110,13 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({ children, onLogout }
         </main>
       </div>
     </div>
+  );
+};
+
+export const EditorLayout: React.FC<EditorLayoutProps> = ({ children, onLogout }) => {
+  return (
+    <SidebarProvider>
+      <EditorLayoutInner onLogout={onLogout}>{children}</EditorLayoutInner>
+    </SidebarProvider>
   );
 };

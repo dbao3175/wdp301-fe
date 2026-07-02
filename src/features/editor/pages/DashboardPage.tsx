@@ -18,8 +18,11 @@ import { StatsCard } from '../components/common/StatsCard.tsx';
 import { LoadingState, ErrorState, StatusBadge } from '../components/common/States.tsx';
 import { VoteTrendChart, RankingChart } from '../components/analytics/Charts.tsx';
 import { SeriesCard, DeadlineCard, RankingBadge, VoteCounter, ProgressTimeline } from '../components/series/SeriesComponents.tsx';
+import { useSidebar } from '../components/layout/SidebarContext';
+import type { Proposal } from '../types/index.ts';
 
 export const DashboardPage: React.FC = () => {
+  const { pendingCount } = useSidebar();
   const { data: dashboardData, isLoading, error, refetch } = useQuery({
     queryKey: ['editor-dashboard-stats'],
     queryFn: () => apiClient.editor.getDashboard(),
@@ -30,13 +33,42 @@ export const DashboardPage: React.FC = () => {
     queryFn: () => apiClient.editor.getMySeries(),
   });
 
+  // Fetch pending proposals
+  const { data: pendingProposals } = useQuery({
+    queryKey: ['pending-proposals'],
+    queryFn: () => apiClient.proposals.getAll('SUBMITTED'),
+  });
+
+  const { data: underReviewProposals } = useQuery({
+    queryKey: ['under-review-proposals'],
+    queryFn: () => apiClient.proposals.getAll('UNDER_REVIEW'),
+  });
+
+  const { data: revisionRequestedProposals } = useQuery({
+    queryKey: ['revision-requested-proposals'],
+    queryFn: () => apiClient.proposals.getAll('REVISION_REQUESTED'),
+  });
+
+  const { data: resubmittedProposals } = useQuery({
+    queryKey: ['resubmitted-proposals'],
+    queryFn: () => apiClient.proposals.getAll('RESUBMITTED'),
+  });
+
+  // Combine all pending proposals
+  const allPendingProposals: Proposal[] = [
+    ...(pendingProposals || []),
+    ...(underReviewProposals || []),
+    ...(revisionRequestedProposals || []),
+    ...(resubmittedProposals || []),
+  ].slice(0, 3); // Show top 3
+
   if (isLoading) return <LoadingState message="Loading dashboard..." />;
   if (error) return <ErrorState onRetry={refetch} />;
   if (!dashboardData) return null;
 
   const stats = {
     activeSeries: dashboardData.seriesCount || 0,
-    pendingProposals: 0,
+    pendingProposals: pendingCount || 0,
     pendingChapterReviews: dashboardData.deadlines?.nearDueCount || 0,
     upcomingDeadlines: dashboardData.deadlines?.nearDueCount || 0,
     delayedProjects: dashboardData.deadlines?.overdueCount || 0,
@@ -165,35 +197,31 @@ export const DashboardPage: React.FC = () => {
           <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
             <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black flex items-center justify-between">
               <h2 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-                Pending Reviews
+                Pending Proposals
               </h2>
               <FileText className="w-4 h-4 text-neutral-400" />
             </div>
             <div className="p-4 space-y-3">
-              <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-300">
-                <div>
-                  <p className="font-sans font-bold text-xs text-ink-black">Crimson Blade Ch.6</p>
-                  <p className="font-mono text-[9px] text-neutral-500">Manuscript Review</p>
-                </div>
-                <Link
-                  to="/editor/review/series-001"
-                  className="text-[9px] font-mono font-extrabold text-[#E63946] uppercase hover:underline flex items-center gap-0.5"
-                >
-                  Review <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-300">
-                <div>
-                  <p className="font-sans font-bold text-xs text-ink-black">Iron Dragon Ch.2</p>
-                  <p className="font-mono text-[9px] text-neutral-500">Manuscript Review</p>
-                </div>
-                <Link
-                  to="/editor/review/series-002"
-                  className="text-[9px] font-mono font-extrabold text-[#E63946] uppercase hover:underline flex items-center gap-0.5"
-                >
-                  Review <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
+              {allPendingProposals.length === 0 ? (
+                <p className="font-mono text-xs text-neutral-400 text-center py-4">No pending proposals</p>
+              ) : (
+                allPendingProposals.map((proposal: Proposal) => (
+                  <div key={proposal.id} className="flex items-center justify-between p-3 bg-amber-50 border border-amber-300">
+                    <div>
+                      <p className="font-sans font-bold text-xs text-ink-black">{proposal.title}</p>
+                      <p className="font-mono text-[9px] text-neutral-500">
+                        {proposal.genre} · {proposal.mangaka?.name || 'Unknown'}
+                      </p>
+                    </div>
+                    <Link
+                      to={`/editor/proposals/${proposal.id}`}
+                      className="text-[9px] font-mono font-extrabold text-[#E63946] uppercase hover:underline flex items-center gap-0.5"
+                    >
+                      Review <ArrowRight className="w-3 h-3" />
+                    </Link>
+                  </div>
+                ))
+              )}
               <Link
                 to="/editor/proposals"
                 className="block text-center text-[9px] font-mono font-extrabold text-neutral-500 uppercase tracking-widest hover:text-ink-black transition-colors pt-1 hover:underline"
