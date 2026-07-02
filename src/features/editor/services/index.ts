@@ -98,14 +98,12 @@ function mapBackendProposalToFrontend(bp: any): Proposal {
     reviewComments: bp.comment ? [
       {
         id: 'c-001',
-        author: {
-          id: 'editor',
-          name: 'Editor Reviewer',
-          role: 'EDITOR',
-          avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Editor'
-        },
+        authorId: 'editor',
+        authorName: 'Editor Reviewer',
+        authorAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Editor',
         content: bp.comment,
-        timestamp: bp.updatedAt || new Date().toISOString()
+        createdAt: bp.updatedAt || new Date().toISOString(),
+        isInternal: false,
       }
     ] : [],
     assignedEditorId: bp.editorId || '',

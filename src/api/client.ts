@@ -24,6 +24,33 @@ import {
 
 export { getStoredUser, setStoredUserSession, getClientConfig, setClientConfig };
 
+const DIRECTIVES_STORAGE_KEY = 'mangaflow_directives_fallback';
+
+const unwrapData = <T,>(response: any, fallback: T): T => {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return response.data ?? fallback;
+  }
+  return response ?? fallback;
+};
+
+const normalizeNotification = (notification: any) => ({
+  ...notification,
+  read: notification.read ?? notification.isRead ?? false,
+});
+
+const readFallbackDirectives = (): Directive[] => {
+  try {
+    const raw = localStorage.getItem(DIRECTIVES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeFallbackDirectives = (directives: Directive[]) => {
+  localStorage.setItem(DIRECTIVES_STORAGE_KEY, JSON.stringify(directives));
+};
+
 export const apiClient = {
   // CONFIG
   getConfig: getClientConfig,
@@ -261,18 +288,72 @@ export const apiClient = {
   // BOARD DIRECTIVE PROPOSALS (Cancel series / Change publication format)
   directives: {
     getAll: async (): Promise<Directive[]> => {
-      const res = await makeFetchRequest('/api/directives', 'GET');
-      return res.data;
+      try {
+        const res = await makeFetchRequest('/api/directives', 'GET');
+        return unwrapData<Directive[]>(res, []);
+      } catch (err) {
+        console.warn('Directives API unavailable, using local fallback:', err);
+        return readFallbackDirectives();
+      }
     },
 
     create: async (seriesId: string, actionType: DirectiveAction, reason: string, newSchedule?: 'WEEKLY' | 'MONTHLY'): Promise<Directive> => {
-      const res = await makeFetchRequest('/api/directives', 'POST', { seriesId, actionType, reason, newSchedule });
-      return res.data;
+      try {
+        const res = await makeFetchRequest('/api/directives', 'POST', { seriesId, actionType, reason, newSchedule });
+        return unwrapData<Directive>(res, {} as Directive);
+      } catch (err) {
+        console.warn('Directives API unavailable, saving directive locally:', err);
+        const currentUser = getStoredUser();
+        const directives = readFallbackDirectives();
+        const directive: Directive = {
+          _id: `local-dir-${Date.now()}`,
+          seriesId,
+          actionType,
+          newSchedule: actionType === 'CHANGE_FORMAT' ? newSchedule || 'MONTHLY' : null,
+          reason,
+          status: 'PENDING',
+          proposedBy: currentUser?._id || 'local-user',
+          proposedByName: currentUser?.name || 'Board Member',
+          votes: [],
+          createdAt: new Date().toISOString(),
+        };
+        writeFallbackDirectives([directive, ...directives]);
+        return directive;
+      }
     },
 
     vote: async (directiveId: string, decision: 'ACCEPT' | 'REJECT', comment: string): Promise<Directive> => {
-      const res = await makeFetchRequest(`/api/directives/${directiveId}/vote`, 'POST', { decision, comment });
-      return res.data;
+      try {
+        const res = await makeFetchRequest(`/api/directives/${directiveId}/vote`, 'POST', { decision, comment });
+        return unwrapData<Directive>(res, {} as Directive);
+      } catch (err) {
+        console.warn('Directives API unavailable, saving directive vote locally:', err);
+        const currentUser = getStoredUser();
+        const directives = readFallbackDirectives();
+        const directive = directives.find(d => d._id === directiveId);
+        if (!directive) throw new Error('Directive not found');
+        if ((directive.votes || []).some(v => v.voterId === currentUser?._id)) {
+          throw new Error('You have already voted on this directive');
+        }
+
+        const updatedVotes = [
+          ...(directive.votes || []),
+          {
+            _id: `local-vote-${Date.now()}`,
+            voterId: currentUser?._id || 'local-user',
+            voterName: currentUser?.name || 'Board Member',
+            decision,
+            comment,
+            createdAt: new Date().toISOString(),
+          },
+        ];
+        const acceptCount = updatedVotes.filter(v => v.decision === 'ACCEPT').length;
+        const rejectCount = updatedVotes.filter(v => v.decision === 'REJECT').length;
+        const status = acceptCount >= 2 ? 'APPROVED' : rejectCount >= 2 ? 'REJECTED' : 'PENDING';
+        const updatedDirective: Directive = { ...directive, votes: updatedVotes, status };
+        writeFallbackDirectives(directives.map(d => d._id === directiveId ? updatedDirective : d));
+        return updatedDirective;
+      }
     }
   },
 
@@ -349,10 +430,12 @@ export const apiClient = {
   
   notifications: {
     getAll: async (userId: string): Promise<any[]> => {
-      return await makeFetchRequest(`/api/notifications/${userId}`, 'GET');
+      const res = await makeFetchRequest(`/api/notifications/${userId}`, 'GET');
+      return unwrapData<any[]>(res, []).map(normalizeNotification);
     },
     getUnread: async (userId: string): Promise<any[]> => {
-      return await makeFetchRequest(`/api/notifications/${userId}/unread`, 'GET');
+      const res = await makeFetchRequest(`/api/notifications/${userId}/unread`, 'GET');
+      return unwrapData<any[]>(res, []).map(normalizeNotification);
     },
     markRead: async (id: string): Promise<any> => {
       return await makeFetchRequest(`/api/notifications/${id}/read`, 'PATCH');
