@@ -11,6 +11,8 @@ import {
   SeriesStatus,
   PubSchedule,
   ChapterStatus,
+  Notification,
+  AuditLog,
 } from "../types";
 
 import {
@@ -561,6 +563,10 @@ export const apiClient = {
     delete: async (userId: string): Promise<void> => {
       await makeFetchRequest(`/api/users/${userId}`, "DELETE");
     },
+    toggleStatus: async (userId: string): Promise<User> => {
+      const res = await makeFetchRequest(`/api/users/${userId}/status`, "PUT");
+      return res.data;
+    },
   },
 
   submissions: {
@@ -644,6 +650,19 @@ export const apiClient = {
         content,
         type,
       });
+    },
+    adminGetAll: async (): Promise<Notification[]> => {
+      return await makeFetchRequest("/api/notifications", "GET");
+    },
+    delete: async (id: string): Promise<void> => {
+      await makeFetchRequest(`/api/notifications/${id}`, "DELETE");
+    },
+  },
+
+  auditLogs: {
+    getAll: async (): Promise<AuditLog[]> => {
+      const res = await makeFetchRequest("/api/audit-logs", "GET");
+      return res.data;
     },
   },
 
