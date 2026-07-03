@@ -621,22 +621,26 @@ export const apiClient = {
 
   notifications: {
     getAll: async (userId: string): Promise<any[]> => {
-      return await makeFetchRequest(`/api/notifications/${userId}`, "GET");
+      const res = await makeFetchRequest(`/api/notifications/${userId}`, "GET");
+      return res.data;
     },
     getUnread: async (userId: string): Promise<any[]> => {
-      return await makeFetchRequest(
+      const res = await makeFetchRequest(
         `/api/notifications/${userId}/unread`,
         "GET",
       );
+      return res.data;
     },
     markRead: async (id: string): Promise<any> => {
-      return await makeFetchRequest(`/api/notifications/${id}/read`, "PATCH");
+      const res = await makeFetchRequest(`/api/notifications/${id}/read`, "PATCH");
+      return res.data;
     },
     markAllRead: async (userId: string): Promise<any> => {
-      return await makeFetchRequest(
+      const res = await makeFetchRequest(
         `/api/notifications/${userId}/read-all`,
         "PATCH",
       );
+      return res.data;
     },
     create: async (
       userId: string,
@@ -644,15 +648,17 @@ export const apiClient = {
       content: string,
       type: "INFO" | "WARNING" | "ERROR",
     ): Promise<any> => {
-      return await makeFetchRequest("/api/notifications", "POST", {
+      const res = await makeFetchRequest("/api/notifications", "POST", {
         userId,
         title,
         content,
         type,
       });
+      return res.data;
     },
     adminGetAll: async (): Promise<Notification[]> => {
-      return await makeFetchRequest("/api/notifications", "GET");
+      const res = await makeFetchRequest("/api/notifications", "GET");
+      return res.data;
     },
     delete: async (id: string): Promise<void> => {
       await makeFetchRequest(`/api/notifications/${id}`, "DELETE");
