@@ -674,11 +674,13 @@ export default function AdminPanel({ currentUser, onRefreshAll }: AdminPanelProp
                         {log.createdAt ? new Date(log.createdAt).toLocaleString() : log.timestamp}
                       </div>
                       <div className="col-span-3 text-white font-bold">
-                        {log.user
-                          ? typeof log.user === 'object'
-                            ? (log.user as User).name
-                            : String(log.user)
-                          : 'Unknown User'}
+                        {log.userName || 
+                          (log.userId && typeof log.userId === 'object' && 'name' in log.userId ? (log.userId as any).name : '') || 
+                          (log.user 
+                            ? typeof log.user === 'object'
+                              ? (log.user as User).name
+                              : String(log.user)
+                            : 'Unknown User')}
                       </div>
                       <div className="col-span-3 text-red-400">{log.action}</div>
                       <div className="col-span-3 text-slate-400">{log.target}</div>

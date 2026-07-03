@@ -156,8 +156,9 @@ export interface Notification {
 
 export interface AuditLog {
   _id: string;
-  userId?: string;
+  userId?: any;
   user?: User | string;
+  userName?: string;
   action: string;
   target: string;
   timestamp?: string;
