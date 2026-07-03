@@ -145,7 +145,7 @@ export interface APIConfig {
 
 export interface Notification {
   _id: string;
-  userId: string;
+  userId: any;
   user?: User;
   title: string;
   content: string;

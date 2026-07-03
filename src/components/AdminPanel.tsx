@@ -102,7 +102,7 @@ export default function AdminPanel({ currentUser, onRefreshAll }: AdminPanelProp
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName || !formEmail || (!editingUserId && !formPassword)) {
-      showToast('Please fill out all required fields', 'error');
+      showToast('Vui lòng điền đầy đủ các thông tin bắt buộc!', 'error');
       return;
     }
 
@@ -116,7 +116,7 @@ export default function AdminPanel({ currentUser, onRefreshAll }: AdminPanelProp
           accountNumber: formAccountNumber,
           cardholder: formCardholder
         });
-        showToast('User updated successfully!');
+        showToast('Cập nhật người dùng thành công!');
       } else {
         await apiClient.users.create({
           name: formName,
@@ -127,52 +127,56 @@ export default function AdminPanel({ currentUser, onRefreshAll }: AdminPanelProp
           accountNumber: formAccountNumber,
           cardholder: formCardholder
         });
-        showToast('User created successfully!');
+        showToast('Tạo người dùng thành công!');
       }
       resetForm();
       fetchUsers();
       onRefreshAll();
     } catch (err: any) {
-      showToast(err.message || 'Action failed', 'error');
+      showToast(err.message || 'Thao tác thất bại', 'error');
     }
   };
 
   const handleDelete = async (userId: string) => {
     if (userId === currentUser._id) {
-      showToast('Cannot delete yourself', 'error');
+      showToast('Không thể tự xóa chính mình!', 'error');
       return;
     }
-    if (!confirm('Are you sure you want to delete this user?')) return;
+    if (!confirm('Bạn có chắc chắn muốn xóa thành viên này không?')) return;
 
     try {
       await apiClient.users.delete(userId);
-      showToast('User deleted successfully.');
+      showToast('Xóa người dùng thành công!');
       fetchUsers();
       onRefreshAll();
     } catch (err: any) {
-      showToast(err.message || 'Failed to delete user', 'error');
+      showToast(err.message || 'Xóa người dùng thất bại', 'error');
     }
   };
 
   const handleToggleStatus = async (userId: string) => {
+    if (userId === currentUser._id) {
+      showToast('Không thể tự khóa tài khoản của chính mình!', 'error');
+      return;
+    }
     try {
       await apiClient.users.toggleStatus(userId);
-      showToast('User status toggled successfully.');
+      showToast('Cập nhật trạng thái hoạt động thành công!');
       fetchUsers();
     } catch (err: any) {
-      showToast(err.message || 'Failed to toggle status', 'error');
+      showToast(err.message || 'Cập nhật trạng thái hoạt động thất bại', 'error');
     }
   };
 
   const handleCreateNotification = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!notifUserId || !notifTitle || !notifContent) {
-      showToast('Please fill out all required fields', 'error');
+      showToast('Vui lòng điền đầy đủ các thông tin bắt buộc!', 'error');
       return;
     }
     try {
       await apiClient.notifications.create(notifUserId, notifTitle, notifContent, notifType);
-      showToast('Notification sent successfully!');
+      showToast('Gửi thông báo thành công!');
       setShowNotifForm(false);
       setNotifUserId('');
       setNotifTitle('');
@@ -180,18 +184,18 @@ export default function AdminPanel({ currentUser, onRefreshAll }: AdminPanelProp
       setNotifType('INFO');
       fetchNotifications();
     } catch (err: any) {
-      showToast(err.message || 'Failed to send notification', 'error');
+      showToast(err.message || 'Gửi thông báo thất bại', 'error');
     }
   };
 
   const handleDeleteNotification = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this notification?')) return;
+    if (!confirm('Bạn có chắc chắn muốn xóa thông báo này không?')) return;
     try {
       await apiClient.notifications.delete(id);
-      showToast('Notification deleted successfully.');
+      showToast('Xóa thông báo thành công!');
       fetchNotifications();
     } catch (err: any) {
-      showToast(err.message || 'Failed to delete notification', 'error');
+      showToast(err.message || 'Xóa thông báo thất bại', 'error');
     }
   };
 
@@ -523,7 +527,9 @@ export default function AdminPanel({ currentUser, onRefreshAll }: AdminPanelProp
                   <p className="text-xs text-slate-500 text-center py-8">No notifications sent yet.</p>
                 ) : (
                   notificationsList.map(notif => {
-                    const recipient = usersList.find(u => u._id === notif.userId);
+                    const recipientId = notif.userId && typeof notif.userId === 'object' ? notif.userId._id : notif.userId;
+                    const recipient = usersList.find(u => u._id === recipientId) || 
+                      (notif.userId && typeof notif.userId === 'object' ? notif.userId : null);
                     return (
                       <div key={notif._id} className="flex items-center justify-between p-4 bg-[#1e1e24] border border-[#2d2d34] hover:border-slate-500 rounded-md transition-all">
                         <div className="flex-1">
@@ -548,7 +554,7 @@ export default function AdminPanel({ currentUser, onRefreshAll }: AdminPanelProp
                           </div>
                           <p className="text-xs text-slate-400 mt-1">{notif.content}</p>
                           <p className="text-[10px] text-slate-500 font-mono mt-1">
-                            Recipient: {recipient ? `${recipient.name} (${recipient.email})` : notif.userId} | Sent: {new Date(notif.createdAt || Date.now()).toLocaleString()}
+                            Recipient: {recipient ? `${recipient.name} (${recipient.email})` : String(notif.userId || '')} | Sent: {new Date(notif.createdAt || Date.now()).toLocaleString()}
                           </p>
                         </div>
 
