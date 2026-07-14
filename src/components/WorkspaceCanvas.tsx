@@ -613,12 +613,18 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
     }
 
     try {
+    if (!sketchFile) {
+      showToast("A sketch page image is required before assigning a task.", "warn");
+      return;
+    }
       setDeployToast("Đang tải ảnh thô lên server...");
 
       let fileId = "";
+      let sourceImageUrl = "";
       if (sketchFile) {
         const fileRes = await apiClient.files.upload(sketchFile, activeChapter._id);
         fileId = fileRes.data._id;
+        sourceImageUrl = fileRes.data.fileUrl;
       }
 
       setDeployToast("Đang tạo và phân công nhiệm vụ...");
@@ -644,7 +650,9 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
         cAssistant,
         cTitle.trim(),
         region,
-        description
+        description,
+        undefined,
+        sourceImageUrl,
       );
 
       setDeployToast(`"${cTitle.trim()}" đã được phân công thành công!`);

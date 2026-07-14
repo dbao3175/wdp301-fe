@@ -122,7 +122,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   const handleSubmitDraft = () => {
     if (!draft || !draft.comment.trim()) return;
     onAddAnnotation({
-      chapterId: page.annotations[0]?.chapterId ?? '',
+      chapterId: page.id,
       pageNumber: page.pageNumber,
       x: draft.x,
       y: draft.y,

@@ -23,6 +23,39 @@ import { ConfirmDialog } from '../components/common/Modal.tsx';
 // CHAPTER SELECTOR
 // =========================================================
 
+const mapPages = (pages: any[] = []) =>
+  pages.map((page) => {
+    const pageId = page._id || page.id;
+    return {
+      id: pageId,
+      pageNumber: page.pageNumber || 0,
+      imageUrl: page.assistantImageUrl || page.imageUrl || '',
+      annotations: (page.annotations || []).map((annotation: any) => {
+        const legacyCategory: Record<string, string> = {
+          CONTENT: 'CONTENT_CORRECTION',
+          SCRIPT: 'SCRIPT_REVISION',
+          DIALOGUE: 'DIALOGUE_ISSUE',
+        };
+        return {
+          id: annotation._id || annotation.id,
+          chapterId: pageId,
+          pageNumber: page.pageNumber || 0,
+          x: annotation.coords?.x || 0,
+          y: annotation.coords?.y || 0,
+          category:
+            legacyCategory[annotation.type] ||
+            annotation.type ||
+            'GENERAL_FEEDBACK',
+          comment: annotation.content || '',
+          authorName: annotation.annotatorId?.name || 'Editor',
+          authorAvatar: '',
+          createdAt: annotation.createdAt || '',
+          resolved: false,
+        };
+      }),
+    };
+  });
+
 interface ChapterSelectorProps {
   chapters: Chapter[];
   selectedId: string;
@@ -142,7 +175,7 @@ export const ManuscriptReviewPage: React.FC = () => {
             status: ch.status || 'DRAFT',
             submittedDate: ch.submittedDate || '',
             lastUpdated: ch.lastUpdated || '',
-            pages: ch.pages || [],
+            pages: mapPages(ch.pages),
             totalPages: ch.totalPages || 0,
             votes: ch.votes || 0,
             reviewNotes: ch.reviewNotes || '',
@@ -167,7 +200,7 @@ export const ManuscriptReviewPage: React.FC = () => {
           status: ch.status || 'DRAFT',
           submittedDate: ch.submittedDate || '',
           lastUpdated: ch.lastUpdated || '',
-          pages: ch.pages || [],
+          pages: mapPages(ch.pages),
           totalPages: ch.totalPages || 0,
           votes: ch.votes || 0,
           reviewNotes: ch.reviewNotes || '',
@@ -203,7 +236,7 @@ export const ManuscriptReviewPage: React.FC = () => {
           status: found.status || 'DRAFT',
           submittedDate: found.submittedDate || '',
           lastUpdated: found.lastUpdated || '',
-          pages: found.pages || [],
+          pages: mapPages(found.pages),
           totalPages: found.totalPages || 0,
           votes: found.votes || 0,
           reviewNotes: found.reviewNotes || '',
@@ -228,7 +261,7 @@ export const ManuscriptReviewPage: React.FC = () => {
   const addAnnotationMutation = useMutation({
     mutationFn: (data: Omit<Annotation, 'id' | 'createdAt' | 'resolved'>) =>
       apiClient.annotations.create(
-        selectedChapterId!,
+        data.chapterId,
         { x: data.x, y: data.y },
         data.comment,
         data.category || 'GENERAL_FEEDBACK',
@@ -259,8 +292,24 @@ export const ManuscriptReviewPage: React.FC = () => {
   });
 
   const approveMutation = useMutation({
-    mutationFn: () =>
-      apiClient.chapters.update(selectedChapterId!, { status: 'SENT_TO_EDITORIAL' as any }),
+    mutationFn: async () => {
+      const tasks = await apiClient.tasks.getAll();
+      const tasksToApprove = tasks.filter((task: any) => {
+        const chapterId = typeof task.chapterId === 'object'
+          ? task.chapterId?._id
+          : task.chapterId;
+        return chapterId === selectedChapterId && task.status === 'MANGAKA_APPROVED';
+      });
+      await Promise.all(
+        tasksToApprove.map((task) =>
+          apiClient.tasks.review(task._id, 'APPROVE', 'Final approval by editor'),
+        ),
+      );
+      return apiClient.chapters.update(
+        selectedChapterId!,
+        { status: 'SENT_TO_EDITORIAL' as any },
+      );
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chapter', selectedChapterId] });
       queryClient.invalidateQueries({ queryKey: ['chapters', seriesId] });
