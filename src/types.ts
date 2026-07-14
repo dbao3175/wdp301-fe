@@ -11,6 +11,10 @@ export interface User {
   role: UserRole;
   avatar?: string;
   token?: string;
+  isActive?: boolean;
+  bankName?: string;
+  accountNumber?: string;
+  cardholder?: string;
 }
 
 export type SeriesStatus = 'PENDING' | 'APPROVED' | 'IN_PRODUCTION' | 'PUBLISHED' | 'REJECTED' | 'CANCELLED';
@@ -137,4 +141,27 @@ export interface Annotation {
 export interface APIConfig {
   baseUrl: string;
   useLiveBackend: boolean;
+}
+
+export interface Notification {
+  _id: string;
+  userId: any;
+  user?: User;
+  title: string;
+  content: string;
+  type: 'INFO' | 'WARNING' | 'ERROR';
+  isRead: boolean;
+  createdAt?: string;
+}
+
+export interface AuditLog {
+  _id: string;
+  userId?: any;
+  user?: User | string;
+  userName?: string;
+  action: string;
+  target: string;
+  timestamp?: string;
+  createdAt?: string;
+  details?: string;
 }
