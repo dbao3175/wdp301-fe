@@ -55,10 +55,11 @@ export default function EditorialBoard({
   const fetchAllProposals = async () => {
     setLoadingProposals(true);
     try {
-      const data = await apiClient.proposals.getAll('SENT_TO_EDITORIAL_BOARD');
-      setProposalsList(data || []);
+      const data = await apiClient.submissions.getAll();
+      console.log('Fetched submissions:', data);
+      setProposalsList((data || []).filter((s: any) => s.proposalId && s.proposalId.status === 'APPROVED_BY_TANTOU'));
     } catch (err) {
-      console.error('Failed to fetch proposals:', err);
+      console.error('Failed to fetch submissions:', err);
     } finally {
       setLoadingProposals(false);
     }
@@ -80,7 +81,7 @@ export default function EditorialBoard({
   }, []);
 
   const pendingPitches = proposalsList.filter(
-    (sub) => sub.status === 'SENT_TO_EDITORIAL_BOARD'
+    (sub) => sub.proposalId && sub.proposalId.status === 'APPROVED_BY_TANTOU'
   );
 
   const totalPages = Math.max(1, Math.ceil(pendingPitches.length / ITEMS_PER_PAGE));
@@ -141,6 +142,7 @@ export default function EditorialBoard({
 
       fetchAllProposals();
       onRefreshAll();
+      closeModal();
     } catch (err: any) {
       setModalMessage(`❌ ${err.message}`);
     } finally {
@@ -205,9 +207,7 @@ export default function EditorialBoard({
       setDirVoteMsg('✅ Vote recorded!');
       onRefreshAll();
       setTimeout(fetchSubmissions, 300);
-      const updated = await apiClient.directives.getAll();
-      const fresh = (Array.isArray(updated) ? updated : []).find(d => d._id === selectedDirective._id);
-      if (fresh) setSelectedDirective(fresh);
+      closeDirectiveModal();
     } catch (err: any) {
       setDirVoteMsg(`❌ ${err.message}`);
     } finally {
@@ -253,6 +253,7 @@ export default function EditorialBoard({
 
           <div className="flex flex-col">
             {paginatedPitches.map((item) => {
+              const prop = item.proposalId || {};
               const totalRequired = item.requiredVoters ? item.requiredVoters.length : 0;
               const votedCount = item.requiredVoters ? item.requiredVoters.filter((v: any) => v.hasVoted).length : 0;
 
@@ -262,14 +263,14 @@ export default function EditorialBoard({
                     <div className="w-full h-full flex items-center justify-center text-neutral-400 text-[9px] font-mono font-bold">NO COVER</div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-syne text-sm font-black uppercase tracking-tight text-ink-black truncate">{item.title}</h3>
+                    <h3 className="font-syne text-sm font-black uppercase tracking-tight text-ink-black truncate">{prop.title || 'Untitled'}</h3>
                     <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
-                      Author: {typeof item.mangakaId === 'object' && item.mangakaId !== null ? (item.mangakaId as any).name : 'Mangaka'}
+                      Author: {prop.mangakaId ? (prop.mangakaId as any).name || 'Mangaka' : 'Mangaka'}
                     </p>
-                    <p className="font-sans text-[10px] text-neutral-400 mt-1 line-clamp-1">{item.synopsis}</p>
+                    <p className="font-sans text-[10px] text-neutral-400 mt-1 line-clamp-1">{prop.synopsis || ''}</p>
                     <div className="flex items-center gap-2 mt-2">
                       <span className="px-2 py-0.5 text-[8px] font-mono font-black uppercase bg-[#FFF3B0] text-ink-black border border-ink-black">
-                        {item.genre}
+                        {prop.genre || 'N/A'}
                       </span>
                     </div>
                   </div>

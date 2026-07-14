@@ -250,7 +250,7 @@ export const DashboardPage: React.FC = () => {
                   className="flex items-center gap-3 p-3 hover:bg-neutral-50 transition-colors"
                 >
                   <span
-                    className={`w-7 h-7 flex items-center justify-center font-syne font-extrabold text-xs border-2 border-ink-black flex-shrink-0 ${
+                    className={`w-7 h-7 flex items-center justify-center font-syne font-extrabold text-xs border-2 border-ink-black shrink-0 ${
                       i === 0
                         ? 'bg-yellow-400 text-ink-black'
                         : i === 1
@@ -263,7 +263,7 @@ export const DashboardPage: React.FC = () => {
                   <img
                     src={series.coverUrl}
                     alt={series.title}
-                    className="w-8 h-10 object-cover border border-neutral-200 flex-shrink-0"
+                    className="w-8 h-10 object-cover border border-neutral-200 shrink-0"
                   />
                   <div className="flex-1 min-w-0">
                     <p className="font-sans font-bold text-xs text-ink-black truncate">{series.title}</p>
@@ -305,7 +305,7 @@ export const DashboardPage: React.FC = () => {
                     <img
                       src={series.coverUrl}
                       alt={series.title}
-                      className="w-8 h-10 object-cover border border-neutral-200 flex-shrink-0"
+                      className="w-8 h-10 object-cover border border-neutral-200 shrink-0"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="font-sans font-bold text-xs text-ink-black truncate">{series.title}</p>

@@ -48,7 +48,7 @@ const SeriesListRow: React.FC<{ series: Series }> = ({ series }) => (
     <img
       src={series.coverUrl}
       alt={series.title}
-      className="w-12 h-16 object-cover border border-neutral-200 flex-shrink-0"
+      className="w-12 h-16 object-cover border border-neutral-200 shrink-0"
     />
     <div className="flex-1 min-w-0">
       <div className="flex items-center gap-2 mb-0.5">
@@ -61,7 +61,7 @@ const SeriesListRow: React.FC<{ series: Series }> = ({ series }) => (
       <p className="font-mono text-[10px] text-neutral-500 mb-2">{series.mangaka.name} · {series.genre}</p>
       <ProgressTimeline currentStage={series.currentStage} completionPercentage={series.completionPercentage} />
     </div>
-    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+    <div className="flex flex-col items-end gap-2 shrink-0">
       <RankingBadge rank={series.currentRanking} previous={series.previousRanking} size="sm" />
       <VoteCounter votes={series.totalVotes} />
       <span className="font-mono text-[9px] text-neutral-400">{series.publishedChapters}/{series.totalChapters} chapters</span>
@@ -215,7 +215,7 @@ export const SeriesManagementPage: React.FC = () => {
                 <span className={`w-6 h-6 flex items-center justify-center text-[10px] font-syne font-extrabold border-2 border-ink-black ${i === 0 ? 'bg-yellow-400' : i === 1 ? 'bg-neutral-300' : 'bg-amber-600 text-white'}`}>
                   {s.currentRanking}
                 </span>
-                <img src={s.coverUrl} alt={s.title} className="w-7 h-9 object-cover border border-neutral-200 flex-shrink-0" />
+                <img src={s.coverUrl} alt={s.title} className="w-7 h-9 object-cover border border-neutral-200 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="font-sans font-bold text-xs text-ink-black truncate">{s.title}</p>
                   <VoteCounter votes={s.totalVotes} label="" />
@@ -234,7 +234,7 @@ export const SeriesManagementPage: React.FC = () => {
           <div className="divide-y divide-neutral-100">
             {mostVoted.map((s) => (
               <Link key={s.id} to={`/editor/series/${s.id}`} className="flex items-center gap-3 p-3 hover:bg-neutral-50 transition-colors">
-                <img src={s.coverUrl} alt={s.title} className="w-7 h-9 object-cover border border-neutral-200 flex-shrink-0" />
+                <img src={s.coverUrl} alt={s.title} className="w-7 h-9 object-cover border border-neutral-200 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="font-sans font-bold text-xs text-ink-black truncate">{s.title}</p>
                   <VoteCounter votes={s.totalVotes} />
@@ -256,7 +256,7 @@ export const SeriesManagementPage: React.FC = () => {
               const growth = s.previousRanking - s.currentRanking;
               return (
                 <Link key={s.id} to={`/editor/series/${s.id}`} className="flex items-center gap-3 p-3 hover:bg-neutral-50 transition-colors">
-                  <img src={s.coverUrl} alt={s.title} className="w-7 h-9 object-cover border border-neutral-200 flex-shrink-0" />
+                  <img src={s.coverUrl} alt={s.title} className="w-7 h-9 object-cover border border-neutral-200 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="font-sans font-bold text-xs text-ink-black truncate">{s.title}</p>
                     <RankingBadge rank={s.currentRanking} previous={s.previousRanking} size="sm" />

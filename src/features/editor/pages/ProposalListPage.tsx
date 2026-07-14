@@ -139,7 +139,7 @@ export const ProposalListPage: React.FC = () => {
           <img
             src={row.mangaka.avatar}
             alt={row.mangaka.name}
-            className="w-7 h-7 border border-neutral-200 flex-shrink-0"
+            className="w-7 h-7 border border-neutral-200 shrink-0"
           />
           <span className="font-sans text-xs text-ink-black font-medium">{row.mangaka.name}</span>
         </div>

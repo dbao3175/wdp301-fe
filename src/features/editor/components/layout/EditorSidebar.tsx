@@ -163,7 +163,7 @@ export const EditorSidebar: React.FC<EditorSidebarProps> = ({ onLogout }) => {
             collapsed ? 'justify-center' : ''
           }`}
         >
-          <Bell className="w-4 h-4 flex-shrink-0" />
+          <Bell className="w-4 h-4 shrink-0" />
           {!collapsed && <span className="font-sans text-xs font-semibold">Notifications</span>}
         </button>
         {onLogout && (
@@ -173,7 +173,7 @@ export const EditorSidebar: React.FC<EditorSidebarProps> = ({ onLogout }) => {
               collapsed ? 'justify-center' : ''
             }`}
           >
-            <LogOut className="w-4 h-4 flex-shrink-0" />
+            <LogOut className="w-4 h-4 shrink-0" />
             {!collapsed && <span className="font-sans text-xs font-semibold">Sign Out</span>}
           </button>
         )}

@@ -11,11 +11,6 @@ import {
   CheckCircle2,
   ChevronRight,
   ChevronLeft,
-  User,
-  Tag,
-  BookOpen,
-  Calendar,
-  Users,
   Send,
   Clock,
   XCircle,
@@ -32,6 +27,7 @@ import {
   StatusBadge,
 } from "../components/common/States.tsx";
 import { Modal, ConfirmDialog } from "../components/common/Modal.tsx";
+import { User } from "@/src/types.ts";
 
 // =========================================================
 // STATUS FLOW DISPLAY
@@ -230,6 +226,10 @@ export const ProposalReviewPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["proposals"] });
       setShowApproveDialog(false);
     },
+    onError: (err: any) => {
+      console.error("Failed to approve proposal:", err);
+      setShowApproveDialog(false);
+    },
   });
 
   const rejectMutation = useMutation({
@@ -239,6 +239,9 @@ export const ProposalReviewPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["proposal", id] });
       queryClient.invalidateQueries({ queryKey: ["proposals"] });
       setShowRejectDialog(false);
+    },
+    onError: (err: any) => {
+      console.error("Failed to reject proposal:", err);
     },
   });
 
@@ -267,7 +270,7 @@ export const ProposalReviewPage: React.FC = () => {
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate("/editor/proposals")}
-          className="flex items-center gap-1.5 px-3 py-2 bg-white border-2 border-ink-black text-xs font-mono font-bold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-50 transition-colors cursor-pointer flex-shrink-0"
+          className="flex items-center gap-1.5 px-3 py-2 bg-white border-2 border-ink-black text-xs font-mono font-bold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-50 transition-colors cursor-pointer shrink-0"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back
         </button>
@@ -311,7 +314,7 @@ export const ProposalReviewPage: React.FC = () => {
             const isDone = currentStatusIdx > idx;
             return (
               <React.Fragment key={status}>
-                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                <div className="flex flex-col items-center gap-1 shrink-0">
                   <div
                     className={`w-4 h-4 border-2 transition-all ${
                       isDone
@@ -499,7 +502,7 @@ export const ProposalReviewPage: React.FC = () => {
               <img
                 src={proposal.mangaka.avatar}
                 alt={proposal.mangaka.name}
-                className="w-12 h-12 border-2 border-ink-black flex-shrink-0"
+                className="w-12 h-12 border-2 border-ink-black shrink-0"
               />
               <div>
                 <p className="font-syne font-extrabold text-sm text-ink-black">
@@ -630,7 +633,7 @@ export const ProposalReviewPage: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <p className="font-sans text-xs text-neutral-700 leading-relaxed break-words">
+                        <p className="font-sans text-xs text-neutral-700 leading-relaxed wrap-break-words">
                           {comment.content}
                         </p>
                         <p className="font-mono text-[9px] text-neutral-400 mt-1">

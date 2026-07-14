@@ -766,21 +766,8 @@ export default function TaskDelegation({
   const handleForward = async (comment: string) => {
     if (!selectedProposal) return;
     try {
-      // 1. Update proposal status to FORWARDED
-      await apiClient.proposals.forward(selectedProposal._id, comment);
-
-      // 2. Create the Series stub (initially PENDING in database)
-      const newSeries = await apiClient.series.create(
-        selectedProposal.title,
-        selectedProposal.synopsis,
-      );
-
-      // 3. Create the Voting Session (SeriesSubmission) on the Board for this Series
-      await apiClient.submissions.create(
-        newSeries._id,
-        "PITCH",
-        "APPROVE_WEEKLY",
-      );
+      // 1. Update proposal status to FORWARDED and create Submission with proposalId
+      await apiClient.proposals.forward(selectedProposal._id,  comment);
 
       const mangakaIdStr =
         typeof selectedProposal.mangakaId === "object" &&

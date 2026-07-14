@@ -568,12 +568,11 @@ export const apiClient = {
       seriesId: string,
       submissionType: "PITCH" | "POST_DECISION" | "CHANGE_EDITOR",
       action: "APPROVE_WEEKLY" | "APPROVE_MONTHLY" | "CANCEL" | "CHANGE_FORMAT",
+      proposalId?: string,
     ): Promise<any> => {
-      return await makeFetchRequest("/api/submissions", "POST", {
-        seriesId,
-        submissionType,
-        action,
-      });
+      const body: any = { seriesId, submissionType, action };
+      if (proposalId) body.proposalId = proposalId;
+      return await makeFetchRequest("/api/submissions", "POST", body);
     },
     getAll: async (): Promise<any[]> => {
       const res = await makeFetchRequest("/api/submissions/all", "GET");
@@ -615,22 +614,26 @@ export const apiClient = {
 
   notifications: {
     getAll: async (userId: string): Promise<any[]> => {
-      return await makeFetchRequest(`/api/notifications/${userId}`, "GET");
+      const res = await makeFetchRequest(`/api/notifications/${userId}`, "GET");
+      return res.data;
     },
     getUnread: async (userId: string): Promise<any[]> => {
-      return await makeFetchRequest(
+      const res = await makeFetchRequest(
         `/api/notifications/${userId}/unread`,
         "GET",
       );
+      return res.data;
     },
     markRead: async (id: string): Promise<any> => {
-      return await makeFetchRequest(`/api/notifications/${id}/read`, "PATCH");
+      const res = await makeFetchRequest(`/api/notifications/${id}/read`, "PATCH");
+      return res.data;
     },
     markAllRead: async (userId: string): Promise<any> => {
-      return await makeFetchRequest(
+      const res = await makeFetchRequest(
         `/api/notifications/${userId}/read-all`,
         "PATCH",
       );
+      return res.data;
     },
     create: async (
       userId: string,
@@ -638,12 +641,13 @@ export const apiClient = {
       content: string,
       type: "INFO" | "WARNING" | "ERROR",
     ): Promise<any> => {
-      return await makeFetchRequest("/api/notifications", "POST", {
+      const res = await makeFetchRequest("/api/notifications", "POST", {
         userId,
         title,
         content,
         type,
       });
+      return res.data;
     },
   },
 
@@ -686,7 +690,7 @@ export const apiClient = {
             `Upload failed with status ${response.status}`,
         );
       }
-      return responseData;
+      return responseData.data;
     },
   },
 

@@ -294,7 +294,7 @@ export const ManuscriptReviewPage: React.FC = () => {
   return (
     <div className="-m-6 h-[calc(100vh-64px)] flex flex-col">
       {/* Top Bar */}
-      <div className="flex items-center gap-3 px-4 py-2.5 bg-white border-b-2 border-ink-black flex-shrink-0">
+      <div className="flex items-center gap-3 px-4 py-2.5 bg-white border-b-2 border-ink-black shrink-0">
         <button
           onClick={() => navigate(`/editor/series/${seriesId}`)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-white border-2 border-ink-black text-[10px] font-mono font-bold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-50 transition-colors cursor-pointer"
@@ -325,7 +325,7 @@ export const ManuscriptReviewPage: React.FC = () => {
       <div className="flex-1 flex overflow-hidden">
 
         {/* Chapter Sidebar */}
-        <div className="w-52 flex-shrink-0 overflow-y-auto border-r-2 border-ink-black">
+        <div className="w-52 shrink-0 overflow-y-auto border-r-2 border-ink-black">
           <ChapterSelector
             chapters={allChapters}
             selectedId={selectedChapterId ?? ''}
@@ -380,7 +380,7 @@ export const ManuscriptReviewPage: React.FC = () => {
         </div>
 
         {/* Comment Sidebar */}
-        <div className="w-72 flex-shrink-0 border-l-2 border-ink-black overflow-hidden">
+        <div className="w-72 shrink-0 border-l-2 border-ink-black overflow-hidden">
           <CommentSidebar
             pages={displayChapter?.pages ?? []}
             selectedAnnotationId={selectedAnnotationId}
