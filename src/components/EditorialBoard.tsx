@@ -181,13 +181,17 @@ export default function EditorialBoard({
     if (!dirForm.seriesId) { setDirMsg('❌ Select a series.'); return; }
     if (!dirForm.reason.trim()) { setDirMsg('❌ Reason is required.'); return; }
     try {
-      await apiClient.directives.create(
+      const action = dirForm.actionType === 'CANCEL'
+        ? 'CANCEL'
+        : dirForm.newSchedule === 'WEEKLY'
+          ? 'APPROVE_WEEKLY'
+          : 'APPROVE_MONTHLY';
+      await apiClient.submissions.create(
         dirForm.seriesId,
-        dirForm.actionType,
-        dirForm.reason,
-        dirForm.actionType === 'CHANGE_FORMAT' ? dirForm.newSchedule : undefined
+        'POST_DECISION',
+        action
       );
-      setDirMsg('✅ Directive proposal created!');
+      setDirMsg('✅ Post-decision submission created!');
       setDirForm({ seriesId: '', actionType: 'CANCEL', newSchedule: 'MONTHLY', reason: '' });
       setShowDirectiveForm(false);
       onRefreshAll();
@@ -329,12 +333,12 @@ export default function EditorialBoard({
 
             {/* Active proposals */}
             <div className="space-y-3 mb-4">
-              {submissionsList.length === 0 && (
+              {submissionsList.filter((d: any) => d.submissionType === 'POST_DECISION').length === 0 && (
                 <div className="bg-manuscript-gray border-2 border-dashed border-neutral-300 p-4 text-center text-xs font-mono font-bold text-neutral-400 uppercase">
-                  No active directives
+                  No active post-decision directives
                 </div>
               )}
-              {submissionsList.map(d => {
+              {submissionsList.filter(d => d.submissionType === 'POST_DECISION').map(d => {
                 const acceptCount = (d.votes || []).filter(v => v.decision === 'ACCEPT').length;
                 const rejectCount = (d.votes || []).filter(v => v.decision === 'REJECT').length;
                 const totalCount = (d.votes || []).length;
@@ -530,50 +534,68 @@ export default function EditorialBoard({
                   </div>
                 )}
 
-                {!userVote ? (
-                  <div className="border-4 border-ink-black p-5 space-y-4">
-                    <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">Cast Your Vote</h3>
-                    {modalMessage && (
-                      <div className={`p-3 border-2 text-xs font-mono font-bold uppercase ${modalMessage.startsWith('🎉') ? 'bg-status-success/15 text-status-success border-status-success' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
-                        {modalMessage}
+                {(() => {
+                  const isAssigned = voterStatus?.voters?.some(
+                    (v: any) => (v.userId?._id || v.userId) === currentUser._id
+                  );
+                  if (!isAssigned && !userVote) {
+                    return (
+                      <div className="bg-neutral-100 border-4 border-dashed border-neutral-400 p-5 text-center">
+                        <p className="font-mono text-xs font-black uppercase text-neutral-500 mb-1">Currently not Assigned</p>
+                        <p className="font-sans text-[10px] text-neutral-400 font-bold">
+                          You are not assigned as a voter for this submission. Assign yourself or wait for assignment.
+                        </p>
                       </div>
-                    )}
-                    <div className="space-y-2">
-                      <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-manuscript-gray text-xs font-bold font-sans uppercase">
-                        <input type="radio" name="modal_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={modalVoteForm.decision === 'ACCEPT'} onChange={() => setModalVoteForm({ ...modalVoteForm, decision: 'ACCEPT' })} />
-                        Accept Serialization
-                      </label>
-                      <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-manuscript-gray text-xs font-bold font-sans uppercase">
-                        <input type="radio" name="modal_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={modalVoteForm.decision === 'REJECT'} onChange={() => setModalVoteForm({ ...modalVoteForm, decision: 'REJECT' })} />
-                        Reject / Revise pitch
-                      </label>
-                    </div>
-                    {modalVoteForm.decision === 'ACCEPT' && (
-                      <div className="animate-fadeIn">
-                        <label className="block text-[10px] font-mono text-neutral-500 uppercase mb-1 font-bold">Preferred Schedule</label>
-                        <select className="bg-white border-2 border-ink-black rounded-none p-2 text-xs w-full focus:outline-none cursor-pointer font-bold" value={modalVoteForm.schedule} onChange={(e) => setModalVoteForm({ ...modalVoteForm, schedule: e.target.value as any })}>
-                          <option value="WEEKLY">WEEKLY</option>
-                          <option value="MONTHLY">MONTHLY</option>
-                        </select>
+                    );
+                  }
+                  if (userVote) {
+                    return (
+                      <div className={`p-4 border-4 ${userVote.decision === 'ACCEPT' ? 'border-status-success bg-status-success/10' : 'border-[#E63946] bg-[#E63946]/10'}`}>
+                        <p className="font-mono text-xs font-black uppercase mb-1">
+                          ✅ You voted: {userVote.decision}
+                          {userVote.schedule && ` (${userVote.schedule})`}
+                        </p>
+                        <p className="font-sans text-[10px] text-neutral-600 font-bold">{userVote.comment}</p>
                       </div>
-                    )}
-                    <div>
-                      <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">Editorial Feedback (Required)</label>
-                      <textarea rows={3} className="w-full bg-manuscript-gray border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder="Provide detailed feedback on the proposal..." value={modalVoteForm.comment} onChange={(e) => setModalVoteForm({ ...modalVoteForm, comment: e.target.value })}></textarea>
+                    );
+                  }
+                  return (
+                    <div className="border-4 border-ink-black p-5 space-y-4">
+                      <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">Cast Your Vote</h3>
+                      {modalMessage && (
+                        <div className={`p-3 border-2 text-xs font-mono font-bold uppercase ${modalMessage.startsWith('🎉') ? 'bg-status-success/15 text-status-success border-status-success' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
+                          {modalMessage}
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-manuscript-gray text-xs font-bold font-sans uppercase">
+                          <input type="radio" name="modal_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={modalVoteForm.decision === 'ACCEPT'} onChange={() => setModalVoteForm({ ...modalVoteForm, decision: 'ACCEPT' })} />
+                          Accept Serialization
+                        </label>
+                        <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-manuscript-gray text-xs font-bold font-sans uppercase">
+                          <input type="radio" name="modal_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={modalVoteForm.decision === 'REJECT'} onChange={() => setModalVoteForm({ ...modalVoteForm, decision: 'REJECT' })} />
+                          Reject / Revise pitch
+                        </label>
+                      </div>
+                      {modalVoteForm.decision === 'ACCEPT' && (
+                        <div className="animate-fadeIn">
+                          <label className="block text-[10px] font-mono text-neutral-500 uppercase mb-1 font-bold">Preferred Schedule</label>
+                          <select className="bg-white border-2 border-ink-black rounded-none p-2 text-xs w-full focus:outline-none cursor-pointer font-bold" value={modalVoteForm.schedule} onChange={(e) => setModalVoteForm({ ...modalVoteForm, schedule: e.target.value as any })}>
+                            <option value="WEEKLY">WEEKLY</option>
+                            <option value="MONTHLY">MONTHLY</option>
+                          </select>
+                        </div>
+                      )}
+                      <div>
+                        <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">Editorial Feedback (Required)</label>
+                        <textarea rows={3} className="w-full bg-manuscript-gray border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder="Provide detailed feedback on the proposal..." value={modalVoteForm.comment} onChange={(e) => setModalVoteForm({ ...modalVoteForm, comment: e.target.value })}></textarea>
+                      </div>
+                      <button onClick={handleModalVoteSubmit} disabled={modalSubmitting} className="w-full bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs font-extrabold uppercase py-3 border-2 border-ink-black shadow-[4px_4px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer disabled:opacity-50">
+                        {modalSubmitting ? 'Submitting...' : 'Submit Vote'}
+                      </button>
                     </div>
-                    <button onClick={handleModalVoteSubmit} disabled={modalSubmitting} className="w-full bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs font-extrabold uppercase py-3 border-2 border-ink-black shadow-[4px_4px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer disabled:opacity-50">
-                      {modalSubmitting ? 'Submitting...' : 'Submit Vote'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className={`p-4 border-4 ${userVote.decision === 'ACCEPT' ? 'border-status-success bg-status-success/10' : 'border-[#E63946] bg-[#E63946]/10'}`}>
-                    <p className="font-mono text-xs font-black uppercase mb-1">
-                      ✅ You voted: {userVote.decision}
-                      {userVote.schedule && ` (${userVote.schedule})`}
-                    </p>
-                    <p className="font-sans text-[10px] text-neutral-600 font-bold">{userVote.comment}</p>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
           </div>
