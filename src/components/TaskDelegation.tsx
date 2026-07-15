@@ -195,7 +195,7 @@ function MangakaView({
           </h2>
         </div>
         <p className="text-[11px] text-slate-500 leading-relaxed">
-          Submit your series concept and optional storyboard archive to the
+          Submit your series concept and required storyboard archive to the
           Tantou Editor for review.
         </p>
       </div>
@@ -766,9 +766,10 @@ export default function TaskDelegation({
   const handleForward = async (comment: string) => {
     if (!selectedProposal) return;
     try {
-      // 1. Update proposal status to FORWARDED and create Submission with proposalId
-      await apiClient.proposals.forward(selectedProposal._id,  comment);
+      // 1. Update proposal status to FORWARDED
+      await apiClient.proposals.forward(selectedProposal._id, comment);
 
+      // The backend creates one idempotent voting submission.
       const mangakaIdStr =
         typeof selectedProposal.mangakaId === "object" &&
         selectedProposal.mangakaId !== null

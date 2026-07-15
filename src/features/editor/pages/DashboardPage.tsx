@@ -206,7 +206,7 @@ export const DashboardPage: React.FC = () => {
                 <p className="font-mono text-xs text-neutral-400 text-center py-4">No pending proposals</p>
               ) : (
                 allPendingProposals.map((proposal: Proposal) => (
-                  <div key={proposal.id} className="flex items-center justify-between p-3 bg-amber-50 border border-amber-300">
+                  <div key={(proposal as any)._id || proposal.id} className="flex items-center justify-between p-3 bg-amber-50 border border-amber-300">
                     <div>
                       <p className="font-sans font-bold text-xs text-ink-black">{proposal.title}</p>
                       <p className="font-mono text-[9px] text-neutral-500">
@@ -214,7 +214,7 @@ export const DashboardPage: React.FC = () => {
                       </p>
                     </div>
                     <Link
-                      to={`/editor/proposals/${proposal.id}`}
+                      to={`/editor/proposals/${(proposal as any)._id || proposal.id}`}
                       className="text-[9px] font-mono font-extrabold text-[#E63946] uppercase hover:underline flex items-center gap-0.5"
                     >
                       Review <ArrowRight className="w-3 h-3" />

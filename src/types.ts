@@ -17,7 +17,7 @@ export interface User {
   cardholder?: string;
 }
 
-export type SeriesStatus = 'PENDING' | 'APPROVED' | 'IN_PRODUCTION' | 'PUBLISHED' | 'REJECTED' | 'CANCELLED';
+export type SeriesStatus = 'PENDING' | 'APPROVED' | 'ACTIVE' | 'ON_HIATUS' | 'IN_PRODUCTION' | 'PUBLISHED' | 'COMPLETED' | 'REJECTED' | 'CANCELLED';
 export type PubSchedule = 'WEEKLY' | 'MONTHLY';
 
 export interface Series {
@@ -34,7 +34,7 @@ export interface Series {
   createdAt?: string;
 }
 
-export type ChapterStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ARCHIVED';
+export type ChapterStatus = 'IN_PROGRESS' | 'SUBMITTED' | 'UNDER_REVIEW' | 'REVISION_REQUESTED' | 'APPROVED' | 'SENT_TO_EDITORIAL' | 'COMPLETED' | 'PUBLISHED' | 'ARCHIVED';
 
 export interface Chapter {
   _id: string;

@@ -83,10 +83,12 @@ export default function App() {
   // Load and refresh core DB models from unified client
   const refreshAllModelCaches = async () => {
     try {
-      const liveSeries = await apiClient.series.getAll();
-      const liveChapters = await apiClient.chapters.getAll();
-      const liveTasks = await apiClient.tasks.getAll();
-      const liveRatings = await apiClient.ratings.getAll();
+      const [liveSeries, liveChapters, liveTasks, liveRatings] = await Promise.all([
+        apiClient.series.getAll().catch(() => []),
+        apiClient.chapters.getAll().catch(() => []),
+        apiClient.tasks.getAll().catch(() => []),
+        apiClient.ratings.getAll().catch(() => []),
+      ]);
 
       setSeriesList(liveSeries);
       setTaskList(liveTasks);

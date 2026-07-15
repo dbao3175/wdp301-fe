@@ -338,13 +338,15 @@ export const apiClient = {
       region?: any,
       description?: string,
       pageIds?: string[],
+      sourceImageUrl?: string,
     ): Promise<Task> => {
       const res = await makeFetchRequest("/api/tasks", "POST", {
         seriesId,
         chapterId,
         assignedTo,
         title,
-        region,
+        regions: region ? [region] : [],
+        sourceImageUrl,
         description,
         pageIds,
       });
@@ -438,10 +440,8 @@ export const apiClient = {
       comment: string,
       schedule?: string,
     ): Promise<Vote> => {
-      const currentUser = getStoredUser();
       const res = await makeFetchRequest("/api/votes", "POST", {
         submissionId,
-        voterId: currentUser?._id,
         decision,
         comment,
         schedule,

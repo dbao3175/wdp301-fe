@@ -56,10 +56,18 @@ export default function EditorialBoard({
     setLoadingProposals(true);
     try {
       const data = await apiClient.submissions.getAll();
-      console.log('Fetched submissions:', data);
-      setProposalsList((data || []).filter((s: any) => s.proposalId && s.proposalId.status === 'APPROVED_BY_TANTOU'));
+      const pitches = (Array.isArray(data) ? data : [])
+        .filter((submission) => submission.submissionType === 'PITCH' && submission.proposalId)
+        .map((submission) => ({
+          ...submission.proposalId,
+          _id: submission._id,
+          proposalRecordId: submission.proposalId._id,
+          decisionStatus: submission.decisionStatus || 'PENDING',
+          requiredVoters: submission.requiredVoters || [],
+        }));
+      setProposalsList(pitches);
     } catch (err) {
-      console.error('Failed to fetch submissions:', err);
+      console.error('Failed to fetch pitch submissions:', err);
     } finally {
       setLoadingProposals(false);
     }
@@ -81,7 +89,7 @@ export default function EditorialBoard({
   }, []);
 
   const pendingPitches = proposalsList.filter(
-    (sub) => sub.proposalId && sub.proposalId.status === 'APPROVED_BY_TANTOU'
+    (sub) => sub.decisionStatus === 'PENDING'
   );
 
   const totalPages = Math.max(1, Math.ceil(pendingPitches.length / ITEMS_PER_PAGE));
@@ -100,7 +108,7 @@ export default function EditorialBoard({
       setModalVotes(Array.isArray(votes) ? votes : (votes as any)?.data || []);
 
       const statusRes = await apiClient.submissions.getVotingStatus(prop._id);
-      setVoterStatus(statusRes?.data || null);
+      setVoterStatus(statusRes || null);
     } catch (err) {
       console.error('Failed to open proposal details:', err);
       setModalVotes([]);
@@ -138,7 +146,7 @@ export default function EditorialBoard({
       setModalVotes(Array.isArray(votes) ? votes : (votes as any)?.data || []);
 
       const statusRes = await apiClient.submissions.getVotingStatus(selectedProposal._id);
-      setVoterStatus(statusRes?.data || null);
+      setVoterStatus(statusRes || null);
 
       fetchAllProposals();
       onRefreshAll();
@@ -155,7 +163,7 @@ export default function EditorialBoard({
     try {
       await apiClient.submissions.assignVoters(selectedProposal._id, selectedVoterIds);
       const statusRes = await apiClient.submissions.getVotingStatus(selectedProposal._id);
-      setVoterStatus(statusRes?.data || null);
+      setVoterStatus(statusRes || null);
       setSelectedVoterIds([]);
       setModalMessage('🎉 Voters assigned successfully!');
       fetchAllProposals();
@@ -165,12 +173,17 @@ export default function EditorialBoard({
   };
 
   const userVote = selectedProposal
-    ? modalVotes.find(v => v.voterId === currentUser._id)
+    ? modalVotes.find((vote) => {
+        const voterId = typeof vote.voterId === 'object'
+          ? (vote.voterId as any)?._id
+          : vote.voterId;
+        return voterId === currentUser._id;
+      })
     : null;
 
   const fetchSubmissions = async () => {
     try {
-      const data = await apiClient.submissions.getAll();
+      const data = await apiClient.directives.getAll();
       setSubmissionsList(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch submissions:', err);
