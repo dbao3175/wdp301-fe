@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Eye, Search, Filter, SortAsc, SortDesc, RefreshCw } from 'lucide-react';
+import { Eye, Download, Search, Filter, SortAsc, SortDesc, RefreshCw } from 'lucide-react';
 import { apiClient } from '../../../api/client.ts';
 import type { Proposal, ProposalStatus } from '../types/index.ts';
 import { SearchInput, FilterDropdown, DataTable } from '../components/common/DataTable.tsx';
@@ -172,13 +172,24 @@ export const ProposalListPage: React.FC = () => {
       key: 'actions',
       header: 'Actions',
       render: (row) => (
-        <Link
-          to={`/editor/proposals/${row.id}`}
-          className="inline-flex items-center gap-1 px-3 py-1.5 bg-ink-black text-white text-[9px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-neutral-800 transition-colors shadow-[2px_2px_0px_#141414] cursor-pointer"
-        >
-          <Eye className="w-3 h-3" />
-          Review
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to={`/editor/proposals/${row.id}`}
+            className="inline-flex items-center gap-1 px-3 py-1.5 bg-ink-black text-white text-[9px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-neutral-800 transition-colors shadow-[2px_2px_0px_#141414] cursor-pointer"
+          >
+            <Eye className="w-3 h-3" />
+            Review
+          </Link>
+          <a
+            href={`/api/series/proposal/${row.id}/storyboard`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#E63946] text-white text-[9px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-red-600 transition-colors shadow-[2px_2px_0px_#141414] cursor-pointer"
+          >
+            <Download className="w-3 h-3" />
+            Download
+          </a>
+        </div>
       ),
     },
   ];

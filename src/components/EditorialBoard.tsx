@@ -64,6 +64,7 @@ export default function EditorialBoard({
           proposalRecordId: submission.proposalId._id,
           decisionStatus: submission.decisionStatus || 'PENDING',
           requiredVoters: submission.requiredVoters || [],
+          seriesId: submission.seriesId || null,
         }));
       setProposalsList(pitches);
     } catch (err) {
@@ -364,6 +365,19 @@ export default function EditorialBoard({
                         </span>
                         <span className="font-syne text-xs font-black text-ink-black truncate">{d.seriesTitle || d.seriesId}</span>
                       </div>
+                      {d.seriesId && (
+                        <a
+                          href={`/editor/series/${typeof d.seriesId === 'object' ? d.seriesId._id : d.seriesId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 inline-flex items-center gap-1 px-2 py-1 bg-ink-black text-white text-[8px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-neutral-800 transition-colors shadow-[1px_1px_0px_#E63946] cursor-pointer"
+                        >
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                          </svg>
+                          Series
+                        </a>
+                      )}
                     </div>
                     <p className="font-sans text-[10px] text-neutral-500 line-clamp-2 mb-2">{d.reason}</p>
                     <div className="flex items-center gap-3 mb-2">
@@ -469,8 +483,38 @@ export default function EditorialBoard({
                 </div>
 
                 <div className="bg-manuscript-gray p-4 border-2 border-ink-black">
-                  <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">Author Pitch Synopsis:</span>
-                  <p className="font-sans text-xs leading-relaxed font-bold text-ink-black">{selectedProposal.synopsis}</p>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">Author Pitch Synopsis:</span>
+                      <p className="font-sans text-xs leading-relaxed font-bold text-ink-black">{selectedProposal.synopsis}</p>
+                    </div>
+                    <div className="shrink-0 flex flex-col gap-2">
+                      {selectedProposal.seriesId && (
+                        <a
+                          href={`/editor/series/${selectedProposal.seriesId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 bg-ink-black text-white text-[9px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-neutral-800 transition-colors shadow-[2px_2px_0px_#E63946] cursor-pointer"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                          </svg>
+                          View Series
+                        </a>
+                      )}
+                      <a
+                        href={`/api/series/proposal/${selectedProposal.proposalRecordId}/storyboard`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#E63946] text-white text-[9px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-red-600 transition-colors shadow-[2px_2px_0px_#141414] cursor-pointer"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Download Storyboard
+                      </a>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Voter Assignment Section */}
