@@ -433,6 +433,8 @@ export default function EditorialBoard({
                 const acceptCount = (d.votes || []).filter(v => v.decision === 'ACCEPT').length;
                 const rejectCount = (d.votes || []).filter(v => v.decision === 'REJECT').length;
                 const totalCount = (d.votes || []).length;
+                const seriesIdObj = d.seriesId as any;
+                const targetSeriesId = seriesIdObj && typeof seriesIdObj === 'object' ? seriesIdObj._id : seriesIdObj;
                 return (
                   <div key={d._id} className="border-2 border-ink-black p-3 bg-manuscript-gray hover:bg-white transition-colors">
                     <div className="flex items-start justify-between gap-2 mb-2">
@@ -446,11 +448,11 @@ export default function EditorialBoard({
                         <span className="inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 border border-ink-black bg-white">
                           {d.status.replaceAll('_', ' ')}
                         </span>
-                        <span className="font-syne text-xs font-black text-ink-black truncate">{d.seriesTitle || d.seriesId}</span>
+                        <span className="font-syne text-xs font-black text-ink-black truncate">{d.seriesTitle || targetSeriesId}</span>
                       </div>
                       {d.seriesId && (
                         <a
-                          href={`/editor/series/${typeof d.seriesId === 'object' ? d.seriesId._id : d.seriesId}`}
+                          href={`/editor/series/${targetSeriesId}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="shrink-0 inline-flex items-center gap-1 px-2 py-1 bg-ink-black text-white text-[8px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-neutral-800 transition-colors shadow-[1px_1px_0px_#E63946] cursor-pointer"
