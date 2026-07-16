@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { User, Series, Rating, Vote, Directive, DirectiveAction } from '../types';
 import { apiClient } from '../api/client';
 import { CheckSquare, X, Gavel, Plus } from 'lucide-react';
+import BoardPublicationPanel from '../features/board/BoardPublicationPanel';
+import ReaderMetricsPanel from '../features/board/ReaderMetricsPanel';
 
 interface EditorialBoardProps {
   currentUser: User;
@@ -36,7 +38,9 @@ export default function EditorialBoard({
   const [modalMessage, setModalMessage] = useState('');
   const [modalSubmitting, setModalSubmitting] = useState(false);
 
-  const [submissionsList, setSubmissionsList] = useState<any[]>([]);
+  const [submissionsList, setSubmissionsList] = useState<Directive[]>([]);
+  const [loadingDirectives, setLoadingDirectives] = useState(false);
+  const [directiveError, setDirectiveError] = useState('');
   const [showDirectiveForm, setShowDirectiveForm] = useState(false);
   const [dirForm, setDirForm] = useState<{
     seriesId: string;
@@ -65,6 +69,8 @@ export default function EditorialBoard({
           decisionStatus: submission.decisionStatus || 'PENDING',
           requiredVoters: submission.requiredVoters || [],
           seriesId: submission.seriesId || null,
+          chairpersonId: submission.chairpersonId || null,
+          tiedDecisions: submission.tiedDecisions || [],
         }));
       setProposalsList(pitches);
     } catch (err) {
@@ -90,7 +96,7 @@ export default function EditorialBoard({
   }, []);
 
   const pendingPitches = proposalsList.filter(
-    (sub) => sub.decisionStatus === 'PENDING'
+    (sub) => ['PENDING', 'TIE_BREAK_REQUIRED'].includes(sub.decisionStatus),
   );
 
   const totalPages = Math.max(1, Math.ceil(pendingPitches.length / ITEMS_PER_PAGE));
@@ -134,13 +140,32 @@ export default function EditorialBoard({
     }
     setModalSubmitting(true);
     try {
-      const scheduleParam = modalVoteForm.decision === 'ACCEPT' ? modalVoteForm.schedule : undefined;
-      await apiClient.votes.submit(
-        selectedProposal._id,
-        modalVoteForm.decision,
-        modalVoteForm.comment,
-        scheduleParam
-      );
+      const isTieBreak = selectedProposal.decisionStatus === 'TIE_BREAK_REQUIRED';
+      const chairId = typeof selectedProposal.chairpersonId === 'object'
+        ? selectedProposal.chairpersonId?._id
+        : selectedProposal.chairpersonId;
+      const tiedDecisions = selectedProposal.tiedDecisions || [];
+      if (isTieBreak && chairId !== currentUser._id) {
+        throw new Error('Only the assigned chairperson can resolve this tie.');
+      }
+      if (isTieBreak && !tiedDecisions.includes(modalVoteForm.decision)) {
+        throw new Error('Choose one of the tied proposal decisions.');
+      }
+      if (isTieBreak) {
+        await apiClient.votes.tieBreak(
+          selectedProposal._id,
+          modalVoteForm.decision,
+          modalVoteForm.comment.trim(),
+        );
+      } else {
+        const scheduleParam = modalVoteForm.decision === 'ACCEPT' ? modalVoteForm.schedule : undefined;
+        await apiClient.votes.submit(
+          selectedProposal._id,
+          modalVoteForm.decision,
+          modalVoteForm.comment.trim(),
+          scheduleParam,
+        );
+      }
       setModalMessage('🎉 Vote recorded successfully!');
       
       const votes = await apiClient.votes.getForSubmission(selectedProposal._id);
@@ -181,13 +206,25 @@ export default function EditorialBoard({
         return voterId === currentUser._id;
       })
     : null;
+  const isProposalTieBreak = selectedProposal?.decisionStatus === 'TIE_BREAK_REQUIRED';
+  const proposalChairId = typeof selectedProposal?.chairpersonId === 'object'
+    ? selectedProposal.chairpersonId?._id
+    : selectedProposal?.chairpersonId;
+  const canResolveProposalTie = isProposalTieBreak && proposalChairId === currentUser._id;
+  const proposalVoteOptions: Array<'ACCEPT' | 'REJECT'> = isProposalTieBreak
+    ? selectedProposal?.tiedDecisions || []
+    : ['ACCEPT', 'REJECT'];
 
   const fetchSubmissions = async () => {
+    setLoadingDirectives(true);
+    setDirectiveError('');
     try {
       const data = await apiClient.directives.getAll();
       setSubmissionsList(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to fetch submissions:', err);
+    } catch (err: any) {
+      setDirectiveError(err.message || 'Failed to load board directives.');
+    } finally {
+      setLoadingDirectives(false);
     }
   };
 
@@ -195,15 +232,11 @@ export default function EditorialBoard({
     if (!dirForm.seriesId) { setDirMsg('❌ Select a series.'); return; }
     if (!dirForm.reason.trim()) { setDirMsg('❌ Reason is required.'); return; }
     try {
-      const action = dirForm.actionType === 'CANCEL'
-        ? 'CANCEL'
-        : dirForm.newSchedule === 'WEEKLY'
-          ? 'APPROVE_WEEKLY'
-          : 'APPROVE_MONTHLY';
-      await apiClient.submissions.create(
+      await apiClient.directives.create(
         dirForm.seriesId,
-        'POST_DECISION',
-        action
+        dirForm.actionType,
+        dirForm.reason.trim(),
+        dirForm.actionType === 'CHANGE_FORMAT' ? dirForm.newSchedule : undefined,
       );
       setDirMsg('✅ Post-decision submission created!');
       setDirForm({ seriesId: '', actionType: 'CANCEL', newSchedule: 'MONTHLY', reason: '' });
@@ -221,7 +254,11 @@ export default function EditorialBoard({
     if (!dirVoteForm.comment.trim()) { setDirVoteMsg('❌ Comment required.'); return; }
     setDirVoteSubmitting(true);
     try {
-      await apiClient.directives.vote(selectedDirective._id, dirVoteForm.decision, dirVoteForm.comment);
+      const isTieBreak = selectedDirective.status === 'TIE_BREAK_REQUIRED';
+      const submit = isTieBreak
+        ? apiClient.directives.tieBreak
+        : apiClient.directives.vote;
+      await submit(selectedDirective._id, dirVoteForm.decision, dirVoteForm.comment.trim());
       setDirVoteMsg('✅ Vote recorded!');
       onRefreshAll();
       setTimeout(fetchSubmissions, 300);
@@ -245,6 +282,18 @@ export default function EditorialBoard({
     setDirVoteSubmitting(false);
   };
 
+  const currentDirectiveVote = selectedDirective?.votes?.find((vote) => {
+    const voterId = typeof vote.voterId === 'object'
+      ? (vote.voterId as any)?._id
+      : vote.voterId;
+    return voterId === currentUser._id;
+  });
+  const directiveChairId = typeof selectedDirective?.chairpersonId === 'object'
+    ? selectedDirective.chairpersonId?._id
+    : selectedDirective?.chairpersonId;
+  const canResolveDirectiveTie =
+    selectedDirective?.status === 'TIE_BREAK_REQUIRED' && directiveChairId === currentUser._id;
+
   return (
     <div className="space-y-6">
       <header className="mb-8 pb-5 border-b-4 border-ink-black flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -256,6 +305,21 @@ export default function EditorialBoard({
           </p>
         </div>
       </header>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,3fr)_minmax(320px,2fr)] gap-6 items-start">
+        <BoardPublicationPanel
+          currentUser={currentUser}
+          boardMembers={boardMembers}
+          onChanged={() => {
+            onRefreshAll();
+          }}
+        />
+        <ReaderMetricsPanel
+          series={activeSeries}
+          ratings={ratings}
+          onChanged={onRefreshAll}
+        />
+      </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
         <section className="xl:col-span-8 flex flex-col gap-6">
@@ -271,7 +335,7 @@ export default function EditorialBoard({
 
           <div className="flex flex-col">
             {paginatedPitches.map((item) => {
-              const prop = item.proposalId || {};
+              const prop = item;
               const totalRequired = item.requiredVoters ? item.requiredVoters.length : 0;
               const votedCount = item.requiredVoters ? item.requiredVoters.filter((v: any) => v.hasVoted).length : 0;
 
@@ -290,6 +354,11 @@ export default function EditorialBoard({
                       <span className="px-2 py-0.5 text-[8px] font-mono font-black uppercase bg-[#FFF3B0] text-ink-black border border-ink-black">
                         {prop.genre || 'N/A'}
                       </span>
+                      {item.decisionStatus === 'TIE_BREAK_REQUIRED' && (
+                        <span className="px-2 py-0.5 text-[8px] font-mono font-black uppercase bg-[#E63946] text-white border border-ink-black">
+                          Tie-break required
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="shrink-0-0 text-center px-4 py-2 border-2 border-ink-black bg-manuscript-gray min-w-[100px]">
@@ -336,7 +405,7 @@ export default function EditorialBoard({
               Board Directive Proposals
             </h2>
             <p className="font-sans text-[10px] text-neutral-500 font-bold uppercase tracking-wider mb-4">
-              Propose to cancel low-ranking series or change publication format. Majority vote required.
+              Propose to continue, cancel, or change a series format. Majority vote required.
             </p>
 
             {dirMsg && (
@@ -347,12 +416,20 @@ export default function EditorialBoard({
 
             {/* Active proposals */}
             <div className="space-y-3 mb-4">
-              {submissionsList.filter((d: any) => d.submissionType === 'POST_DECISION').length === 0 && (
+              {loadingDirectives && (
+                <div className="bg-manuscript-gray border-2 border-neutral-300 p-4 text-center text-xs font-mono font-bold text-neutral-500 uppercase">
+                  Loading directives...
+                </div>
+              )}
+              {directiveError && (
+                <div className="bg-[#E63946]/10 border-2 border-[#E63946] p-3 text-xs font-mono font-bold text-[#E63946]">{directiveError}</div>
+              )}
+              {!loadingDirectives && submissionsList.length === 0 && (
                 <div className="bg-manuscript-gray border-2 border-dashed border-neutral-300 p-4 text-center text-xs font-mono font-bold text-neutral-400 uppercase">
                   No active post-decision directives
                 </div>
               )}
-              {submissionsList.filter(d => d.submissionType === 'POST_DECISION').map(d => {
+              {submissionsList.map(d => {
                 const acceptCount = (d.votes || []).filter(v => v.decision === 'ACCEPT').length;
                 const rejectCount = (d.votes || []).filter(v => v.decision === 'REJECT').length;
                 const totalCount = (d.votes || []).length;
@@ -360,8 +437,14 @@ export default function EditorialBoard({
                   <div key={d._id} className="border-2 border-ink-black p-3 bg-manuscript-gray hover:bg-white transition-colors">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex-1 min-w-0">
-                        <span className={`inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 ${d.actionType === 'CANCEL' ? 'bg-[#E63946] text-white' : 'bg-[#FFF3B0] text-ink-black border border-ink-black'}`}>
+                        {d.actionType === 'CONTINUE' && (
+                          <span className="inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 bg-status-success/15 text-green-800 border border-status-success">CONTINUE SERIES</span>
+                        )}
+                        <span className={`inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 ${d.actionType === 'CONTINUE' ? 'hidden' : d.actionType === 'CANCEL' ? 'bg-[#E63946] text-white' : 'bg-[#FFF3B0] text-ink-black border border-ink-black'}`}>
                           {d.actionType === 'CANCEL' ? 'CANCEL SERIES' : `CHANGE → ${d.newSchedule || 'MONTHLY'}`}
+                        </span>
+                        <span className="inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 border border-ink-black bg-white">
+                          {d.status.replaceAll('_', ' ')}
                         </span>
                         <span className="font-syne text-xs font-black text-ink-black truncate">{d.seriesTitle || d.seriesId}</span>
                       </div>
@@ -423,6 +506,7 @@ export default function EditorialBoard({
                   <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">Action Type</label>
                   <select value={dirForm.actionType} onChange={(e) => setDirForm({ ...dirForm, actionType: e.target.value as DirectiveAction })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none cursor-pointer">
                     <option value="CANCEL">Cancel Series (low ranking)</option>
+                    <option value="CONTINUE">Continue Series</option>
                     <option value="CHANGE_FORMAT">Change Publication Format</option>
                   </select>
                 </div>
@@ -518,6 +602,7 @@ export default function EditorialBoard({
                 </div>
 
                 {/* Voter Assignment Section */}
+                {!isProposalTieBreak && (
                 <div className="bg-manuscript-gray p-4 border-2 border-ink-black space-y-3">
                   <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1">Assign Required Voters:</span>
                   
@@ -567,6 +652,7 @@ export default function EditorialBoard({
                   </div>
                   <p className="text-[8px] text-neutral-400 font-sans leading-none mt-1">Hold Ctrl/Cmd to select multiple members.</p>
                 </div>
+                )}
 
                 {modalVotes.length > 0 && (
                   <div>
@@ -595,7 +681,17 @@ export default function EditorialBoard({
                   const isAssigned = voterStatus?.voters?.some(
                     (v: any) => (v.userId?._id || v.userId) === currentUser._id
                   );
-                  if (!isAssigned && !userVote) {
+                  if (isProposalTieBreak && !canResolveProposalTie) {
+                    return (
+                      <div className="bg-[#FFF3B0]/40 border-4 border-[#FFF3B0] p-5 text-center">
+                        <p className="font-mono text-xs font-black uppercase text-ink-black mb-1">Tie-break pending</p>
+                        <p className="font-sans text-[10px] text-neutral-600 font-bold">
+                          Only the assigned chairperson can choose between the tied decisions.
+                        </p>
+                      </div>
+                    );
+                  }
+                  if (!isProposalTieBreak && !isAssigned && !userVote) {
                     return (
                       <div className="bg-neutral-100 border-4 border-dashed border-neutral-400 p-5 text-center">
                         <p className="font-mono text-xs font-black uppercase text-neutral-500 mb-1">Currently not Assigned</p>
@@ -605,7 +701,7 @@ export default function EditorialBoard({
                       </div>
                     );
                   }
-                  if (userVote) {
+                  if (!isProposalTieBreak && userVote) {
                     return (
                       <div className={`p-4 border-4 ${userVote.decision === 'ACCEPT' ? 'border-status-success bg-status-success/10' : 'border-[#E63946] bg-[#E63946]/10'}`}>
                         <p className="font-mono text-xs font-black uppercase mb-1">
@@ -618,23 +714,29 @@ export default function EditorialBoard({
                   }
                   return (
                     <div className="border-4 border-ink-black p-5 space-y-4">
-                      <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">Cast Your Vote</h3>
+                      <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">
+                        {isProposalTieBreak ? 'Chairperson Tie-break' : 'Cast Your Vote'}
+                      </h3>
                       {modalMessage && (
                         <div className={`p-3 border-2 text-xs font-mono font-bold uppercase ${modalMessage.startsWith('🎉') ? 'bg-status-success/15 text-status-success border-status-success' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
                           {modalMessage}
                         </div>
                       )}
                       <div className="space-y-2">
-                        <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-manuscript-gray text-xs font-bold font-sans uppercase">
-                          <input type="radio" name="modal_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={modalVoteForm.decision === 'ACCEPT'} onChange={() => setModalVoteForm({ ...modalVoteForm, decision: 'ACCEPT' })} />
-                          Accept Serialization
-                        </label>
-                        <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-manuscript-gray text-xs font-bold font-sans uppercase">
-                          <input type="radio" name="modal_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={modalVoteForm.decision === 'REJECT'} onChange={() => setModalVoteForm({ ...modalVoteForm, decision: 'REJECT' })} />
-                          Reject / Revise pitch
-                        </label>
+                        {proposalVoteOptions.map((option) => (
+                          <label key={option} className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-manuscript-gray text-xs font-bold font-sans uppercase">
+                            <input
+                              type="radio"
+                              name="modal_decision"
+                              className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer"
+                              checked={modalVoteForm.decision === option}
+                              onChange={() => setModalVoteForm({ ...modalVoteForm, decision: option })}
+                            />
+                            {option === 'ACCEPT' ? 'Accept Serialization' : 'Reject / Revise pitch'}
+                          </label>
+                        ))}
                       </div>
-                      {modalVoteForm.decision === 'ACCEPT' && (
+                      {!isProposalTieBreak && modalVoteForm.decision === 'ACCEPT' && (
                         <div className="animate-fadeIn">
                           <label className="block text-[10px] font-mono text-neutral-500 uppercase mb-1 font-bold">Preferred Schedule</label>
                           <select className="bg-white border-2 border-ink-black rounded-none p-2 text-xs w-full focus:outline-none cursor-pointer font-bold" value={modalVoteForm.schedule} onChange={(e) => setModalVoteForm({ ...modalVoteForm, schedule: e.target.value as any })}>
@@ -648,7 +750,7 @@ export default function EditorialBoard({
                         <textarea rows={3} className="w-full bg-manuscript-gray border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder="Provide detailed feedback on the proposal..." value={modalVoteForm.comment} onChange={(e) => setModalVoteForm({ ...modalVoteForm, comment: e.target.value })}></textarea>
                       </div>
                       <button onClick={handleModalVoteSubmit} disabled={modalSubmitting} className="w-full bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs font-extrabold uppercase py-3 border-2 border-ink-black shadow-[4px_4px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer disabled:opacity-50">
-                        {modalSubmitting ? 'Submitting...' : 'Submit Vote'}
+                        {modalSubmitting ? 'Submitting...' : isProposalTieBreak ? 'Resolve Tie' : 'Submit Vote'}
                       </button>
                     </div>
                   );
@@ -667,8 +769,14 @@ export default function EditorialBoard({
             <div className="sticky top-0 bg-white border-b-4 border-ink-black p-5 flex items-start justify-between z-10">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`px-2 py-0.5 text-[9px] font-mono font-black uppercase ${selectedDirective.actionType === 'CANCEL' ? 'bg-[#E63946] text-white' : 'bg-[#FFF3B0] text-ink-black border border-ink-black'}`}>
+                  {selectedDirective.actionType === 'CONTINUE' && (
+                    <span className="px-2 py-0.5 text-[9px] font-mono font-black uppercase bg-status-success/15 text-green-800 border border-status-success">CONTINUE SERIES</span>
+                  )}
+                  <span className={`px-2 py-0.5 text-[9px] font-mono font-black uppercase ${selectedDirective.actionType === 'CONTINUE' ? 'hidden' : selectedDirective.actionType === 'CANCEL' ? 'bg-[#E63946] text-white' : 'bg-[#FFF3B0] text-ink-black border border-ink-black'}`}>
                     {selectedDirective.actionType === 'CANCEL' ? 'CANCEL SERIES' : `CHANGE → ${selectedDirective.newSchedule || 'MONTHLY'}`}
+                  </span>
+                  <span className="px-2 py-0.5 text-[9px] font-mono font-black uppercase border border-ink-black bg-white">
+                    {selectedDirective.status.replaceAll('_', ' ')}
                   </span>
                 </div>
                 <h2 className="font-syne text-lg font-black uppercase tracking-tight text-ink-black">{selectedDirective.seriesTitle || selectedDirective.seriesId}</h2>
@@ -724,9 +832,9 @@ export default function EditorialBoard({
               )}
 
               {/* Cast vote form */}
-              {selectedDirective.status === 'PENDING' && !(selectedDirective.votes || []).some(v => v.voterId === currentUser._id) ? (
+              {(selectedDirective.status === 'PENDING' && !currentDirectiveVote) || canResolveDirectiveTie ? (
                 <div className="border-4 border-ink-black p-5 space-y-4">
-                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">Cast Your Vote</h3>
+                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">{canResolveDirectiveTie ? 'Chairperson Tie-break' : 'Cast Your Vote'}</h3>
                   {dirVoteMsg && (
                     <div className={`p-3 border-2 text-xs font-mono font-bold uppercase ${dirVoteMsg.startsWith('✅') ? 'bg-status-success/15 text-status-success border-status-success' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
                       {dirVoteMsg}
@@ -747,17 +855,17 @@ export default function EditorialBoard({
                     <textarea rows={3} className="w-full bg-manuscript-gray border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder="Explain your vote..." value={dirVoteForm.comment} onChange={(e) => setDirVoteForm({ ...dirVoteForm, comment: e.target.value })}></textarea>
                   </div>
                   <button onClick={handleSubmissionVoteSubmit} disabled={dirVoteSubmitting} className="w-full bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs font-extrabold uppercase py-3 border-2 border-ink-black shadow-[4px_4px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer disabled:opacity-50">
-                    {dirVoteSubmitting ? 'Submitting...' : 'Submit Vote'}
+                    {dirVoteSubmitting ? 'Submitting...' : canResolveDirectiveTie ? 'Resolve Tie' : 'Submit Vote'}
                   </button>
                 </div>
               ) : (
-                <div className={`p-4 border-4 ${(selectedDirective.votes || []).find(v => v.voterId === currentUser._id)?.decision === 'ACCEPT' ? 'border-status-success bg-status-success/10' : (selectedDirective.votes || []).find(v => v.voterId === currentUser._id) ? 'border-[#E63946] bg-[#E63946]/10' : 'border-neutral-300 bg-neutral-50'}`}>
-                  {(selectedDirective.votes || []).find(v => v.voterId === currentUser._id) ? (
+                <div className={`p-4 border-4 ${currentDirectiveVote?.decision === 'ACCEPT' ? 'border-status-success bg-status-success/10' : currentDirectiveVote ? 'border-[#E63946] bg-[#E63946]/10' : 'border-neutral-300 bg-neutral-50'}`}>
+                  {currentDirectiveVote ? (
                     <div>
                       <p className="font-mono text-xs font-black uppercase mb-1">
-                        ✅ You voted: {(selectedDirective.votes || []).find(v => v.voterId === currentUser._id)?.decision}
+                        ✅ You voted: {currentDirectiveVote.decision}
                       </p>
-                      <p className="font-sans text-[10px] text-neutral-600 font-bold">{(selectedDirective.votes || []).find(v => v.voterId === currentUser._id)?.comment}</p>
+                      <p className="font-sans text-[10px] text-neutral-600 font-bold">{currentDirectiveVote.comment}</p>
                     </div>
                   ) : (
                     <p className="font-mono text-xs font-black uppercase text-neutral-400">

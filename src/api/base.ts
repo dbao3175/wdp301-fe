@@ -85,7 +85,9 @@ export async function makeFetchRequest(
   }
 
   if (!response.ok) {
-    throw new Error(responseData.message || `Request failed with status ${response.status}`);
+    const error = new Error(responseData.message || `Request failed with status ${response.status}`);
+    (error as Error & { response?: unknown }).response = responseData;
+    throw error;
   }
   return responseData;
 }

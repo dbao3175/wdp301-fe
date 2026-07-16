@@ -27,6 +27,7 @@
 import React, { useState, useEffect } from "react";
 import { User, Series, Rating } from "../types";
 import { apiClient } from "../api/client";
+import { canonicalMetricPeriod } from "../features/board/metricPeriod";
 import {
   BarChart3,
   TrendingUp,
@@ -347,15 +348,7 @@ function TrendIcon({
 // RankRow — renders differently based on derived view
 // ─────────────────────────────────────────────────────────────────────────────
 
-function RankRow({
-  entry,
-  view,
-  onVoteChange,
-}: {
-  entry: RankEntry;
-  view: DerivedView;
-  onVoteChange: (id: string, val: number) => void;
-}) {
+function RankRow({ entry }: { entry: RankEntry }) {
   const tier = getTier(entry.rank);
   const isHigh = tier === "high";
   const isLow = tier === "low";
@@ -419,28 +412,14 @@ function RankRow({
 
       {/* ── VOTES ──
            MANGAKA  → read-only number (no input)
-           BOARD    → editable input that triggers live re-sort
+           BOTH     → read-only ranking values
       */}
       <div className="w-28 shrink-0 text-right">
-        {view === "board" ? (
-          <input
-            type="number"
-            value={entry.votes}
-            min={0}
-            onChange={(e) => {
-              // ← API: PUT /api/rankings/scores  Body: { id: entry.id, votes: val }
-              onVoteChange(entry.id, Number(e.target.value));
-            }}
-            className="w-24 bg-[#121214] border border-[#2d2d34] rounded-md px-2 py-1 text-[11px] text-white font-mono text-right focus:outline-none focus:border-slate-500 transition-colors"
-          />
-        ) : (
-          // MANGAKA: strictly read-only, no input element rendered
-          <span
-            className={`text-[12px] font-bold font-mono ${isHigh ? "text-white" : "text-slate-400"}`}
-          >
-            {entry.votes.toLocaleString()}
-          </span>
-        )}
+        <span
+          className={`text-[12px] font-bold font-mono ${isHigh ? "text-white" : "text-slate-400"}`}
+        >
+          {entry.votes.toLocaleString()}
+        </span>
       </div>
 
       {/* ── Trend ── */}
@@ -478,7 +457,7 @@ export default function LeaderboardAnalytics({
 }: LeaderboardAnalyticsProps) {
   // ── Derive view from role — NO toggle button exposed to the user ──────────
   //   MANGAKA      → 'mangaka'  (read-only)
-  //   BOARD_MEMBER → 'board'    (full admin)
+  //   BOARD_MEMBER → 'board'    (metrics and rankings view)
   const view: DerivedView =
     currentUser.role === "BOARD_MEMBER" ? "board" : "mangaka";
 
@@ -542,7 +521,6 @@ export default function LeaderboardAnalytics({
   }, [period]);
 
   const entries = period === "weekly" ? weeklyData : monthlyData;
-  const setEntries = period === "weekly" ? setWeeklyData : setMonthlyData;
 
   // ── Access guard — only BOARD_MEMBER and MANGAKA can reach this tab ───────
   if (currentUser.role !== "BOARD_MEMBER" && currentUser.role !== "MANGAKA") {
@@ -579,65 +557,8 @@ export default function LeaderboardAnalytics({
   const lowCount = entries.filter((e) => getTier(e.rank) === "low").length;
   const axedCount = entries.filter((e) => e.directive === "axed").length;
 
-  // ── Handler: edit votes and re-sort live (BOARD_MEMBER only) ─────────────
-  const handleVoteChange = async (id: string, val: number) => {
-    // ← API: PUT /api/rankings/scores  Body: { entries: [{ id, votes: val }] }
-    try {
-      const updated = await apiClient.rankings.updateScores([
-        { id, votes: val },
-      ]);
-      const data = Array.isArray(updated)
-        ? updated
-        : (updated as any)?.data || [];
 
-      const mapped: RankEntry[] = data.map((item: any) => ({
-        id: item.id,
-        rank: item.rank,
-        prevRank: item.prevRank || item.rank,
-        title: item.title || "Unknown",
-        author: item.author || "Unknown",
-        genre: item.genre || "",
-        votes: item.votes || 0,
-        trend: item.trend === "flat" ? "stable" : item.trend || "stable",
-        directive:
-          item.directive === null ? "active" : item.directive || "active",
-      }));
-
-      setEntries(mapped);
-    } catch (err: any) {
-      console.error("Failed to update scores:", err);
-    }
-  };
-
-  // ── Handler: board directive (BOARD_MEMBER only) ──────────────────────────
-  const handleDirective = async (id: string, action: "axed" | "digital") => {
-    // ← API: POST /api/rankings/directive  Body: { id, action, cycle }
-    try {
-      const updated = await apiClient.rankings.applyDirective(
-        id,
-        action,
-        cycle,
-      );
-      const item = (updated as any)?.data || updated;
-
-      setEntries((prev) =>
-        prev.map((e) =>
-          e.id === id
-            ? {
-                ...e,
-                directive: item.directive || action,
-                votes: item.votes || e.votes,
-                rank: item.rank || e.rank,
-                prevRank: item.prevRank || e.prevRank,
-                trend: item.trend === "flat" ? "stable" : item.trend || e.trend,
-              }
-            : e,
-        ),
-      );
-    } catch (err: any) {
-      console.error("Failed to apply directive:", err);
-    }
-  };
+  // Series decisions are created and voted on from the Editorial Board page.
 
   // ── Handler: refresh from API ─────────────────────────────────────────────
   const handleRefresh = async () => {
@@ -653,11 +574,17 @@ export default function LeaderboardAnalytics({
     }
     setIngestSubmitting(true);
     try {
-      await apiClient.ratings.submit(
-        ingestSeriesId,
-        ingestVoteCount,
-        ingestSource,
-      );
+      const metricCycle = period === 'weekly' ? 'WEEKLY' : 'MONTHLY';
+      const metricPeriod = canonicalMetricPeriod(metricCycle);
+      await apiClient.ratings.submit({
+        seriesId: ingestSeriesId,
+        voteCount: ingestVoteCount,
+        ratingScore: 0,
+        readerCount: 0,
+        cycle: metricCycle,
+        ...metricPeriod,
+        sourceFrom: ingestSource,
+      });
       setIngestMsg("🚀 Ratings data ingested! Rankings updated.");
 
       // Recalculate rankings: aggregate all ratings per series and re-sort
@@ -823,11 +750,17 @@ export default function LeaderboardAnalytics({
           continue;
         }
 
-        await apiClient.ratings.submit(
-          resolvedSeriesId,
-          record.votes,
-          record.source,
-        );
+        const metricCycle = period === 'weekly' ? 'WEEKLY' : 'MONTHLY';
+        const metricPeriod = canonicalMetricPeriod(metricCycle);
+        await apiClient.ratings.submit({
+          seriesId: resolvedSeriesId,
+          voteCount: record.votes,
+          ratingScore: 0,
+          readerCount: 0,
+          cycle: metricCycle,
+          ...metricPeriod,
+          sourceFrom: record.source,
+        });
         successCount++;
       }
 
@@ -840,8 +773,7 @@ export default function LeaderboardAnalytics({
     }
   };
 
-  // ── Column header — directive column only rendered in board view ──────────
-  const showDirectiveCol = view === "board";
+  // ── Ranking table ────────────────────────────────────────────────────────
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -1060,17 +992,11 @@ export default function LeaderboardAnalytics({
               Series / Author
             </div>
             <div className="w-28 shrink-0 text-[8px] font-bold text-slate-600 uppercase tracking-widest text-right">
-              {view === "board" ? "Edit Votes ↑↓" : "Votes"}
+              Votes
             </div>
             <div className="w-12 shrink-0 text-[8px] font-bold text-slate-600 uppercase tracking-widest text-center">
               Trend
             </div>
-            {/* Directive column header — only in board view */}
-            {showDirectiveCol && (
-              <div className="w-40 shrink-0 text-[8px] font-bold text-slate-600 uppercase tracking-widest text-right">
-                Directive
-              </div>
-            )}
           </div>
         )}
 
@@ -1080,8 +1006,6 @@ export default function LeaderboardAnalytics({
             <RankRow
               key={entry.id}
               entry={entry}
-              view={view}
-              onVoteChange={handleVoteChange}
             />
           ))}
         </div>

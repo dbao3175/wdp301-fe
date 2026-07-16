@@ -82,12 +82,76 @@ export interface Task {
 
 export interface Rating {
   _id: string;
-  seriesId: string;
+  seriesId: string | Series;
   series?: string; // MongoDB ref option
   voteCount: number;
-  source: string;
-  submittedBy: string; // user ID who submitted
+  ratingScore?: number;
+  readerCount?: number;
+  revenue?: number | null;
+  cycle?: PubSchedule;
+  periodStart?: string;
+  periodEnd?: string;
+  sourceFrom?: string;
+  /** @deprecated Kept for compatibility with legacy rating records. */
+  source?: string;
+  submittedBy: string | User; // user ID who submitted
   createdAt?: string;
+}
+
+export interface ReaderMetricInput {
+  seriesId: string;
+  voteCount: number;
+  ratingScore: number;
+  readerCount: number;
+  revenue?: number;
+  cycle: PubSchedule;
+  periodStart: string;
+  periodEnd: string;
+  sourceFrom: string;
+}
+
+export type PublicationDecision = 'PUBLISH' | 'REJECT' | 'RESCHEDULE';
+
+export interface PublicationVote {
+  _id: string;
+  voterId: string | User;
+  decision: PublicationDecision;
+  comment?: string;
+  createdAt?: string;
+}
+
+export interface BoardPublication {
+  chapter: Chapter;
+  tasks?: Task[];
+  pages?: Array<{
+    _id?: string;
+    pageNumber?: number;
+    status?: string;
+    imageUrl?: string;
+    assistantImageUrl?: string;
+  }>;
+  session?: {
+    _id: string;
+    decisionStatus?: string;
+    finalDecision?: PublicationDecision | null;
+    newSchedule?: PubSchedule | null;
+    chairpersonId?: string | User | null;
+    requiredVoters?: Array<{
+      userId: string | User;
+      hasVoted?: boolean;
+    }>;
+    tiedDecisions?: PublicationDecision[];
+    reason?: string;
+    createdAt?: string;
+  } | null;
+  votes: PublicationVote[];
+  tally?: {
+    PUBLISH?: number;
+    REJECT?: number;
+    RESCHEDULE?: number;
+    total?: number;
+    required?: number;
+  };
 }
 
 export interface Vote {
@@ -100,12 +164,12 @@ export interface Vote {
   createdAt?: string;
 }
 
-export type DirectiveAction = 'CANCEL' | 'CHANGE_FORMAT';
-export type DirectiveStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type DirectiveAction = 'CONTINUE' | 'CANCEL' | 'CHANGE_FORMAT';
+export type DirectiveStatus = 'PENDING' | 'TIE_BREAK_REQUIRED' | 'APPROVED' | 'REJECTED';
 
 export interface DirectiveVote {
   _id: string;
-  voterId: string;
+  voterId: string | User;
   voterName?: string;
   decision: 'ACCEPT' | 'REJECT';
   comment?: string;
@@ -123,6 +187,8 @@ export interface Directive {
   proposedBy: string;
   proposedByName?: string;
   votes: DirectiveVote[];
+  chairpersonId?: string | User | null;
+  tiedDecisions?: Array<'ACCEPT' | 'REJECT'>;
   createdAt?: string;
 }
 

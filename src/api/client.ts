@@ -4,6 +4,9 @@ import {
   Chapter,
   Task,
   Rating,
+  ReaderMetricInput,
+  BoardPublication,
+  PublicationDecision,
   Vote,
   Directive,
   DirectiveAction,
@@ -385,18 +388,77 @@ export const apiClient = {
       return res.data;
     },
 
-    submit: async (
-      seriesId: string,
-      voteCount: number,
-      source: string,
-    ): Promise<Rating> => {
-      const user = getStoredUser();
-      const res = await makeFetchRequest("/api/ratings", "POST", {
-        seriesId,
-        voteCount,
-        source,
-        submittedBy: user?._id,
+    submit: async (entry: ReaderMetricInput): Promise<Rating> => {
+      const res = await makeFetchRequest("/api/ratings", "POST", entry);
+      return res.data;
+    },
+
+    import: async (entries: ReaderMetricInput[]): Promise<{
+      data: Rating[];
+      summary: { total: number; imported: number; failed: number };
+      errors: Array<{ index: number; message: string }>;
+    }> => {
+      const res = await makeFetchRequest("/api/ratings/import", "POST", {
+        entries,
       });
+      return {
+        data: Array.isArray(res.data) ? res.data : [],
+        summary: res.summary || {
+          total: entries.length,
+          imported: Array.isArray(res.data) ? res.data.length : 0,
+          failed: 0,
+        },
+        errors: Array.isArray(res.errors) ? res.errors : [],
+      };
+    },
+  },
+
+  // EDITORIAL BOARD CHAPTER PUBLICATION REVIEW
+  boardPublications: {
+    getAll: async (): Promise<BoardPublication[]> => {
+      const res = await makeFetchRequest("/api/board/publications", "GET");
+      return res.data;
+    },
+
+    open: async (
+      chapterId: string,
+      options: {
+        newSchedule?: "WEEKLY" | "MONTHLY";
+        voterIds?: string[];
+        chairpersonId?: string;
+      },
+    ): Promise<BoardPublication> => {
+      const res = await makeFetchRequest(
+        `/api/board/publications/${chapterId}/open`,
+        "POST",
+        options,
+      );
+      return res.data;
+    },
+
+    vote: async (
+      sessionId: string,
+      decision: PublicationDecision,
+      comment: string,
+    ): Promise<BoardPublication> => {
+      const res = await makeFetchRequest(
+        `/api/board/publications/${sessionId}/vote`,
+        "POST",
+        { decision, comment },
+      );
+      return res.data;
+    },
+
+    tieBreak: async (
+      sessionId: string,
+      decision: PublicationDecision,
+      comment: string,
+    ): Promise<BoardPublication> => {
+      const res = await makeFetchRequest(
+        `/api/board/publications/${sessionId}/tie-break`,
+        "POST",
+        { decision, comment },
+      );
       return res.data;
     },
   },
@@ -409,27 +471,6 @@ export const apiClient = {
       return res.data || [];
     },
 
-    updateScores: async (
-      entries: { id: string; votes: number }[],
-    ): Promise<any[]> => {
-      const res = await makeFetchRequest("/api/rankings/scores", "PUT", {
-        entries,
-      });
-      return res.data || [];
-    },
-
-    applyDirective: async (
-      id: string,
-      action: "axed" | "digital",
-      cycle: string,
-    ): Promise<any> => {
-      const res = await makeFetchRequest("/api/rankings/directive", "POST", {
-        id,
-        action,
-        cycle,
-      });
-      return res.data;
-    },
   },
 
   // BOARD VOTING ON SERIES PROPOSALS
@@ -453,6 +494,19 @@ export const apiClient = {
       const res = await makeFetchRequest(
         `/api/votes/submission/${submissionId}`,
         "GET",
+      );
+      return res.data;
+    },
+
+    tieBreak: async (
+      submissionId: string,
+      decision: "ACCEPT" | "REJECT",
+      comment: string,
+    ): Promise<any> => {
+      const res = await makeFetchRequest(
+        `/api/votes/submission/${submissionId}/tie-break`,
+        "POST",
+        { decision, comment },
       );
       return res.data;
     },
@@ -487,6 +541,19 @@ export const apiClient = {
     ): Promise<Directive> => {
       const res = await makeFetchRequest(
         `/api/directives/${directiveId}/vote`,
+        "POST",
+        { decision, comment },
+      );
+      return res.data;
+    },
+
+    tieBreak: async (
+      directiveId: string,
+      decision: "ACCEPT" | "REJECT",
+      comment: string,
+    ): Promise<Directive> => {
+      const res = await makeFetchRequest(
+        `/api/directives/${directiveId}/tie-break`,
         "POST",
         { decision, comment },
       );
