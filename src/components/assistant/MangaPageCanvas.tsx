@@ -4,6 +4,7 @@
 
 import React from 'react';
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { apiClient } from '../../api/client';
 
 interface MangaPageCanvasProps {
   zoom: number;
@@ -31,10 +32,11 @@ export default function MangaPageCanvas({
   region,
 }: MangaPageCanvasProps) {
   // If the imageUrl is a relative uploads path, point it to the backend port
+  const cleanPath = imageUrl && imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
   const fullImageUrl = imageUrl 
     ? (imageUrl.startsWith('http') || imageUrl.startsWith('blob:') || imageUrl.startsWith('data:') 
         ? imageUrl 
-        : `http://localhost:5000/${imageUrl}`)
+        : `${apiClient.getConfig().baseUrl}/${cleanPath}`)
     : undefined;
 
   return (

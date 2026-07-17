@@ -24,6 +24,8 @@ export interface AssistantTask {
   earnings?: number;
   submittedAt?: string;
   approvedAt?: string;
+  imageUrl?: string;
+  pages?: any[];
   region?: {
     x: number;
     y: number;
@@ -38,6 +40,7 @@ export type AIToolId = 'sam' | 'yolo';
 export interface AIToolConfig {
   id: AIToolId;
   name: string;
+  badge?: string;
   description: string;
   color: string;
   borderColor: string;

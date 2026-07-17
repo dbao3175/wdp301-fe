@@ -124,8 +124,13 @@ export default function App() {
 
       if (liveChaptersList.length > 0) {
         const currentSid = currentActiveSeries?._id;
+        const getSeriesId = (c: any) => {
+          if (!c) return undefined;
+          if (typeof c.seriesId === "object" && c.seriesId !== null) return c.seriesId._id;
+          return c.seriesId;
+        };
         const validChaptersForSeries = liveChaptersList.filter(
-          (c) => c.seriesId === currentSid || c.series === currentSid,
+          (c) => getSeriesId(c) === currentSid || c.series === currentSid,
         );
         const chapterExists =
           activeChapter &&
@@ -138,13 +143,14 @@ export default function App() {
           !chapterExists ||
           !chapterValid ||
           (activeChapter &&
-            activeChapter.seriesId !== currentSid &&
+            getSeriesId(activeChapter) !== currentSid &&
             activeChapter.series !== currentSid)
         ) {
           if (validChaptersForSeries.length > 0) {
             setActiveChapter(validChaptersForSeries[0]);
           } else {
-            setActiveChapter(liveChaptersList[0]);
+            // No chapters for this series — do NOT pick a chapter from another series
+            setActiveChapter(null);
           }
         }
       } else {
@@ -160,7 +166,7 @@ export default function App() {
 
   // Sync cache on authorization and configuration changes
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && currentUser.role !== "ASSISTANT") {
       refreshAllModelCaches();
     }
   }, [currentUser]);

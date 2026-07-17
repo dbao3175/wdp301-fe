@@ -342,6 +342,7 @@ export const apiClient = {
       description?: string,
       pageIds?: string[],
       sourceImageUrl?: string,
+      dueAt?: string,
     ): Promise<Task> => {
       const res = await makeFetchRequest("/api/tasks", "POST", {
         seriesId,
@@ -352,15 +353,16 @@ export const apiClient = {
         sourceImageUrl,
         description,
         pageIds,
+        dueAt,
       });
       return res.data;
     },
 
-    submit: async (taskId: string): Promise<Task> => {
+    submit: async (taskId: string, assistantImageUrl?: string): Promise<Task> => {
       const res = await makeFetchRequest(
         `/api/assistant/tasks/${taskId}/submit`,
         "PUT",
-        {},
+        { assistantImageUrl },
       );
       return res.data;
     },
@@ -706,7 +708,6 @@ export const apiClient = {
         `/api/notifications/${userId}/read-all`,
         "PATCH",
       );
-      return res.data;
       return res.data;
     },
     create: async (

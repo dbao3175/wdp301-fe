@@ -413,6 +413,11 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
   const [cType,         setCType]         = useState('Background');
   const [cAssistant,    setCAssistant]    = useState('');
   const [cInstructions, setCInstructions] = useState('');
+  const [cDueAt,        setCDueAt]        = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    return d.toISOString().split('T')[0];
+  });
   const [deployToast,   setDeployToast]   = useState<string | null>(null);
 
   const [assistantsList, setAssistantsList] = useState<any[]>([]);
@@ -484,7 +489,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
 
   useEffect(() => {
     fetchWorkspaceData();
-  }, []);
+  }, [activeSeries?._id, activeChapter?._id]);
 
   useEffect(() => {
     if (activeTask && activeTask.rawTask?.regions && activeTask.rawTask.regions.length > 0) {
@@ -623,8 +628,8 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
       let sourceImageUrl = "";
       if (sketchFile) {
         const fileRes = await apiClient.files.upload(sketchFile, activeChapter._id);
-        fileId = fileRes.data._id;
-        sourceImageUrl = fileRes.data.fileUrl;
+        fileId = fileRes._id || fileRes.data?._id || "";
+        sourceImageUrl = fileRes.fileUrl || fileRes.data?.fileUrl || "";
       }
 
       setDeployToast("Đang tạo và phân công nhiệm vụ...");
@@ -653,6 +658,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
         description,
         undefined,
         sourceImageUrl,
+        cDueAt ? new Date(cDueAt).toISOString() : undefined,
       );
 
       setDeployToast(`"${cTitle.trim()}" đã được phân công thành công!`);
@@ -804,13 +810,28 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 >
                   <DrawableCanvas
                     sketchSrc={(() => {
+                      const pages = activeTask?.rawTask?.pageIds || [];
+                      const firstPage = Array.isArray(pages) && pages.length > 0 ? pages[0] : null;
+
+                      if (viewMode === 'submission') {
+                        if (firstPage?.assistantImageUrl) {
+                          const url = firstPage.assistantImageUrl;
+                          return url.startsWith('http') ? url : `${apiClient.getConfig().baseUrl}/${url.startsWith('/') ? url.slice(1) : url}`;
+                        }
+                      }
+
+                      if (firstPage?.imageUrl) {
+                        const url = firstPage.imageUrl;
+                        return url.startsWith('http') ? url : `${apiClient.getConfig().baseUrl}/${url.startsWith('/') ? url.slice(1) : url}`;
+                      }
+
                       if (!activeTask?.rawTask?.description || !activeTask.rawTask.description.startsWith('[IMAGE_URL:')) return null;
                       const match = activeTask.rawTask.description.match(/^\[IMAGE_URL:([^\]]+)\]/);
                       if (!match) return null;
                       const rawUrl = match[1];
                       return rawUrl.startsWith('http') ? rawUrl : `${apiClient.getConfig().baseUrl}/${rawUrl.startsWith('/') ? rawUrl.slice(1) : rawUrl}`;
                     })()}
-                    boxes={reviewBoxes}
+                    boxes={viewMode === 'submission' ? [] : reviewBoxes}
                     activeBoxId={activeBoxId}
                     onBoxCreated={b => {
                       const nb: BBox = { ...b, id: `rb_${Date.now()}`, comment: '' };
@@ -985,38 +1006,22 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
 
                 {/* Approve */}
                 <div className="px-4 py-3 border-b border-[#2d2d34] shrink-0">
-                  {currentUser.role === 'MANGAKA' ? (
-                    <>
-                      <button
-                        onClick={handleApprove}
-                        disabled={activeTask.status !== 'PENDING_REVIEW'}
-                        className="w-full py-2.5 rounded-md bg-white hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-black transition-all cursor-pointer flex items-center justify-center gap-2"
-                      >
-                        <Check className="w-4 h-4" /> Approve (Vòng 1)
-                      </button>
-                      {activeTask.status === 'MANGAKA_APPROVED' && (
-                        <p className="text-[9px] text-green-400 text-center mt-1.5">Bạn đã duyệt (Vòng 1). Chờ Editor duyệt cuối.</p>
-                      )}
-                      {activeTask.status === 'APPROVED' && (
-                        <p className="text-[9px] text-slate-500 text-center mt-1.5">Task đã hoàn tất</p>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={handleApprove}
-                        disabled={activeTask.status !== 'MANGAKA_APPROVED'}
-                        className="w-full py-2.5 rounded-md bg-white hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-black transition-all cursor-pointer flex items-center justify-center gap-2"
-                      >
-                        <Check className="w-4 h-4" /> Final Approve (Vòng 2)
-                      </button>
-                      {activeTask.status === 'PENDING_REVIEW' && (
-                        <p className="text-[9px] text-amber-500 text-center mt-1.5">Chờ Mangaka duyệt trước (Vòng 1)</p>
-                      )}
-                      {activeTask.status === 'APPROVED' && (
-                        <p className="text-[9px] text-slate-500 text-center mt-1.5">Task đã hoàn tất</p>
-                      )}
-                    </>
+                  <button
+                    onClick={handleApprove}
+                    disabled={
+                      activeTask.status === 'APPROVED' ||
+                      activeTask.status === 'MANGAKA_APPROVED' ||
+                      (activeTask.status !== 'PENDING_REVIEW' && activeTask.rawTask?.status !== 'SUBMITTED')
+                    }
+                    className="w-full py-2.5 rounded-md bg-white hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-black transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Check className="w-4 h-4" /> Approve Task
+                  </button>
+                  {(activeTask.status === 'MANGAKA_APPROVED' || activeTask.status === 'APPROVED' || activeTask.rawTask?.status === 'MANGAKA_APPROVED') && (
+                    <p className="text-[9px] text-green-400 text-center mt-1.5 font-bold uppercase tracking-wide">✓ Mangaka Approved — Task đã hoàn tất</p>
+                  )}
+                  {activeTask.status === 'REVISING' && (
+                    <p className="text-[9px] text-amber-400 text-center mt-1.5">Đã yêu cầu Assistant chỉnh sửa lại</p>
                   )}
                 </div>
 
@@ -1108,6 +1113,18 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                       </button>
                     ))}
                   </div>
+                </div>
+                {/* Task Deadline */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                    Task Deadline
+                  </label>
+                  <input
+                    type="date"
+                    value={cDueAt}
+                    onChange={e => setCDueAt(e.target.value)}
+                    className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2 text-xs text-white focus:outline-none focus:border-slate-500 transition-colors cursor-pointer"
+                  />
                 </div>
 
                 {/* Assign To */}

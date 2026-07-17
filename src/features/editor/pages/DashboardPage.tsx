@@ -60,7 +60,11 @@ export const DashboardPage: React.FC = () => {
     ...(underReviewProposals || []),
     ...(revisionRequestedProposals || []),
     ...(resubmittedProposals || []),
-  ].slice(0, 3); // Show top 3
+  ].map((p: any) => ({
+    ...p,
+    id: p._id || p.id || '',
+    mangaka: p.mangakaId || p.mangaka || { name: p.mangakaName || 'Unknown' }
+  })).slice(0, 3); // Show top 3
 
   if (isLoading) return <LoadingState message="Loading dashboard..." />;
   if (error) return <ErrorState onRetry={refetch} />;
@@ -185,8 +189,8 @@ export const DashboardPage: React.FC = () => {
               <Clock className="w-4 h-4 text-neutral-400" />
             </div>
             <div className="divide-y divide-neutral-100">
-              {(deadlines ?? []).map((dl: any) => (
-                <div key={dl.id} className="p-3">
+              {(deadlines ?? []).map((dl: any, idx: number) => (
+                <div key={dl.id || `dl-${idx}`} className="p-3">
                   <DeadlineCard deadline={dl} />
                 </div>
               ))}

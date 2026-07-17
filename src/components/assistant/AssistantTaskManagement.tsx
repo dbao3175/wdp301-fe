@@ -39,7 +39,9 @@ function urgencyMeta(urgency: AssistantTask['urgency']) {
 function formatDeadline(iso: string) {
   const d = new Date(iso);
   const now = new Date();
-  const diffDays = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const dZero = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const nowZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((dZero.getTime() - nowZero.getTime()) / (1000 * 60 * 60 * 24));
   if (diffDays < 0) return { label: 'Overdue', color: 'text-red-400' };
   if (diffDays === 0) return { label: 'Today', color: 'text-red-400' };
   if (diffDays === 1) return { label: '1 day left', color: 'text-amber-400' };

@@ -49,7 +49,7 @@ export default function Navigation({
     try {
       await apiClient.notifications.markRead(id);
       setNotifications((prev) =>
-        prev.map((n) => (n._id === id ? { ...n, read: true } : n)),
+        prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)),
       );
     } catch (err) {
       console.error("Error marking notification as read:", err);
@@ -60,7 +60,7 @@ export default function Navigation({
     if (!currentUser?._id) return;
     try {
       await apiClient.notifications.markAllRead(currentUser._id);
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     } catch (err) {
       console.error("Error marking all notifications as read:", err);
     }

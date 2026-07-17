@@ -68,10 +68,25 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
     }, 1800);
   };
 
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+
+  const handleFileUpload = async (file: File) => {
+    try {
+      setSubmitToast(`Uploading ${file.name}...`);
+      const chapterId = typeof task.chapter === 'string' ? task.chapter : undefined;
+      const res = await apiClient.files.upload(file, chapterId || '');
+      const url = res.fileUrl || res.data?.fileUrl || '';
+      setUploadedImageUrl(url);
+      setSubmitToast(`Uploaded: ${file.name}`);
+    } catch (err: any) {
+      setSubmitToast(`Upload failed: ${err.message}`);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!task) return;
     try {
-      await apiClient.tasks.submit(task._id);
+      await apiClient.tasks.submit(task._id, uploadedImageUrl || undefined);
       setSubmitToast(`Task "${task.title}" submitted for review`);
       setTimeout(() => setSubmitToast(null), 2500);
       if (onRefresh) onRefresh();
@@ -85,7 +100,18 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
     e.preventDefault();
     setDropHover(false);
     const f = e.dataTransfer.files?.[0];
-    if (f) setSubmitToast(`Uploaded: ${f.name}`);
+    if (f) handleFileUpload(f);
+  };
+  const handleDownloadImage = () => {
+    if (!task.imageUrl) {
+      setSubmitToast('Không tìm thấy ảnh bản thảo để tải về');
+      return;
+    }
+    const cleanPath = task.imageUrl.startsWith('/') ? task.imageUrl.slice(1) : task.imageUrl;
+    const fullUrl = task.imageUrl.startsWith('http')
+      ? task.imageUrl
+      : `${apiClient.getConfig().baseUrl}/${cleanPath}`;
+    window.open(fullUrl, '_blank');
   };
 
   return (
@@ -139,9 +165,9 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
               <div className="mt-3">
                 <div className="flex justify-between text-[9px] text-slate-600 mb-1">
                   <span>Progress</span>
-                  <span className="font-mono">{task.progress}%</span>
+                  <span>{task.progress}%</span>
                 </div>
-                <div className="w-full h-1.5 bg-[#2d2d34] rounded-full overflow-hidden">
+                <div className="h-1.5 bg-[#121214] rounded-full overflow-hidden border border-[#2d2d34]">
                   <div
                     className="h-full bg-red-500 rounded-full transition-all"
                     style={{ width: `${task.progress}%` }}
@@ -161,9 +187,10 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
             onZoomReset={zoomReset}
             episodeLabel={`${task.chapter} · ${task.series}`}
             imageUrl={
-              task.description && task.description.startsWith('[IMAGE_URL:')
+              task.imageUrl ||
+              (task.description && task.description.startsWith('[IMAGE_URL:')
                 ? task.description.match(/^\[IMAGE_URL:([^\]]+)\]/)?.[1]
-                : undefined
+                : undefined)
             }
             region={task.region}
           />
@@ -172,30 +199,29 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
         {/* Right panel — 268px */}
         <aside className="w-[268px] shrink-0 flex flex-col bg-[#1e1e24] border-l border-[#2d2d34] overflow-hidden">
           <div className="px-4 py-3 border-b border-[#2d2d34] shrink-0">
-            <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">AI Tools</p>
+            <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-red-500" /> AI Production Suite
+            </h3>
+            <p className="text-[9px] text-slate-500 mt-0.5">Automated assist tools for manga creation</p>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {AI_TOOLS.map((tool) => {
               const isExpanded = expandedTool === tool.id;
               const isGenerating = generating === tool.id;
-
               return (
-                <div
-                  key={tool.id}
-                  className={`rounded-md border transition-all ${tool.borderColor} ${isExpanded ? tool.bgColor : 'bg-[#121214]/60'}`}
-                >
+                <div key={tool.id} className="border border-[#2d2d34] bg-[#121214] rounded-md overflow-hidden">
                   <button
                     onClick={() => toggleTool(tool.id)}
-                    className="w-full flex items-center justify-between px-3 py-2.5 cursor-pointer"
+                    className="w-full flex items-center justify-between p-3 text-left hover:bg-[#1e1e24] transition-colors cursor-pointer"
                   >
-                    <div className="flex items-center gap-2">
-                      <Sparkles className={`w-3.5 h-3.5 ${tool.color}`} />
-                      <div className="text-left">
-                        <p className={`text-[11px] font-bold ${tool.color}`}>{tool.name}</p>
-                        {!isExpanded && (
-                          <p className="text-[9px] text-slate-600 mt-0.5 line-clamp-1">{tool.description}</p>
-                        )}
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-7 h-7 rounded-md ${tool.bgColor} border ${tool.borderColor} flex items-center justify-center ${tool.color}`}>
+                        <Sparkles className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold text-white leading-none mb-0.5">{tool.name}</p>
+                        <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest">{tool.badge}</span>
                       </div>
                     </div>
                     {isExpanded ? (
@@ -275,7 +301,10 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
 
       {/* Bottom action bar */}
       <footer className="shrink-0 flex items-center gap-3 px-4 py-3 bg-[#181820] border-t border-[#2d2d34]">
-        <button className="flex items-center gap-1.5 px-3 py-2 bg-[#2d2d34] hover:bg-[#3a3a44] border border-[#3a3a44] text-slate-400 text-[10px] font-bold uppercase rounded-md transition-all cursor-pointer">
+        <button
+          onClick={handleDownloadImage}
+          className="flex items-center gap-1.5 px-3 py-2 bg-[#2d2d34] hover:bg-[#3a3a44] border border-[#3a3a44] text-slate-400 hover:text-white text-[10px] font-bold uppercase rounded-md transition-all cursor-pointer"
+        >
           <Download className="w-3.5 h-3.5" />
           Download
         </button>
@@ -287,7 +316,16 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
           <Upload className="w-3.5 h-3.5" />
           Upload
         </button>
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleFileUpload(f);
+          }}
+        />
 
         <div
           onDragOver={(e) => { e.preventDefault(); setDropHover(true); }}

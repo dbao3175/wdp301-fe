@@ -36,6 +36,8 @@ export default function AssistantApp({
       const mapped: AssistantTask[] = rawTasks.map((t: any) => {
         const urgency = t.status === 'REVISION_REQUESTED' ? 'critical' : 'normal';
         const status = t.status === 'REVISION_REQUESTED' ? 'REVISING' : (t.status === 'PENDING' ? 'ASSIGNED' : t.status);
+        const firstPage = t.pageIds?.[0];
+        const imageUrl = firstPage ? (firstPage.imageUrl || '') : '';
         return {
           _id: t._id,
           title: t.title,
@@ -55,7 +57,9 @@ export default function AssistantApp({
           earnings: t.status === 'APPROVED' ? 50000 : 0,
           submittedAt: t.submittedAt,
           approvedAt: t.reviewedAt,
-          region: t.region
+          region: t.regions?.[0] || t.region || null,
+          imageUrl: imageUrl,
+          pages: t.pageIds || []
         };
       });
       setTasksList(mapped);
