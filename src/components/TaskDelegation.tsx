@@ -411,35 +411,10 @@ function EditorView({
   const [isLoading, setIsLoading] = useState(false);
 
   const handleDownload = async () => {
-    if (proposal.storyboardFile) {
-      const url = URL.createObjectURL(proposal.storyboardFile);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = proposal.storyboardPreviewName;
-      a.click();
-      URL.revokeObjectURL(url);
-      return;
-    }
-
     if (!(proposal as any)._id) return;
     try {
       setIsLoading(true);
-      const config = apiClient.getConfig();
-      const url = `${config.baseUrl}/api/series/proposal/${(proposal as any)._id}/storyboard`;
-      const headers: HeadersInit = {};
-      const token = localStorage.getItem("mangaflow_token");
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-      const response = await fetch(url, { headers });
-      if (!response.ok) throw new Error("Download failed");
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = proposal.storyboardPreviewName || "storyboard.zip";
-      a.click();
-      URL.revokeObjectURL(blobUrl);
+      await apiClient.proposals.downloadStoryboard((proposal as any)._id);
     } catch (err: any) {
       console.error(err);
       alert("Failed to download storyboard");

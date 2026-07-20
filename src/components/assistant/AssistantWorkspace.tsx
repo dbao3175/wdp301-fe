@@ -102,16 +102,32 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
     const f = e.dataTransfer.files?.[0];
     if (f) handleFileUpload(f);
   };
-  const handleDownloadImage = () => {
+  const handleDownloadImage = async () => {
     if (!task.imageUrl) {
       setSubmitToast('Không tìm thấy ảnh bản thảo để tải về');
       return;
     }
-    const cleanPath = task.imageUrl.startsWith('/') ? task.imageUrl.slice(1) : task.imageUrl;
-    const fullUrl = task.imageUrl.startsWith('http')
-      ? task.imageUrl
-      : `${apiClient.getConfig().baseUrl}/${cleanPath}`;
-    window.open(fullUrl, '_blank');
+    try {
+      const cleanPath = task.imageUrl.startsWith('/') ? task.imageUrl.slice(1) : task.imageUrl;
+      const fullUrl = task.imageUrl.startsWith('http')
+        ? task.imageUrl
+        : `${apiClient.getConfig().baseUrl}/${cleanPath}`;
+      
+      const response = await fetch(fullUrl);
+      if (!response.ok) throw new Error('Download failed');
+      
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `task-${task._id}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err: any) {
+      setSubmitToast(`Download failed: ${err.message}`);
+    }
   };
 
   return (

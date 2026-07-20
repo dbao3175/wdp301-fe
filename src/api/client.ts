@@ -255,6 +255,41 @@ export const apiClient = {
         {},
       );
     },
+
+    downloadStoryboard: async (id: string): Promise<void> => {
+      const config = getClientConfig();
+      const url = `${config.baseUrl}/api/series/proposal/${id}/storyboard`;
+      const headers: HeadersInit = {};
+      const token = getStoredToken();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(url, { headers });
+      if (!response.ok) {
+        throw new Error("Failed to download storyboard");
+      }
+
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      
+      const contentDisposition = response.headers.get("Content-Disposition");
+      let filename = "storyboard";
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    },
   },
 
   // CHAPTERS INDEXING

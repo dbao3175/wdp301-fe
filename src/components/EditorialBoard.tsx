@@ -588,17 +588,22 @@ export default function EditorialBoard({
                           View Series
                         </a>
                       )}
-                      <a
-                        href={`/api/series/proposal/${selectedProposal.proposalRecordId}/storyboard`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={async () => {
+                          try {
+                            await apiClient.proposals.downloadStoryboard(selectedProposal.proposalRecordId);
+                          } catch (err) {
+                            console.error('Download failed', err);
+                            alert('Failed to download storyboard');
+                          }
+                        }}
                         className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#E63946] text-white text-[9px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-red-600 transition-colors shadow-[2px_2px_0px_#141414] cursor-pointer"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         Download Storyboard
-                      </a>
+                      </button>
                     </div>
                   </div>
                 </div>
