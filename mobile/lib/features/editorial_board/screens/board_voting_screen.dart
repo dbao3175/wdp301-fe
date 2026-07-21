@@ -317,7 +317,7 @@ class _VoteTally extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final remaining = math.max(requiredVotes - total, 0);
+    final awaiting = math.max(requiredVotes - total, 0);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -329,11 +329,27 @@ class _VoteTally extends StatelessWidget {
         Row(children: [
           Expanded(
               child: _TallyNumber(
-                  label: 'Accept', value: accept, color: AppColors.green)),
-          Container(width: 1.2, height: 38, color: AppColors.ink),
+                  label: 'Accept',
+                  value: accept.toString(),
+                  color: AppColors.green)),
+          const SizedBox(width: 6),
           Expanded(
               child: _TallyNumber(
-                  label: 'Reject', value: reject, color: AppColors.red)),
+                  label: 'Reject',
+                  value: reject.toString(),
+                  color: AppColors.red)),
+          const SizedBox(width: 6),
+          Expanded(
+              child: _TallyNumber(
+                  label: 'Awaiting',
+                  value: awaiting.toString(),
+                  color: AppColors.amber)),
+          const SizedBox(width: 6),
+          Expanded(
+              child: _TallyNumber(
+                  label: 'Cast',
+                  value: '$total/$requiredVotes',
+                  color: AppColors.ink)),
         ]),
         const SizedBox(height: 12),
         Container(
@@ -345,12 +361,12 @@ class _VoteTally extends StatelessWidget {
           child: Row(children: [
             if (accept > 0)
               Expanded(flex: accept, child: Container(color: AppColors.green)),
-            if (remaining > 0)
+            if (awaiting > 0)
               Expanded(
-                  flex: remaining, child: Container(color: AppColors.paper)),
+                  flex: awaiting, child: Container(color: AppColors.paper)),
             if (reject > 0)
               Expanded(flex: reject, child: Container(color: AppColors.red)),
-            if (accept == 0 && reject == 0 && remaining == 0)
+            if (accept == 0 && reject == 0 && awaiting == 0)
               Expanded(child: Container(color: AppColors.paper)),
           ]),
         ),
@@ -364,26 +380,38 @@ class _TallyNumber extends StatelessWidget {
       {required this.label, required this.value, required this.color});
 
   final String label;
-  final int value;
+  final String value;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return Column(children: [
-      Text(value.toString(),
-          style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w900,
-              fontSize: 24,
-              height: 1)),
-      const SizedBox(height: 4),
-      Text(label.toUpperCase(),
-          style: TextStyle(
-              color: color,
-              fontSize: 10,
-              letterSpacing: 0.5,
-              fontWeight: FontWeight.w900)),
-    ]);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        border: Border.all(color: color.withValues(alpha: 0.65), width: 1.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Column(children: [
+        Text(value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+                height: 1)),
+        const SizedBox(height: 4),
+        Text(label.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                color: color,
+                fontSize: 8,
+                letterSpacing: 0.4,
+                fontWeight: FontWeight.w900)),
+      ]),
+    );
   }
 }
 

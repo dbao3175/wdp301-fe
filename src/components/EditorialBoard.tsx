@@ -12,6 +12,20 @@ interface EditorialBoardProps {
   onRefreshAll: () => void;
 }
 
+const getVoteVoterId = (vote: Vote) => {
+  const voterId = vote.voterId as any;
+  return typeof voterId === 'object' ? voterId?._id : voterId;
+};
+
+const dedupeVotesByVoter = (votes: Vote[]) => {
+  const byVoter = new Map<string, Vote>();
+  votes.forEach((vote) => {
+    const voterId = getVoteVoterId(vote);
+    if (voterId) byVoter.set(voterId, vote);
+  });
+  return Array.from(byVoter.values());
+};
+
 export default function EditorialBoard({
   currentUser,
   series,
@@ -198,13 +212,16 @@ export default function EditorialBoard({
     }
   };
 
+  const uniqueModalVotes = dedupeVotesByVoter(modalVotes);
+  const acceptVoteCount = uniqueModalVotes.filter((vote) => vote.decision === 'ACCEPT').length;
+  const rejectVoteCount = uniqueModalVotes.filter((vote) => vote.decision === 'REJECT').length;
+  const totalCast = acceptVoteCount + rejectVoteCount;
+  const modalRequiredVoters = voterStatus?.voters || selectedProposal?.requiredVoters || [];
+  const modalRequiredCount = voterStatus?.totalRequired ?? modalRequiredVoters.length;
+  const modalAwaitingCount = Math.max(modalRequiredCount - totalCast, 0);
+
   const userVote = selectedProposal
-    ? modalVotes.find((vote) => {
-        const voterId = typeof vote.voterId === 'object'
-          ? (vote.voterId as any)?._id
-          : vote.voterId;
-        return voterId === currentUser._id;
-      })
+    ? uniqueModalVotes.find((vote) => getVoteVoterId(vote) === currentUser._id)
     : null;
   const isProposalTieBreak = selectedProposal?.decisionStatus === 'TIE_BREAK_REQUIRED';
   const proposalChairId = typeof selectedProposal?.chairpersonId === 'object'
@@ -553,18 +570,22 @@ export default function EditorialBoard({
                 </button>
               </div>
               <div className="p-5 space-y-5">
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-4 gap-3">
                   <div className="bg-status-success/10 border-2 border-status-success p-3 text-center">
-                    <div className="font-mono text-2xl font-black text-status-success">{modalVotes.filter(v => v.decision === 'ACCEPT').length}</div>
+                    <div className="font-mono text-2xl font-black text-status-success">{acceptVoteCount}</div>
                     <div className="font-mono text-[9px] font-bold text-status-success uppercase">Accept</div>
                   </div>
                   <div className="bg-[#E63946]/10 border-2 border-[#E63946] p-3 text-center">
-                    <div className="font-mono text-2xl font-black text-[#E63946]">{modalVotes.filter(v => v.decision === 'REJECT').length}</div>
+                    <div className="font-mono text-2xl font-black text-[#E63946]">{rejectVoteCount}</div>
                     <div className="font-mono text-[9px] font-bold text-[#E63946] uppercase">Reject</div>
                   </div>
+                  <div className="bg-[#FFF3B0]/60 border-2 border-[#B7791F] p-3 text-center">
+                    <div className="font-mono text-2xl font-black text-[#B7791F]">{modalAwaitingCount}</div>
+                    <div className="font-mono text-[9px] font-bold text-[#B7791F] uppercase">Awaiting</div>
+                  </div>
                   <div className="bg-manuscript-gray border-2 border-ink-black p-3 text-center">
-                    <div className="font-mono text-2xl font-black text-ink-black">{modalVotes.length}</div>
-                    <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">Total Cast</div>
+                    <div className="font-mono text-2xl font-black text-ink-black">{modalRequiredCount ? `${totalCast}/${modalRequiredCount}` : totalCast}</div>
+                    <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">Cast</div>
                   </div>
                 </div>
 
@@ -618,15 +639,21 @@ export default function EditorialBoard({
                     <div className="space-y-1 mb-3">
                       <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase">Assigned Board Members:</p>
                       <div className="flex flex-wrap gap-1.5">
-                        {voterStatus.voters.map((v: any) => (
-                          <span key={v.userId?._id || v.userId} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono border ${
-                            v.hasVoted 
-                              ? 'bg-status-success/10 border-status-success text-status-success' 
-                              : 'bg-[#E63946]/10 border-[#E63946] text-[#E63946]'
-                          }`}>
-                            {v.userId?.name || 'Unknown'} {v.hasVoted ? '✓' : '✗'}
-                          </span>
-                        ))}
+                        {voterStatus.voters.map((v: any) => {
+                          const voterId = v.userId?._id || v.userId;
+                          const voterVote = uniqueModalVotes.find((vote) => getVoteVoterId(vote) === voterId);
+                          const decision = voterVote?.decision;
+                          const chipClass = decision === 'ACCEPT'
+                            ? 'bg-status-success/10 border-status-success text-status-success'
+                            : decision === 'REJECT'
+                              ? 'bg-[#E63946]/10 border-[#E63946] text-[#E63946]'
+                              : 'bg-[#FFF3B0]/60 border-[#B7791F] text-[#B7791F]';
+                          return (
+                            <span key={voterId} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono font-black uppercase border ${chipClass}`}>
+                              {v.userId?.name || 'Unknown'} - {decision || 'WAITING'}
+                            </span>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -661,11 +688,11 @@ export default function EditorialBoard({
                 </div>
                 )}
 
-                {modalVotes.length > 0 && (
+                {uniqueModalVotes.length > 0 && (
                   <div>
                     <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black mb-2">Board Member Votes</h3>
                     <div className="space-y-2">
-                      {modalVotes.map(vote => (
+                      {uniqueModalVotes.map(vote => (
                         <div key={vote._id} className={`p-3 border-2 ${vote.decision === 'ACCEPT' ? 'border-status-success bg-status-success/5' : 'border-[#E63946] bg-[#E63946]/5'}`}>
                           <div className="flex items-center gap-2 mb-1">
                             <span className={`px-2 py-0.5 text-[8px] font-mono font-black uppercase ${vote.decision === 'ACCEPT' ? 'bg-status-success text-white' : 'bg-[#E63946] text-white'}`}>
