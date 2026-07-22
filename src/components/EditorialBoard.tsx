@@ -555,9 +555,9 @@ export default function EditorialBoard({
       {/* Vote Detail Modal */}
       {selectedProposal && (() => {
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/70" onClick={closeModal}></div>
-            <div className="relative bg-white border-4 border-ink-black shadow-[8px_8px_0px_#141414] w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+          <div className="motion-modal fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="motion-modal-backdrop absolute inset-0 bg-black/70" onClick={closeModal}></div>
+            <div className="motion-modal-panel relative bg-white border-4 border-ink-black shadow-[8px_8px_0px_#141414] w-full max-w-2xl max-h-[85vh] overflow-y-auto">
               <div className="sticky top-0 bg-white border-b-4 border-ink-black p-5 flex items-start justify-between z-10">
                 <div>
                   <h2 className="font-syne text-lg font-black uppercase tracking-tight text-ink-black">{selectedProposal.title}</h2>
@@ -797,9 +797,9 @@ export default function EditorialBoard({
 
       {/* Directive Vote Modal */}
       {selectedDirective && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70" onClick={closeDirectiveModal}></div>
-          <div className="relative bg-white border-4 border-ink-black shadow-[8px_8px_0px_#141414] w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+        <div className="motion-modal fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="motion-modal-backdrop absolute inset-0 bg-black/70" onClick={closeDirectiveModal}></div>
+          <div className="motion-modal-panel relative bg-white border-4 border-ink-black shadow-[8px_8px_0px_#141414] w-full max-w-2xl max-h-[85vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b-4 border-ink-black p-5 flex items-start justify-between z-10">
               <div>
                 <div className="flex items-center gap-2 mb-1">

@@ -172,7 +172,7 @@ export const SeriesDetailPage: React.FC = () => {
           synopsis: found.synopsis || '',
           genre: found.genre || '',
           tags: found.tags || [],
-          coverUrl: found.coverImage || 'https://picsum.photos/seed/default/400/560',
+          coverUrl: found.imageUrl || found.coverImage || `https://placehold.co/400x560/171717/E63946?text=${encodeURIComponent(found.title || 'No Cover')}`,
           mangaka: {
             id: found.mangakaId?._id || found.mangaka?.id || '',
             name: typeof found.mangakaId === 'object' && found.mangakaId ? found.mangakaId.name : found.mangaka?.name || 'Unknown',

@@ -41,15 +41,15 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="motion-modal fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-ink-black/60 backdrop-blur-sm" />
+      <div className="motion-modal-backdrop absolute inset-0 bg-ink-black/60 backdrop-blur-sm" />
 
       {/* Modal Content */}
       <div
-        className={`relative w-full ${sizeClasses[size]} bg-white border-2 border-ink-black shadow-[8px_8px_0px_#141414] max-h-[90vh] flex flex-col`}
+        className={`motion-modal-panel relative w-full ${sizeClasses[size]} bg-white border-2 border-ink-black shadow-[8px_8px_0px_#141414] max-h-[90vh] flex flex-col`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

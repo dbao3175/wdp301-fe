@@ -11,6 +11,7 @@ import AssistantApp from "./components/assistant/AssistantApp";
 import Navigation from "./components/Navigation";
 import AdminPanel from "./components/AdminPanel";
 import LoginBackground from "./components/LoginBackground";
+import MotionScene from "./components/motion/MotionScene";
 import { EditorApp } from "./features/editor/EditorApp.tsx";
 import { Sparkles, Key, Radio, Layers, CloudLightning } from "lucide-react";
 
@@ -262,7 +263,7 @@ export default function App() {
     <div className="min-h-screen bg-manuscript-gray font-sans selection:bg-action-blue selection:text-white">
       {/* Universal Grid backdrop decoration dots */}
       <div
-        className="fixed top-0 left-0 w-full h-full pointer-events-none z-[-1] opacity-40"
+        className="ambient-grid fixed top-0 left-0 w-full h-full pointer-events-none z-[-1] opacity-40"
         style={{
           backgroundImage:
             "radial-gradient(#c7c6ca 0.75px, transparent 0.75px)",
@@ -274,7 +275,8 @@ export default function App() {
         /* ======================== SCREEN 1: AUTHENTICATION CONTAINER ======================== */
         <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
           <LoginBackground />
-          <div className="w-full max-w-md bg-white/95 backdrop-blur-md border-4 border-ink-black rounded-none p-8 shadow-[8px_8px_0px_#141414] flex flex-col transition-all duration-300 relative z-10">
+          <MotionScene sceneKey={isRegisterMode ? "register" : "login"} className="w-full max-w-md relative z-10">
+          <div className="w-full max-w-md bg-white/95 backdrop-blur-md border-4 border-ink-black rounded-none p-8 shadow-[8px_8px_0px_#141414] flex flex-col transition-all duration-300">
             {/* Header Title */}
             <div className="text-center mb-8 select-none">
               <h1 className="font-syne text-4xl font-extrabold text-ink-black tracking-tighter flex items-center justify-center gap-2">
@@ -453,6 +455,7 @@ export default function App() {
               )}
             </div>
           </div>
+          </MotionScene>
         </div>
       ) : currentUser.role === "ASSISTANT" ? (
         <AssistantApp
@@ -487,6 +490,7 @@ export default function App() {
 
           {/* Core Content canvas viewports */}
           <main className="block">
+            <MotionScene sceneKey={`${currentUser.role}:${activeTab}`} className="min-h-[calc(100vh-4rem)]">
             {activeTab === "workspace" &&
               currentUser.role !== "BOARD_MEMBER" && (
                 <div className="p-4 md:p-6">
@@ -554,6 +558,7 @@ export default function App() {
                 )}
               </div>
             )}
+            </MotionScene>
           </main>
         </div>
       )}
