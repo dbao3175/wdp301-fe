@@ -79,7 +79,7 @@ export const DashboardPage: React.FC = () => {
     topRankedSeries: (mySeries || []).slice(0, 3).map((s: any) => ({
       id: s._id,
       title: s.title,
-      coverUrl: s.coverImage || 'https://picsum.photos/seed/default/400/560',
+      coverUrl: s.imageUrl || s.coverImage || `https://placehold.co/400x560/171717/E63946?text=${encodeURIComponent(s.title || 'No Cover')}`,
       totalVotes: 0,
       currentRanking: 0,
       previousRanking: 0,

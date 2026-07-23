@@ -1031,12 +1031,12 @@ export default function LeaderboardAnalytics({
 
       {/* ── Reader Voting Form Modal ── */}
       {showIngestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="motion-modal fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/80"
+            className="motion-modal-backdrop absolute inset-0 bg-black/80"
             onClick={() => setShowIngestModal(false)}
           ></div>
-          <div className="relative bg-[#1e1e24] border border-[#2d2d34] rounded-md shadow-2xl shadow-black w-full max-w-md overflow-hidden">
+          <div className="motion-modal-panel relative bg-[#1e1e24] border border-[#2d2d34] rounded-md shadow-2xl shadow-black w-full max-w-md overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#2d2d34]">
               <div className="flex items-center gap-2">
                 <Database className="w-4 h-4 text-red-400" />

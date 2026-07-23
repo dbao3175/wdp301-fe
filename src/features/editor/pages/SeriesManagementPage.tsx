@@ -109,7 +109,7 @@ export const SeriesManagementPage: React.FC = () => {
         synopsis: s.synopsis || '',
         genre: s.genre || '',
         tags: s.tags || [],
-        coverUrl: s.coverImage || 'https://picsum.photos/seed/default/400/560',
+        coverUrl: s.imageUrl || s.coverImage || `https://placehold.co/400x560/171717/E63946?text=${encodeURIComponent(s.title || 'No Cover')}`,
         mangaka: {
           id: s.mangakaId?._id || s.mangaka?.id || '',
           name: typeof s.mangakaId === 'object' && s.mangakaId ? s.mangakaId.name : s.mangaka?.name || 'Unknown',

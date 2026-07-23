@@ -190,7 +190,7 @@ export const ProposalListPage: React.FC = () => {
             Review
           </Link>
           <button
-            onClick={() => handleDownloadClick(row.id, row.title)}
+            onClick={() => handleDownloadClick(row.id)}
             className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#E63946] text-white text-[9px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-red-600 transition-colors shadow-[2px_2px_0px_#141414] cursor-pointer"
           >
             <Download className="w-3 h-3" />

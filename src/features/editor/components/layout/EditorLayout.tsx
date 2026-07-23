@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight, Home } from 'lucide-react';
 import { SidebarProvider, useSidebar } from './SidebarContext';
+import MotionScene from '../../../../components/motion/MotionScene';
 
 const routeLabels: Record<string, string> = {
   editor: 'Editor',
@@ -62,6 +63,7 @@ interface EditorLayoutProps {
 
 const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => void }> = ({ children, onLogout }) => {
   const { collapsed } = useSidebar();
+  const location = useLocation();
   
   return (
     <div className="min-h-screen bg-manuscript-gray flex">
@@ -100,13 +102,15 @@ const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => 
         <main className="flex-1 p-6 overflow-y-auto">
           {/* Dot grid backdrop */}
           <div
-            className="fixed inset-0 pointer-events-none opacity-30 z-0"
+            className="ambient-grid fixed inset-0 pointer-events-none opacity-30 z-0"
             style={{
               backgroundImage: 'radial-gradient(#9ca3af 0.6px, transparent 0.6px)',
               backgroundSize: '20px 20px',
             }}
           />
-          <div className="relative z-10">{children}</div>
+          <MotionScene sceneKey={location.pathname} className="relative z-10">
+            {children}
+          </MotionScene>
         </main>
       </div>
     </div>

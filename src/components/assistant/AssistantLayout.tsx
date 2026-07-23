@@ -18,6 +18,7 @@ import { AssistantNotification } from './assistantTypes';
 import { MOCK_NOTIFICATIONS } from './assistantMockData';
 import NotificationDropdown from './NotificationDropdown';
 import { apiClient } from '../../api/client';
+import MotionScene from '../motion/MotionScene';
 
 interface AssistantLayoutProps {
   currentUser: User;
@@ -230,7 +231,11 @@ export default function AssistantLayout({
           </div>
         </header>
 
-        <main className="flex-1 overflow-hidden relative">{children}</main>
+        <main className="flex-1 overflow-hidden relative">
+          <MotionScene sceneKey={activeTab} className="h-full">
+            {children}
+          </MotionScene>
+        </main>
       </div>
     </div>
   );
