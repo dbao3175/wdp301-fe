@@ -518,8 +518,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth }) =>
               {[
                 { title: "One Piece", author: "Eiichiro Oda", cover: "/manga/one-piece/cover.jpg", status: "PUBLISHED" },
                 { title: "Doraemon Đại Tuyển Tập", author: "Fujiko F. Fujio", cover: "/manga/doraemon/cover.jpg", status: "PRODUCTION" },
-                { title: "Manga Demo 1", author: "Studio Kaze", cover: null, status: "REVIEW" },
-                { title: "Manga Demo 2", author: "Yumi Art", cover: null, status: "PROPOSAL" },
+                { title: "Naruto", author: "Masashi Kishimoto", cover: "/manga/naruto/cover.jpg", status: "REVIEW" },
+                { title: "JoJo's Bizarre Adventure – Cuộc Phiêu Lưu Bí Ẩn", author: "Hirohiko Araki", cover: "/manga/jojos-bizarre-adventure/cover.jpg", status: "PROPOSAL" },
               ].map((series, idx) => (
                 <ScrollReveal key={idx} delay={0.15 * idx}>
                   <motion.div 
