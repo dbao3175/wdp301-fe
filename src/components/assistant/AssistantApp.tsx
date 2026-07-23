@@ -38,12 +38,13 @@ export default function AssistantApp({
         const status = t.status === 'REVISION_REQUESTED' ? 'REVISING' : (t.status === 'PENDING' ? 'ASSIGNED' : t.status);
         const firstPage = t.pageIds?.[0];
         const imageUrl = firstPage ? (firstPage.imageUrl || '') : '';
+        const assistantImageUrl = firstPage ? (firstPage.assistantImageUrl || '') : '';
         return {
           _id: t._id,
           title: t.title,
           type: t.type || t.region?.type || 'Background',
           status: status,
-          chapter: `Ch. ${t.chapterId?.chapterNumber || '??'}`,
+          chapter: t.chapterId?._id || '',
           chapterNumber: t.chapterId?.chapterNumber || 0,
           series: t.seriesId?.title || 'Unknown Series',
           deadline: t.dueAt || new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
@@ -59,6 +60,7 @@ export default function AssistantApp({
           approvedAt: t.reviewedAt,
           region: t.regions?.[0] || t.region || null,
           imageUrl: imageUrl,
+          assistantImageUrl: assistantImageUrl,
           pages: t.pageIds || []
         };
       });

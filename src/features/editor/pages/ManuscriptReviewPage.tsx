@@ -335,8 +335,8 @@ export const ManuscriptReviewPage: React.FC = () => {
 
   // Get chapter to display — prefer from series object (has full pages)
   const displayChapter =
-    series.chapters.find((c) => c.id === selectedChapterId) ??
-    (chapter ?? null);
+    (chapter ?? null) ??
+    series.chapters.find((c) => c.id === selectedChapterId);
 
   const allChapters = series.chapters.length > 0 ? series.chapters : (chapters ?? []);
 

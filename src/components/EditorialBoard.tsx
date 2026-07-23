@@ -301,25 +301,10 @@ export default function EditorialBoard({
           <h1 className="font-syne text-3xl font-black text-ink-black uppercase italic tracking-tight">Editorial Board</h1>
           <p className="font-sans text-xs text-neutral-600 font-bold uppercase tracking-wider mt-1.5 flex items-center gap-2">
             <span className="inline-block w-2.5 h-2.5 bg-[#E63946]"></span>
-            Majority vote required to approve proposals. Vote tally &amp; serialization decisions panel.
+            Majority vote required to approve proposals. Vote tally & serialization decisions panel.
           </p>
         </div>
       </header>
-
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,3fr)_minmax(320px,2fr)] gap-6 items-start">
-        <BoardPublicationPanel
-          currentUser={currentUser}
-          boardMembers={boardMembers}
-          onChanged={() => {
-            onRefreshAll();
-          }}
-        />
-        <ReaderMetricsPanel
-          series={activeSeries}
-          ratings={ratings}
-          onChanged={onRefreshAll}
-        />
-      </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
         <section className="xl:col-span-8 flex flex-col gap-6">
@@ -368,7 +353,7 @@ export default function EditorialBoard({
                     </div>
                   </div>
                   <button onClick={() => openProposalModal(item)} className="shrink-0-0 bg-[#E63946] hover:bg-red-600 text-white font-syne text-[10px] font-extrabold uppercase py-2.5 px-5 border-2 border-ink-black shadow-[3px_3px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
-                    Review &amp; Vote
+                    Review & Vote
                   </button>
                 </div>
               );
@@ -395,9 +380,22 @@ export default function EditorialBoard({
               </button>
             </div>
           )}
+
+          <BoardPublicationPanel
+            currentUser={currentUser}
+            boardMembers={boardMembers}
+            onChanged={() => {
+              onRefreshAll();
+            }}
+          />
         </section>
 
         <div className="xl:col-span-4 flex flex-col gap-6">
+          <ReaderMetricsPanel
+            series={activeSeries}
+            ratings={ratings}
+            onChanged={onRefreshAll}
+          />
           {/* Directive Proposals Section */}
           <section className="bg-white border-4 border-ink-black rounded-none p-6 shadow-[4px_4px_0px_#141414]">
             <h2 className="font-syne text-md font-black uppercase text-ink-black border-b-2 border-ink-black pb-3 mb-4 flex items-center gap-2 select-none">
@@ -535,7 +533,6 @@ export default function EditorialBoard({
       </div>
 
       {/* Vote Detail Modal */}
-      {/* Vote Detail Modal */}
       {selectedProposal && (() => {
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -631,33 +628,41 @@ export default function EditorialBoard({
                     </div>
                   )}
 
-                  {/* Dropdown / list of available board members to add */}
-                  <div className="flex gap-2">
-                    <select 
-                      multiple
-                      value={selectedVoterIds}
-                      onChange={(e) => {
-                        const options = Array.from(e.target.selectedOptions, option => option.value);
-                        setSelectedVoterIds(options);
-                      }}
-                      className="flex-1 bg-white border-2 border-ink-black p-2 font-sans text-xs text-ink-black focus:outline-none h-20"
-                    >
+                  {/* Checkbox list of available board members to add */}
+                  <div className="space-y-1">
+                    <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase">Available Board Members:</p>
+                    <div className="border-2 border-ink-black p-2 bg-white max-h-28 overflow-y-auto">
                       {boardMembers
                         .filter(m => !voterStatus?.voters?.some((v: any) => (v.userId?._id || v.userId) === m._id))
                         .map(m => (
-                          <option key={m._id} value={m._id}>{m.name}</option>
-                        ))
-                      }
-                    </select>
-                    <button 
-                      onClick={handleAssignVoters}
-                      disabled={selectedVoterIds.length === 0}
-                      className="bg-ink-black hover:bg-neutral-800 text-white font-syne text-[10px] font-extrabold uppercase px-4 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                    >
-                      Assign Voters
-                    </button>
+                          <label key={m._id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-manuscript-gray p-1">
+                            <input
+                              type="checkbox"
+                              checked={selectedVoterIds.includes(m._id)}
+                              onChange={() => {
+                                setSelectedVoterIds(prev =>
+                                  prev.includes(m._id)
+                                    ? prev.filter(id => id !== m._id)
+                                    : [...prev, m._id]
+                                );
+                              }}
+                              className="w-4 h-4 accent-ink-black"
+                            />
+                            {m.name}
+                          </label>
+                        ))}
+                      {boardMembers.filter(m => !voterStatus?.voters?.some((v: any) => (v.userId?._id || v.userId) === m._id)).length === 0 && (
+                        <p className="font-mono text-[9px] text-neutral-400 text-center py-2">All board members already assigned.</p>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-[8px] text-neutral-400 font-sans leading-none mt-1">Hold Ctrl/Cmd to select multiple members.</p>
+                  <button 
+                    onClick={handleAssignVoters}
+                    disabled={selectedVoterIds.length === 0}
+                    className="w-full bg-ink-black hover:bg-neutral-800 text-white font-syne text-[10px] font-extrabold uppercase px-4 py-2 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Assign Voters ({selectedVoterIds.length} selected)
+                  </button>
                 </div>
                 )}
 

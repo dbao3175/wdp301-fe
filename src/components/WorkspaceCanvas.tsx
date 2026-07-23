@@ -446,7 +446,11 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
       const asts = await apiClient.users.getAll('ASSISTANT');
       setAssistantsList(asts);
 
-      const live = await apiClient.tasks.getAll();
+      const live = await apiClient.tasks.getAll(
+        undefined,
+        activeSeries?._id,
+        activeChapter?._id,
+      );
 
       // Deduplicate if needed (though backend should return unique tasks)
       const uniqueRawTasks = live.filter((value, index, self) =>
@@ -485,7 +489,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
     } finally {
       setIsWorkspaceLoading(false);
     }
-  }, [activeTaskId]);
+  }, [activeTaskId, activeSeries?._id, activeChapter?._id]);
 
   useEffect(() => {
     fetchWorkspaceData();
@@ -1122,6 +1126,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                   <input
                     type="date"
                     value={cDueAt}
+                    min={new Date().toISOString().split('T')[0]}
                     onChange={e => setCDueAt(e.target.value)}
                     className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2 text-xs text-white focus:outline-none focus:border-slate-500 transition-colors cursor-pointer"
                   />

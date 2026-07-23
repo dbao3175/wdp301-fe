@@ -108,7 +108,7 @@ export default function AssistantTaskManagement({
   }, [allTasks]);
 
   const chapters = useMemo(() => {
-    return [...new Set(allTasks.map((t) => t.chapter))].sort();
+    return [...new Set(allTasks.map((t) => `Ch. ${t.chapterNumber}`))].sort();
   }, [allTasks]);
 
   const combinedSearch = (inlineSearch || searchQuery).toLowerCase();
@@ -120,7 +120,7 @@ export default function AssistantTaskManagement({
         if (!hay.includes(combinedSearch)) return false;
       }
       if (filterStatus !== 'ALL' && t.status !== filterStatus) return false;
-      if (filterChapter !== 'ALL' && t.chapter !== filterChapter) return false;
+      if (filterChapter !== 'ALL' && `Ch. ${t.chapterNumber}` !== filterChapter) return false;
       if (filterDeadline !== 'ALL') {
         const dl = formatDeadline(t.deadline);
         if (filterDeadline === 'overdue' && dl.label !== 'Overdue') return false;
@@ -252,7 +252,7 @@ export default function AssistantTaskManagement({
                       <p className="text-[11px] font-semibold text-white">{task.title}</p>
                       <p className="text-[9px] text-slate-600 mt-0.5">{task.series} · {task.type}</p>
                     </td>
-                    <td className="px-4 py-3 text-[11px] font-mono text-slate-400">{task.chapter}</td>
+                    <td className="px-4 py-3 text-[11px] font-mono text-slate-400">Ch. {task.chapterNumber}</td>
                     <td className={`px-4 py-3 text-[11px] font-mono font-bold ${dl.color}`}>{dl.label}</td>
                     <td className="px-4 py-3"><StatusBadge status={task.status} /></td>
                     <td className="px-4 py-3">
@@ -307,7 +307,7 @@ export default function AssistantTaskManagement({
                       <p className="text-[11px] font-semibold text-white">{task.title}</p>
                       <p className="text-[9px] text-slate-600 mt-0.5">{task.series}</p>
                     </td>
-                    <td className="px-4 py-3 text-[11px] font-mono text-slate-400">{task.chapter}</td>
+                    <td className="px-4 py-3 text-[11px] font-mono text-slate-400">Ch. {task.chapterNumber}</td>
                     <td className="px-4 py-3">
                       <PageCountBars count={task.pageCount ?? 0} />
                     </td>

@@ -75,6 +75,12 @@ export default function BoardPublicationPanel({
   const [voterIds, setVoterIds] = useState<string[]>([]);
   const [chairpersonId, setChairpersonId] = useState('');
 
+  const toggleVoter = (id: string) => {
+    setVoterIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -380,23 +386,22 @@ export default function BoardPublicationPanel({
                       <div className="border-4 border-ink-black p-4 space-y-3">
                         <p className="font-mono text-[10px] font-black uppercase">Open publication voting</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <label className="text-[10px] font-mono font-bold uppercase">
-                            Required voters
-                            <select
-                              multiple
-                              value={voterIds}
-                              onChange={(event) => {
-                                const selectedIds = Array.from(event.target.selectedOptions, (option) => option.value);
-                                setVoterIds(selectedIds);
-                                if (!selectedIds.includes(chairpersonId)) setChairpersonId('');
-                              }}
-                              className="mt-1 w-full h-28 border-2 border-ink-black p-2 bg-white text-xs"
-                            >
+                          <div>
+                            <p className="text-[10px] font-mono font-bold uppercase mb-1">Required voters</p>
+                            <div className="border-2 border-ink-black p-2 bg-white max-h-36 overflow-y-auto space-y-1">
                               {boardMembers.map((member) => (
-                                <option key={member._id} value={member._id}>{member.name}</option>
+                                <label key={member._id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-manuscript-gray p-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={voterIds.includes(member._id)}
+                                    onChange={() => toggleVoter(member._id)}
+                                    className="w-4 h-4 accent-ink-black"
+                                  />
+                                  {member.name}
+                                </label>
                               ))}
-                            </select>
-                          </label>
+                            </div>
+                          </div>
                           <label className="text-[10px] font-mono font-bold uppercase">
                             Chairperson
                             <select
@@ -405,13 +410,12 @@ export default function BoardPublicationPanel({
                               className="mt-1 w-full border-2 border-ink-black p-2 bg-white text-xs"
                             >
                               <option value="">Select chairperson...</option>
-                              {boardMembers.filter((member) => voterIds.includes(member._id)).map((member) => (
+                              {boardMembers.map((member) => (
                                 <option key={member._id} value={member._id}>{member.name}</option>
                               ))}
                             </select>
                           </label>
                         </div>
-                        <p className="text-[9px] text-neutral-500">Hold Ctrl/Cmd to choose multiple voters.</p>
                         <label className="block text-[10px] font-mono font-bold uppercase">
                           Proposed publication schedule
                           <select

@@ -444,49 +444,6 @@ export const ProposalReviewPage: React.FC = () => {
               </div>
             </div>
           </div>
-
-          {/* Character Designs */}
-          <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
-            <div className="px-5 py-3 border-b-2 border-ink-black bg-ink-black">
-              <h2 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-                Character Designs ({proposal.characterDesigns.length})
-              </h2>
-            </div>
-            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {proposal.characterDesigns.map((char: any) => (
-                <div
-                  key={char.id}
-                  className="border-2 border-neutral-200 overflow-hidden hover:border-ink-black transition-colors"
-                >
-                  <div className="h-48 overflow-hidden bg-neutral-100">
-                    <img
-                      src={char.imageUrl}
-                      alt={char.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="p-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-syne font-extrabold text-xs text-ink-black">
-                        {char.name}
-                      </span>
-                      <span className="px-1.5 py-0.5 bg-ink-black text-white text-[8px] font-mono uppercase">
-                        {char.role}
-                      </span>
-                    </div>
-                    <p className="font-sans text-[11px] text-neutral-600 leading-relaxed">
-                      {char.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              {proposal.characterDesigns.length === 0 && (
-                <p className="font-mono text-xs text-neutral-400 col-span-2">
-                  No character designs submitted.
-                </p>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* RIGHT: Sidebar */}

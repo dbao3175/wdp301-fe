@@ -360,9 +360,14 @@ export const apiClient = {
 
   // TASK ORCHESTRATION
   tasks: {
-    getAll: async (userId?: string): Promise<Task[]> => {
+    getAll: async (userId?: string, seriesId?: string, chapterId?: string): Promise<Task[]> => {
+      const params = new URLSearchParams();
+      if (userId) params.set('userId', userId);
+      if (seriesId) params.set('seriesId', seriesId);
+      if (chapterId) params.set('chapterId', chapterId);
+      const query = params.toString();
       const res = await makeFetchRequest(
-        `/api/tasks${userId ? `?userId=${userId}` : ""}`,
+        `/api/tasks${query ? `?${query}` : ""}`,
         "GET",
       );
       return res.data;

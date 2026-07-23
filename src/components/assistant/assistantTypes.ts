@@ -25,6 +25,7 @@ export interface AssistantTask {
   submittedAt?: string;
   approvedAt?: string;
   imageUrl?: string;
+  assistantImageUrl?: string;
   pages?: any[];
   region?: {
     x: number;

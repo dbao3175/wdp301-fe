@@ -69,14 +69,15 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
   };
 
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [showOriginal, setShowOriginal] = useState(false);
 
   const handleFileUpload = async (file: File) => {
     try {
       setSubmitToast(`Uploading ${file.name}...`);
-      const chapterId = typeof task.chapter === 'string' ? task.chapter : undefined;
-      const res = await apiClient.files.upload(file, chapterId || '');
+      const res = await apiClient.files.upload(file, task.chapter || '');
       const url = res.fileUrl || res.data?.fileUrl || '';
       setUploadedImageUrl(url);
+      setShowOriginal(false);
       setSubmitToast(`Uploaded: ${file.name}`);
     } catch (err: any) {
       setSubmitToast(`Upload failed: ${err.message}`);
@@ -152,7 +153,7 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
             {[
               { label: 'Task ID', value: task._id },
               { label: 'Series', value: task.series },
-              { label: 'Chapter', value: task.chapter },
+              { label: 'Chapter', value: `Ch. ${task.chapterNumber}` },
               { label: 'Type', value: task.type },
               { label: 'Deadline', value: new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) },
             ].map((field) => (
@@ -196,20 +197,61 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
 
         {/* Center canvas */}
         <main className="flex-1 min-w-0 overflow-hidden">
-          <MangaPageCanvas
-            zoom={zoom}
-            onZoomIn={zoomIn}
-            onZoomOut={zoomOut}
-            onZoomReset={zoomReset}
-            episodeLabel={`${task.chapter} · ${task.series}`}
-            imageUrl={
+          {/* Compute which image to display */}
+          {(() => {
+            const sourceImageUrl =
               task.imageUrl ||
               (task.description && task.description.startsWith('[IMAGE_URL:')
                 ? task.description.match(/^\[IMAGE_URL:([^\]]+)\]/)?.[1]
-                : undefined)
-            }
-            region={task.region}
-          />
+                : undefined);
+
+            // Prefer just-uploaded image, fall back to persisted assistantImageUrl
+            const myWorkUrl = uploadedImageUrl || task.assistantImageUrl || '';
+            const hasMyWork = !!(uploadedImageUrl || task.assistantImageUrl);
+            const canvasImageUrl = showOriginal ? sourceImageUrl : (myWorkUrl || sourceImageUrl);
+
+            return (
+              <>
+                {/* Image toggle bar — only visible when assistant has uploaded their own image */}
+                {hasMyWork && (
+                  <div className="flex items-center justify-center gap-2 px-4 py-1.5 bg-[#181820] border-b border-[#2d2d34] shrink-0">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600">
+                      View:
+                    </span>
+                    <button
+                      onClick={() => setShowOriginal(false)}
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                        !showOriginal
+                          ? 'bg-white/10 border border-white/20 text-white'
+                          : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                      }`}
+                    >
+                      My Work
+                    </button>
+                    <button
+                      onClick={() => setShowOriginal(true)}
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                        showOriginal
+                          ? 'bg-white/10 border border-white/20 text-white'
+                          : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                      }`}
+                    >
+                      Original
+                    </button>
+                  </div>
+                )}
+                <MangaPageCanvas
+                  zoom={zoom}
+                  onZoomIn={zoomIn}
+                  onZoomOut={zoomOut}
+                  onZoomReset={zoomReset}
+                  episodeLabel={`Ch. ${task.chapterNumber} · ${task.series}`}
+                  imageUrl={canvasImageUrl}
+                  region={task.region}
+                />
+              </>
+            );
+          })()}
         </main>
 
         {/* Right panel — 268px */}
