@@ -143,7 +143,7 @@ export const apiClient = {
       title: string,
       genre: string,
       synopsis: string,
-      storyboard: File,
+      storyboards: File[],
     ): Promise<any> => {
       const config = getClientConfig();
       const url = `${config.baseUrl}/api/series/proposal`;
@@ -151,7 +151,7 @@ export const apiClient = {
       fd.append("title", title);
       fd.append("genre", genre);
       fd.append("synopsis", synopsis);
-      fd.append("storyboard", storyboard);
+      storyboards.forEach((f) => fd.append("storyboards", f));
 
       const headers: HeadersInit = {};
       const storedToken = getStoredToken();
@@ -185,9 +185,12 @@ export const apiClient = {
       return responseData.data;
     },
 
-    getAll: async (status?: string): Promise<any[]> => {
-      const query = status ? `?status=${status}` : "";
-      const res = await makeFetchRequest(`/api/series/proposal${query}`, "GET");
+    getAll: async (status?: string, mangakaId?: string): Promise<any[]> => {
+      const params = new URLSearchParams();
+      if (status) params.set('status', status);
+      if (mangakaId) params.set('mangakaId', mangakaId);
+      const query = params.toString();
+      const res = await makeFetchRequest(`/api/series/proposal${query ? `?${query}` : ""}`, "GET");
       return res.data;
     },
 
@@ -232,12 +235,58 @@ export const apiClient = {
       );
     },
 
-    resubmit: async (id: string): Promise<any> => {
-      return await makeFetchRequest(
-        `/api/series/proposal/${id}/resubmit`,
-        "PUT",
-        {},
-      );
+    resubmit: async (id: string, files?: File[], removeImageUrls?: string[], synopsis?: string): Promise<any> => {
+      if (files && files.length > 0) {
+        const config = getClientConfig();
+        const url = `${config.baseUrl}/api/series/proposal/${id}/resubmit`;
+        const fd = new FormData();
+        files.forEach((f) => fd.append('storyboards', f));
+        if (removeImageUrls && removeImageUrls.length > 0) {
+          fd.append('removeImages', JSON.stringify(removeImageUrls));
+        }
+        if (synopsis) {
+          fd.append('synopsis', synopsis);
+        }
+
+        const headers: HeadersInit = {};
+        const storedToken = getStoredToken();
+        if (storedToken) {
+          headers['Authorization'] = `Bearer ${storedToken}`;
+        }
+
+        const response = await fetch(url, {
+          method: 'PUT',
+          headers,
+          body: fd,
+        });
+
+        const responseText = await response.text();
+        let responseData;
+        try {
+          responseData = responseText ? JSON.parse(responseText) : {};
+        } catch (e) {
+          responseData = {
+            message: responseText || `Resubmit failed with status ${response.status}`,
+          };
+        }
+
+        if (!response.ok) {
+          throw new Error(responseData.message || `Resubmit failed with status ${response.status}`);
+        }
+        return responseData.data;
+      } else if (removeImageUrls && removeImageUrls.length > 0) {
+        return await makeFetchRequest(
+          `/api/series/proposal/${id}/resubmit`,
+          'PUT',
+          { removeImages: JSON.stringify(removeImageUrls), synopsis },
+        );
+      } else {
+        return await makeFetchRequest(
+          `/api/series/proposal/${id}/resubmit`,
+          'PUT',
+          { synopsis },
+        );
+      }
     },
 
     sendToBoard: async (id: string): Promise<any> => {
