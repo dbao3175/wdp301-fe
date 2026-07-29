@@ -18,49 +18,65 @@ import { StatsCard } from '../components/common/StatsCard.tsx';
 import { LoadingState, ErrorState, StatusBadge } from '../components/common/States.tsx';
 import { VoteTrendChart, RankingChart } from '../components/analytics/Charts.tsx';
 import { SeriesCard, DeadlineCard, RankingBadge, VoteCounter, ProgressTimeline } from '../components/series/SeriesComponents.tsx';
-import { useSidebar } from '../components/layout/SidebarContext';
+import { useLanguage } from '../../../i18n/LanguageContext';
+import { resolveSeriesCover, useSeriesCoverFallback } from '../utils/seriesCover';
 import type { Proposal } from '../types/index.ts';
 
 export const DashboardPage: React.FC = () => {
-  const { pendingCount } = useSidebar();
+  const { language, t } = useLanguage();
   const { data: dashboardData, isLoading, error, refetch } = useQuery({
     queryKey: ['editor-dashboard-stats'],
     queryFn: () => apiClient.editor.getDashboard(),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const { data: mySeries } = useQuery({
     queryKey: ['editor-my-series'],
     queryFn: () => apiClient.editor.getMySeries(),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   // Fetch pending proposals
   const { data: pendingProposals } = useQuery({
     queryKey: ['pending-proposals'],
     queryFn: () => apiClient.proposals.getAll('SUBMITTED'),
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const { data: underReviewProposals } = useQuery({
     queryKey: ['under-review-proposals'],
     queryFn: () => apiClient.proposals.getAll('UNDER_REVIEW'),
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const { data: revisionRequestedProposals } = useQuery({
     queryKey: ['revision-requested-proposals'],
     queryFn: () => apiClient.proposals.getAll('REVISION_REQUESTED'),
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const { data: resubmittedProposals } = useQuery({
     queryKey: ['resubmitted-proposals'],
     queryFn: () => apiClient.proposals.getAll('RESUBMITTED'),
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
-  // Combine all pending proposals
-  const allPendingProposals: Proposal[] = [
+  // Combine all proposals that still require an editor action.
+  const pendingProposalItems = [
     ...(pendingProposals || []),
     ...(underReviewProposals || []),
     ...(revisionRequestedProposals || []),
     ...(resubmittedProposals || []),
-  ].map((p: any) => ({
+  ];
+  const allPendingProposals: Proposal[] = pendingProposalItems.map((p: any) => ({
     ...p,
     id: p._id || p.id || '',
     mangaka: p.mangakaId || p.mangaka || { name: p.mangakaName || 'Unknown' }
@@ -70,28 +86,36 @@ export const DashboardPage: React.FC = () => {
   if (error) return <ErrorState onRetry={refetch} />;
   if (!dashboardData) return null;
 
+  const rankedSeries = [...(mySeries || [])]
+    .sort((a: any, b: any) => {
+      const rankA = Number(a.currentRanking) > 0 ? Number(a.currentRanking) : Number.MAX_SAFE_INTEGER;
+      const rankB = Number(b.currentRanking) > 0 ? Number(b.currentRanking) : Number.MAX_SAFE_INTEGER;
+      return rankA - rankB || Number(b.totalVotes || 0) - Number(a.totalVotes || 0);
+    })
+    .slice(0, 3);
+
   const stats = {
     activeSeries: dashboardData.seriesCount || 0,
-    pendingProposals: pendingCount || 0,
-    pendingChapterReviews: dashboardData.deadlines?.nearDueCount || 0,
+    pendingProposals: pendingProposalItems.length,
+    pendingChapterReviews: dashboardData.pendingReviewCount || 0,
     upcomingDeadlines: dashboardData.deadlines?.nearDueCount || 0,
     delayedProjects: dashboardData.deadlines?.overdueCount || 0,
-    topRankedSeries: (mySeries || []).slice(0, 3).map((s: any) => ({
-      id: s._id,
+    topRankedSeries: rankedSeries.map((s: any) => ({
+      id: s._id || s.id,
       title: s.title,
-      coverUrl: s.imageUrl || s.coverImage || `https://placehold.co/400x560/171717/E63946?text=${encodeURIComponent(s.title || 'No Cover')}`,
-      totalVotes: 0,
-      currentRanking: 0,
-      previousRanking: 0,
+      coverUrl: resolveSeriesCover(s.title || '', s.imageUrl || s.coverImage),
+      totalVotes: Number(s.totalVotes || 0),
+      currentRanking: Number(s.currentRanking || 0),
+      previousRanking: Number(s.previousRanking || 0),
       status: s.status || 'ACTIVE',
-      currentStage: 'STORY_PLANNING',
-      completionPercentage: 0,
-      publishedChapters: 0,
-      totalChapters: 0,
-      voteHistory: [],
-      rankingHistory: [],
-      progressHistory: [],
-      mangaka: { name: typeof s.mangakaId === 'object' && s.mangakaId ? s.mangakaId.name : 'Unknown' },
+      currentStage: s.currentStage || 'STORY_PLANNING',
+      completionPercentage: Number(s.completionPercentage || 0),
+      publishedChapters: Number(s.publishedChapters || 0),
+      totalChapters: Number(s.totalChapters || 0),
+      voteHistory: s.voteHistory || [],
+      rankingHistory: s.rankingHistory || [],
+      progressHistory: s.progressHistory || [],
+      mangaka: { name: s.originalAuthor || (typeof s.mangakaId === 'object' && s.mangakaId ? s.mangakaId.name : 'Unknown') },
     })),
     mostVotedSeries: [],
   };
@@ -99,8 +123,8 @@ export const DashboardPage: React.FC = () => {
   const deadlines = dashboardData.deadlines ? [
     ...(dashboardData.deadlines.overdue || []).map((d: any) => ({
       id: d.chapterId?._id || d.chapterId,
-      title: `Ch.${d.chapterNumber} Review`,
-      seriesTitle: d.seriesTitle || 'Unknown Series',
+      title: t('Chapter {{number}} Review', { number: d.chapterNumber }),
+      seriesTitle: d.seriesTitle || t('Unknown Series'),
       type: 'chapter_review' as const,
       dueDate: d.dueAt,
       daysRemaining: 0,
@@ -108,8 +132,8 @@ export const DashboardPage: React.FC = () => {
     })),
     ...(dashboardData.deadlines.nearDue || []).map((d: any) => ({
       id: d.chapterId?._id || d.chapterId,
-      title: `Ch.${d.chapterNumber} Review`,
-      seriesTitle: d.seriesTitle || 'Unknown Series',
+      title: t('Chapter {{number}} Review', { number: d.chapterNumber }),
+      seriesTitle: d.seriesTitle || t('Unknown Series'),
       type: 'chapter_review' as const,
       dueDate: d.dueAt,
       daysRemaining: Math.ceil((new Date(d.dueAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
@@ -123,16 +147,16 @@ export const DashboardPage: React.FC = () => {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="font-syne font-extrabold text-2xl text-ink-black tracking-tight">
-            Editor Dashboard
+            {t('Editor Dashboard')}
           </h1>
           <p className="font-mono text-xs text-neutral-500 mt-0.5 uppercase tracking-widest">
-            Tantou Overview — Today's Status
+            {t("Tantou Overview — Today's Status")}
           </p>
         </div>
         <div className="hidden md:flex items-center gap-2 bg-white border-2 border-ink-black px-3 py-2 shadow-[2px_2px_0px_#141414]">
           <Calendar className="w-3.5 h-3.5 text-neutral-500" />
           <span className="font-mono text-[10px] font-bold text-neutral-600 uppercase">
-            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+            {new Date().toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
           </span>
         </div>
       </div>
@@ -140,7 +164,7 @@ export const DashboardPage: React.FC = () => {
       {/* ============ STATS GRID ============ */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatsCard
-          title="Active Series"
+          title="Total Series"
           value={stats.activeSeries}
           icon={BookOpen}
           trend={{ value: 0, label: 'vs last month' }}
@@ -184,12 +208,16 @@ export const DashboardPage: React.FC = () => {
           <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
             <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black flex items-center justify-between">
               <h2 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-                Deadline Alerts
+                {t('Deadline Alerts')}
               </h2>
               <Clock className="w-4 h-4 text-neutral-400" />
             </div>
             <div className="divide-y divide-neutral-100">
-              {(deadlines ?? []).map((dl: any, idx: number) => (
+              {deadlines.length === 0 ? (
+                <p className="font-mono text-xs text-neutral-400 text-center py-6">
+                  {t('No pending deadlines')}
+                </p>
+              ) : deadlines.map((dl: any, idx: number) => (
                 <div key={dl.id || `dl-${idx}`} className="p-3">
                   <DeadlineCard deadline={dl} />
                 </div>
@@ -201,27 +229,27 @@ export const DashboardPage: React.FC = () => {
           <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
             <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black flex items-center justify-between">
               <h2 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-                Pending Proposals
+                {t('Pending Proposals')}
               </h2>
               <FileText className="w-4 h-4 text-neutral-400" />
             </div>
             <div className="p-4 space-y-3">
               {allPendingProposals.length === 0 ? (
-                <p className="font-mono text-xs text-neutral-400 text-center py-4">No pending proposals</p>
+                <p className="font-mono text-xs text-neutral-400 text-center py-4">{t('No pending proposals')}</p>
               ) : (
                 allPendingProposals.map((proposal: Proposal) => (
                   <div key={(proposal as any)._id || proposal.id} className="flex items-center justify-between p-3 bg-amber-50 border border-amber-300">
                     <div>
                       <p className="font-sans font-bold text-xs text-ink-black">{proposal.title}</p>
                       <p className="font-mono text-[9px] text-neutral-500">
-                        {proposal.genre} · {proposal.mangaka?.name || 'Unknown'}
+                        {proposal.genre} · {proposal.mangaka?.name || t('Unknown')}
                       </p>
                     </div>
                     <Link
                       to={`/editor/proposals/${(proposal as any)._id || proposal.id}`}
                       className="text-[9px] font-mono font-extrabold text-[#E63946] uppercase hover:underline flex items-center gap-0.5"
                     >
-                      Review <ArrowRight className="w-3 h-3" />
+                      {t('Review')} <ArrowRight className="w-3 h-3" />
                     </Link>
                   </div>
                 ))
@@ -230,7 +258,7 @@ export const DashboardPage: React.FC = () => {
                 to="/editor/proposals"
                 className="block text-center text-[9px] font-mono font-extrabold text-neutral-500 uppercase tracking-widest hover:text-ink-black transition-colors pt-1 hover:underline"
               >
-                View All Proposals →
+                {t('View All Proposals')} →
               </Link>
             </div>
           </div>
@@ -242,7 +270,7 @@ export const DashboardPage: React.FC = () => {
           <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
             <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black flex items-center justify-between">
               <h2 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-                Top Ranked Series
+                {t('Top Ranked Series')}
               </h2>
               <Award className="w-4 h-4 text-yellow-400" />
             </div>
@@ -266,6 +294,7 @@ export const DashboardPage: React.FC = () => {
                   </span>
                   <img
                     src={series.coverUrl}
+                    onError={(event) => useSeriesCoverFallback(event.currentTarget, series.title)}
                     alt={series.title}
                     className="w-8 h-10 object-cover border border-neutral-200 shrink-0"
                   />
@@ -283,7 +312,7 @@ export const DashboardPage: React.FC = () => {
           <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
             <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black">
               <h2 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-                Vote Trend — Crimson Blade
+                {t('Vote Trend')} — {stats.topRankedSeries[0]?.title || t('No series found')}
               </h2>
             </div>
             <div className="p-4">
@@ -298,7 +327,7 @@ export const DashboardPage: React.FC = () => {
           <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
             <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black flex items-center justify-between">
               <h2 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-                Production Overview
+                {t('Production Overview')}
               </h2>
               <TrendingUp className="w-4 h-4 text-neutral-400" />
             </div>
@@ -308,6 +337,7 @@ export const DashboardPage: React.FC = () => {
                   <div className="flex items-center gap-2 mb-3">
                     <img
                       src={series.coverUrl}
+                      onError={(event) => useSeriesCoverFallback(event.currentTarget, series.title)}
                       alt={series.title}
                       className="w-8 h-10 object-cover border border-neutral-200 shrink-0"
                     />
@@ -325,13 +355,13 @@ export const DashboardPage: React.FC = () => {
                   />
                   <div className="flex items-center justify-between mt-2">
                     <span className="font-mono text-[9px] text-neutral-400">
-                      {series.publishedChapters}/{series.totalChapters} chapters
+                      {series.publishedChapters}/{series.totalChapters} {t('chapters')}
                     </span>
                     <Link
                       to={`/editor/series/${series.id}`}
                       className="text-[9px] font-mono font-extrabold text-[#E63946] uppercase hover:underline"
                     >
-                      View Detail →
+                      {t('View Detail')} →
                     </Link>
                   </div>
                 </div>
@@ -342,7 +372,7 @@ export const DashboardPage: React.FC = () => {
           {/* Ranking Trend */}
           <RankingChart
             data={stats.topRankedSeries[0]?.rankingHistory ?? []}
-            title="Ranking Trend — Crimson Blade"
+            title={`${t('Ranking Trend')} — ${stats.topRankedSeries[0]?.title || t('No series found')}`}
           />
         </div>
       </div>

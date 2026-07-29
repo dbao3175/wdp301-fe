@@ -373,28 +373,26 @@ export const apiClient = {
       return res.data;
     },
 
-    create: async (
-      seriesId: string,
-      chapterId: string,
-      assignedTo: string,
-      title: string,
-      region?: any,
-      description?: string,
-      pageIds?: string[],
-      sourceImageUrl?: string,
-      dueAt?: string,
-    ): Promise<Task> => {
-      const res = await makeFetchRequest("/api/tasks", "POST", {
-        seriesId,
-        chapterId,
-        assignedTo,
-        title,
-        regions: region ? [region] : [],
-        sourceImageUrl,
-        description,
-        pageIds,
-        dueAt,
-      });
+    create: async (payload: {
+      seriesId: string;
+      chapterId: string;
+      assignedTo: string;
+      title: string;
+      type: string;
+      regions: Array<{
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        type: string;
+        comment?: string;
+      }>;
+      description?: string;
+      pageIds?: string[];
+      sourceImageUrl?: string;
+      dueAt?: string;
+    }): Promise<Task> => {
+      const res = await makeFetchRequest("/api/tasks", "POST", payload);
       return res.data;
     },
 
@@ -629,6 +627,22 @@ export const apiClient = {
   },
 
   assistant: {
+    getMyTasks: async (): Promise<Task[]> => {
+      const res = await makeFetchRequest("/api/assistant/my-tasks", "GET");
+      return res.data;
+    },
+    uploadPageResult: async (
+      pageId: string,
+      assistantImageUrl: string,
+      note?: string,
+    ): Promise<any> => {
+      const res = await makeFetchRequest(
+        `/api/assistant/pages/${pageId}/upload`,
+        "PUT",
+        { assistantImageUrl, note },
+      );
+      return res.data;
+    },
     getIncomeTasks: async (): Promise<any> => {
       const res = await makeFetchRequest("/api/assistant/income/tasks", "GET");
       return res.data;

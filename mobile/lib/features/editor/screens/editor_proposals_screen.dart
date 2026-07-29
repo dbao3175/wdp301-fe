@@ -51,6 +51,7 @@ class _ProposalCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     return StudioCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -71,18 +72,28 @@ class _ProposalCard extends ConsumerWidget {
         Row(children: [
           Expanded(
               child: OutlinedButton.icon(
+                  onPressed: () => _download(context),
+                  icon: const Icon(Icons.download_rounded, size: 18),
+                  label: Text(l10n.downloadProposal))),
+          const SizedBox(width: 8),
+          Expanded(
+              child: OutlinedButton.icon(
                   onPressed: () => _act(context, ref, 'revision'),
-                  icon: const Icon(Icons.edit_note),
+                  icon: const Icon(Icons.edit_note, size: 18),
                   label: const Text('Revision'))),
           const SizedBox(width: 8),
           Expanded(
               child: FilledButton.icon(
                   onPressed: () => _act(context, ref, 'forward'),
-                  icon: const Icon(Icons.forward_rounded),
+                  icon: const Icon(Icons.forward_rounded, size: 18),
                   label: const Text('Forward'))),
         ]),
       ]),
     );
+  }
+
+  void _download(BuildContext context) {
+    downloadManuscriptFile(proposal.title, context);
   }
 
   Future<void> _act(BuildContext context, WidgetRef ref, String action) async {

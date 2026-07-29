@@ -3,7 +3,7 @@
  * Full-height 3-column workspace with AI tools
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Download,
   Upload,
@@ -15,10 +15,11 @@ import {
   UploadCloud,
 } from 'lucide-react';
 import { AssistantTask, AIToolId } from './assistantTypes';
-import { AI_TOOLS, ASSIGNED_TASKS } from './assistantMockData';
+import { AI_TOOLS } from './assistantMockData';
 import MangaPageCanvas from './MangaPageCanvas';
 
 import { apiClient } from '../../api/client';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 interface AssistantWorkspaceProps {
   activeTask: AssistantTask | null;
@@ -30,14 +31,33 @@ const STATUS_COLORS: Record<string, string> = {
   IN_PROGRESS: 'bg-blue-500/10 text-blue-400',
   REVISING: 'bg-amber-500/10 text-amber-400',
   SUBMITTED: 'bg-violet-500/10 text-violet-400',
+  MANGAKA_APPROVED: 'bg-cyan-500/10 text-cyan-400',
   APPROVED: 'bg-green-500/10 text-green-400',
 };
 
 const APPLY_TO_OPTIONS = ['Full Page', 'Active Panel', 'Selected Region', 'Background Only'];
 
 export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantWorkspaceProps) {
-  const task = activeTask ?? ASSIGNED_TASKS[0];
+  const { t } = useLanguage();
+  if (!activeTask) {
+    return (
+      <div className="h-full flex items-center justify-center bg-[#121214] p-8">
+        <div className="max-w-md text-center border border-[#2d2d34] bg-[#181820] rounded-lg p-8">
+          <UploadCloud className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+          <h2 className="text-sm font-bold text-white">{t("No production task selected")}</h2>
+          <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
+            {t("Open an assigned task from Task Management to view its source page, work regions, and revision notes.")}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
+  return <AssistantWorkspaceContent task={activeTask} onRefresh={onRefresh} />;
+}
+
+function AssistantWorkspaceContent({ task, onRefresh }: { task: AssistantTask; onRefresh?: () => void }) {
+  const { language, t } = useLanguage();
   const [zoom, setZoom] = useState(1);
   const [expandedTool, setExpandedTool] = useState<AIToolId | null>(null);
   const [prompts, setPrompts] = useState<Record<AIToolId, string>>({
@@ -63,7 +83,7 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
     setGenerating(id);
     setTimeout(() => {
       setGenerating(null);
-      setSubmitToast(`${AI_TOOLS.find((t) => t.id === id)?.name} generation complete`);
+      setSubmitToast(t('{{tool}} generation complete', { tool: AI_TOOLS.find((tool) => tool.id === id)?.name || '' }));
       setTimeout(() => setSubmitToast(null), 2500);
     }, 1800);
   };
@@ -71,28 +91,63 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [showOriginal, setShowOriginal] = useState(false);
 
+  useEffect(() => {
+    setUploadedImageUrl(null);
+    setShowOriginal(false);
+    setSubmitToast(null);
+  }, [task._id]);
+
+  const isWorkLocked = ['SUBMITTED', 'MANGAKA_APPROVED', 'APPROVED'].includes(task.status);
+
   const handleFileUpload = async (file: File) => {
+    if (isWorkLocked) return;
+    if (!file.type.startsWith('image/')) {
+      setSubmitToast(t('Only image files can be submitted for a manga page task'));
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setSubmitToast(t('The result image must not exceed 10 MB'));
+      return;
+    }
+
     try {
-      setSubmitToast(`Uploading ${file.name}...`);
+      setSubmitToast(t('Uploading {{file}}...', { file: file.name }));
       const res = await apiClient.files.upload(file, task.chapter || '');
       const url = res.fileUrl || res.data?.fileUrl || '';
+      const firstPage = task.pages?.[0];
+      const pageId = typeof firstPage === 'string' ? firstPage : firstPage?._id;
+      if (!url || !pageId) {
+        throw new Error('This task has no valid page to receive the uploaded result');
+      }
+
+      await apiClient.assistant.uploadPageResult(pageId, url, `Result for ${task.title}`);
       setUploadedImageUrl(url);
       setShowOriginal(false);
-      setSubmitToast(`Uploaded: ${file.name}`);
+      setSubmitToast(t('Uploaded: {{file}}', { file: file.name }));
+      onRefresh?.();
     } catch (err: any) {
-      setSubmitToast(`Upload failed: ${err.message}`);
+      setSubmitToast(t('Upload failed: {{error}}', { error: t(err.message) }));
     }
   };
 
   const handleSubmit = async () => {
-    if (!task) return;
+    if (isWorkLocked) return;
+    const resultUrl = uploadedImageUrl || task.assistantImageUrl;
+    if (!resultUrl || (task.status === 'REVISING' && !uploadedImageUrl)) {
+      setSubmitToast(
+        task.status === 'REVISING'
+          ? t('Upload a revised result before resubmitting')
+          : t('Upload your completed page result before submitting')
+      );
+      return;
+    }
     try {
-      await apiClient.tasks.submit(task._id, uploadedImageUrl || undefined);
-      setSubmitToast(`Task "${task.title}" submitted for review`);
+      await apiClient.tasks.submit(task._id, resultUrl);
+      setSubmitToast(t('Task "{{task}}" submitted for review', { task: task.title }));
       setTimeout(() => setSubmitToast(null), 2500);
-      if (onRefresh) onRefresh();
+      onRefresh?.();
     } catch (err: any) {
-      setSubmitToast(`Submission failed: ${err.message}`);
+      setSubmitToast(t('Submission failed: {{error}}', { error: t(err.message) }));
       setTimeout(() => setSubmitToast(null), 3000);
     }
   };
@@ -105,7 +160,7 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
   };
   const handleDownloadImage = async () => {
     if (!task.imageUrl) {
-      setSubmitToast('Không tìm thấy ảnh bản thảo để tải về');
+      setSubmitToast(t('Source image not found for download'));
       return;
     }
     try {
@@ -127,7 +182,7 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
       document.body.removeChild(link);
       URL.revokeObjectURL(blobUrl);
     } catch (err: any) {
-      setSubmitToast(`Download failed: ${err.message}`);
+      setSubmitToast(t('Download failed: {{error}}', { error: t(err.message) }));
     }
   };
 
@@ -145,7 +200,7 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
         {/* Left panel — 256px */}
         <aside className="w-[256px] shrink-0 flex flex-col bg-[#1e1e24] border-r border-[#2d2d34] overflow-hidden">
           <div className="p-4 border-b border-[#2d2d34] shrink-0">
-            <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-2">Task Metadata</p>
+            <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-2">{t("Task Metadata")}</p>
             <h2 className="text-[13px] font-bold text-white leading-snug">{task.title}</h2>
           </div>
 
@@ -153,12 +208,12 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
             {[
               { label: 'Task ID', value: task._id },
               { label: 'Series', value: task.series },
-              { label: 'Chapter', value: `Ch. ${task.chapterNumber}` },
-              { label: 'Type', value: task.type },
-              { label: 'Deadline', value: new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) },
+              { label: 'Chapter', value: `${t('Chapter')} ${task.chapterNumber}` },
+              { label: 'Type', value: t(task.type) },
+              { label: 'Deadline', value: new Date(task.deadline).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' }) },
             ].map((field) => (
               <div key={field.label}>
-                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">{field.label}</p>
+                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">{t(field.label)}</p>
                 <p className={`text-[11px] font-medium text-slate-300 ${field.label === 'Task ID' ? 'font-mono' : ''}`}>
                   {field.value}
                 </p>
@@ -166,7 +221,7 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
             ))}
 
             <div>
-              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">Description</p>
+              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">{t("Description")}</p>
               <p className="text-[11px] text-slate-400 leading-relaxed">
                 {task.description && task.description.startsWith('[IMAGE_URL:')
                   ? task.description.replace(/^\[IMAGE_URL:[^\]]+\]\s*/, '')
@@ -174,14 +229,23 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
               </p>
             </div>
 
+            {task.status === 'REVISING' && task.reviewNote && (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+                <p className="text-[9px] font-bold text-amber-400 uppercase tracking-widest mb-1">
+                  {t("Revision requested")}
+                </p>
+                <p className="text-[11px] text-amber-100/80 leading-relaxed">{task.reviewNote}</p>
+              </div>
+            )}
+
             <div>
-              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-2">Status</p>
+              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-2">{t("Status")}</p>
               <span className={`inline-block px-2 py-0.5 text-[9px] font-bold uppercase rounded-sm ${STATUS_COLORS[task.status] ?? ''}`}>
-                {task.status.replace('_', ' ')}
+                {t(task.status.replace('_', ' '))}
               </span>
               <div className="mt-3">
                 <div className="flex justify-between text-[9px] text-slate-600 mb-1">
-                  <span>Progress</span>
+                  <span>{t("Progress")}</span>
                   <span>{task.progress}%</span>
                 </div>
                 <div className="h-1.5 bg-[#121214] rounded-full overflow-hidden border border-[#2d2d34]">
@@ -216,7 +280,7 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
                 {hasMyWork && (
                   <div className="flex items-center justify-center gap-2 px-4 py-1.5 bg-[#181820] border-b border-[#2d2d34] shrink-0">
                     <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600">
-                      View:
+                      {t("View")}:
                     </span>
                     <button
                       onClick={() => setShowOriginal(false)}
@@ -226,7 +290,7 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
                           : 'text-slate-500 hover:text-slate-300 border border-transparent'
                       }`}
                     >
-                      My Work
+                      {t("My Work")}
                     </button>
                     <button
                       onClick={() => setShowOriginal(true)}
@@ -236,7 +300,7 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
                           : 'text-slate-500 hover:text-slate-300 border border-transparent'
                       }`}
                     >
-                      Original
+                      {t("Original")}
                     </button>
                   </div>
                 )}
@@ -245,7 +309,8 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
                   onZoomIn={zoomIn}
                   onZoomOut={zoomOut}
                   onZoomReset={zoomReset}
-                  episodeLabel={`Ch. ${task.chapterNumber} · ${task.series}`}
+                  episodeLabel={`${t('Chapter')} ${task.chapterNumber} ? ${task.series}`}
+                  regions={task.regions}
                   imageUrl={canvasImageUrl}
                   region={task.region}
                 />
@@ -258,9 +323,9 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
         <aside className="w-[268px] shrink-0 flex flex-col bg-[#1e1e24] border-l border-[#2d2d34] overflow-hidden">
           <div className="px-4 py-3 border-b border-[#2d2d34] shrink-0">
             <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-red-500" /> AI Production Suite
+              <Sparkles className="w-3.5 h-3.5 text-red-500" /> {t("AI Production Suite")}
             </h3>
-            <p className="text-[9px] text-slate-500 mt-0.5">Automated assist tools for manga creation</p>
+            <p className="text-[9px] text-slate-500 mt-0.5">{t("Automated assist tools for manga creation")}</p>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -295,7 +360,7 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
 
                       <div>
                         <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest block mb-1">
-                          Prompt
+                          {t("Prompt")}
                         </label>
                         <textarea
                           value={prompts[tool.id]}
@@ -308,7 +373,7 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
                       <div>
                         <div className="flex justify-between mb-1">
                           <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">
-                            Strength
+                            {t("Strength")}
                           </label>
                           <span className="text-[9px] font-mono text-slate-500">{strengths[tool.id]}%</span>
                         </div>
@@ -324,7 +389,7 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
 
                       <div>
                         <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest block mb-1">
-                          Apply To
+                          {t("Apply To")}
                         </label>
                         <select
                           value={applyTo[tool.id]}
@@ -332,7 +397,7 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
                           className="w-full bg-[#121214] border border-[#2d2d34] text-[10px] text-slate-400 font-mono px-2 py-1.5 rounded-md focus:outline-none cursor-pointer"
                         >
                           {APPLY_TO_OPTIONS.map((o) => (
-                            <option key={o} value={o}>{o}</option>
+                            <option key={o} value={o}>{t(o)}</option>
                           ))}
                         </select>
                       </div>
@@ -343,9 +408,9 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
                         className={`w-full flex items-center justify-center gap-2 py-2 rounded-md text-[10px] font-bold uppercase transition-all cursor-pointer disabled:opacity-60 ${tool.bgColor} ${tool.color} border ${tool.borderColor} hover:opacity-90`}
                       >
                         {isGenerating ? (
-                          <><Loader2 className="w-3 h-3 animate-spin" /> Generating…</>
+                          <><Loader2 className="w-3 h-3 animate-spin" /> {t("Generating...")}</>
                         ) : (
-                          <><Sparkles className="w-3 h-3" /> Auto Generate</>
+                          <><Sparkles className="w-3 h-3" /> {t("Auto Generate")}</>
                         )}
                       </button>
                     </div>
@@ -364,15 +429,17 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
           className="flex items-center gap-1.5 px-3 py-2 bg-[#2d2d34] hover:bg-[#3a3a44] border border-[#3a3a44] text-slate-400 hover:text-white text-[10px] font-bold uppercase rounded-md transition-all cursor-pointer"
         >
           <Download className="w-3.5 h-3.5" />
-          Download
+          {t("Download")}
         </button>
 
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="flex items-center gap-1.5 px-3 py-2 bg-[#2d2d34] hover:bg-[#3a3a44] border border-[#3a3a44] text-slate-400 text-[10px] font-bold uppercase rounded-md transition-all cursor-pointer"
+          disabled={isWorkLocked}
+          title={isWorkLocked ? t("This task is waiting for review or already approved") : t("Upload result")}
+          className="flex items-center gap-1.5 px-3 py-2 bg-[#2d2d34] hover:bg-[#3a3a44] disabled:opacity-40 disabled:cursor-not-allowed border border-[#3a3a44] text-slate-400 text-[10px] font-bold uppercase rounded-md transition-all cursor-pointer"
         >
           <Upload className="w-3.5 h-3.5" />
-          Upload
+          {t("Upload")}
         </button>
         <input
           ref={fileInputRef}
@@ -389,25 +456,28 @@ export default function AssistantWorkspace({ activeTask, onRefresh }: AssistantW
           onDragOver={(e) => { e.preventDefault(); setDropHover(true); }}
           onDragLeave={() => setDropHover(false)}
           onDrop={onFileDrop}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => !isWorkLocked && fileInputRef.current?.click()}
           className={`flex-1 flex items-center justify-center gap-2 py-2 border-2 border-dashed rounded-md cursor-pointer transition-all ${
-            dropHover
-              ? 'border-red-500/50 bg-red-500/5 text-red-400'
-              : 'border-[#2d2d34] text-slate-600 hover:border-slate-500 hover:text-slate-500'
+            isWorkLocked
+              ? 'border-[#2d2d34] text-slate-700 cursor-not-allowed'
+              : dropHover
+                ? 'border-red-500/50 bg-red-500/5 text-red-400'
+                : 'border-[#2d2d34] text-slate-600 hover:border-slate-500 hover:text-slate-500'
           }`}
         >
           <UploadCloud className="w-4 h-4" />
           <span className="text-[10px] font-bold uppercase tracking-wide">
-            Drop files here or click to browse
+            {t("Drop files here or click to browse")}
           </span>
         </div>
 
         <button
           onClick={handleSubmit}
-          className="flex items-center gap-1.5 px-5 py-2 bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold uppercase rounded-md transition-all cursor-pointer shrink-0"
+          disabled={isWorkLocked}
+          className="flex items-center gap-1.5 px-5 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white text-[10px] font-bold uppercase rounded-md transition-all cursor-pointer shrink-0"
         >
           <Send className="w-3.5 h-3.5" />
-          Submit Task
+          {task.status === 'REVISING' ? t("Resubmit Task") : isWorkLocked ? t("Waiting for Review") : t("Submit Task")}
         </button>
       </footer>
     </div>

@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import type { Series, ProductionStage } from '../../types/index.ts';
 import { StatusBadge } from '../common/States.tsx';
+import { useLanguage } from '../../../../i18n/LanguageContext';
+import { useSeriesCoverFallback } from '../../utils/seriesCover';
 
 // =========================================================
 // RANKING BADGE
@@ -28,6 +30,7 @@ export const RankingBadge: React.FC<RankingBadgeProps> = ({
   previous,
   size = 'md',
 }) => {
+  const { t } = useLanguage();
   const diff = previous ? previous - rank : 0;
   const sizeClass = size === 'sm' ? 'text-base w-8 h-8' : size === 'lg' ? 'text-4xl w-16 h-16' : 'text-2xl w-12 h-12';
 
@@ -54,7 +57,7 @@ export const RankingBadge: React.FC<RankingBadgeProps> = ({
       )}
       {previous !== undefined && diff === 0 && (
         <span className="text-[10px] font-mono font-bold text-neutral-400 flex items-center gap-0.5">
-          <Minus className="w-3 h-3" /> same
+          <Minus className="w-3 h-3" /> {t('same')}
         </span>
       )}
     </div>
@@ -74,6 +77,7 @@ export const VoteCounter: React.FC<VoteCounterProps> = ({
   votes,
   label = 'votes',
 }) => {
+  const { t } = useLanguage();
   const formatted =
     votes >= 1000 ? `${(votes / 1000).toFixed(1)}k` : votes.toString();
 
@@ -81,7 +85,7 @@ export const VoteCounter: React.FC<VoteCounterProps> = ({
     <div className="flex items-center gap-1.5">
       <Heart className="w-3.5 h-3.5 text-[#E63946]" />
       <span className="font-syne font-extrabold text-sm text-ink-black">{formatted}</span>
-      <span className="font-mono text-[9px] text-neutral-400 uppercase">{label}</span>
+      <span className="font-mono text-[9px] text-neutral-400 uppercase">{t(label)}</span>
     </div>
   );
 };
@@ -119,6 +123,7 @@ const priorityTextStyles = {
 };
 
 export const DeadlineCard: React.FC<DeadlineCardProps> = ({ deadline }) => {
+  const { t } = useLanguage();
   return (
     <div
       className={`border-l-4 ${priorityStyles[deadline.priority]} px-4 py-3 border border-l-4`}
@@ -133,10 +138,10 @@ export const DeadlineCard: React.FC<DeadlineCardProps> = ({ deadline }) => {
             className={`font-syne font-extrabold text-sm ${priorityTextStyles[deadline.priority]}`}
           >
             {deadline.daysRemaining === 0
-              ? 'Today!'
+              ? t('Today!')
               : deadline.daysRemaining < 0
-              ? `${Math.abs(deadline.daysRemaining)}d overdue`
-              : `${deadline.daysRemaining}d left`}
+              ? t('{{count}}d overdue', { count: Math.abs(deadline.daysRemaining) })
+              : t('{{count}}d left', { count: deadline.daysRemaining })}
           </p>
           <p className="font-mono text-[9px] text-neutral-400">{deadline.dueDate}</p>
         </div>
@@ -186,13 +191,14 @@ export const ProgressTimeline: React.FC<ProgressTimelineProps> = ({
   currentStage,
   completionPercentage,
 }) => {
+  const { t } = useLanguage();
   const currentIdx = STAGE_ORDER.indexOf(currentStage);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <span className="font-mono text-xs font-bold text-neutral-600 uppercase tracking-wide">
-          {STAGE_LABELS[currentStage]}
+          {t(STAGE_LABELS[currentStage])}
         </span>
         <span className="font-syne font-extrabold text-sm text-ink-black">
           {completionPercentage}%
@@ -213,7 +219,7 @@ export const ProgressTimeline: React.FC<ProgressTimelineProps> = ({
           return (
             <React.Fragment key={stage}>
               <div
-                title={STAGE_LABELS[stage]}
+                title={t(STAGE_LABELS[stage])}
                 className={`w-3 h-3 border-2 transition-colors flex-shrink-0 ${
                   isDone
                     ? 'bg-emerald-500 border-emerald-600'
@@ -234,8 +240,8 @@ export const ProgressTimeline: React.FC<ProgressTimelineProps> = ({
         })}
       </div>
       <div className="flex justify-between mt-1">
-        <span className="font-mono text-[8px] text-neutral-400 uppercase">Start</span>
-        <span className="font-mono text-[8px] text-neutral-400 uppercase">Published</span>
+        <span className="font-mono text-[8px] text-neutral-400 uppercase">{t('Start')}</span>
+        <span className="font-mono text-[8px] text-neutral-400 uppercase">{t('Published')}</span>
       </div>
     </div>
   );
@@ -258,6 +264,7 @@ const seriesStatusVariant: Record<string, string> = {
 };
 
 export const SeriesCard: React.FC<SeriesCardProps> = ({ series }) => {
+  const { t } = useLanguage();
   const rankDiff = series.previousRanking - series.currentRanking;
 
   return (
@@ -270,6 +277,7 @@ export const SeriesCard: React.FC<SeriesCardProps> = ({ series }) => {
         <img
           src={series.coverUrl}
           alt={series.title}
+          onError={(event) => useSeriesCoverFallback(event.currentTarget, series.title)}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
         <div className="absolute top-2 right-2">
@@ -301,8 +309,8 @@ export const SeriesCard: React.FC<SeriesCardProps> = ({ series }) => {
             <Calendar className="w-3 h-3" />
             <span className="font-mono text-[9px]">
               {series.remainingDays <= 0
-                ? 'OVERDUE'
-                : `${series.remainingDays}d`}
+                ? t('OVERDUE')
+                : t('{{count}}d', { count: series.remainingDays })}
             </span>
           </div>
         </div>

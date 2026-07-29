@@ -65,8 +65,13 @@ export interface Task {
   chapterId: string;
   chapter?: string; // MongoDB ref option
   assignedTo: string; // userId or assistant name
+  assignedBy?: string;
   title: string;
+  type?: string;
+  description?: string;
   status: TaskStatus;
+  pageIds?: any[];
+  dueAt?: string;
   // Bounding box or coordinates defined for the task if applicable
   region?: {
     x: number;
@@ -75,6 +80,14 @@ export interface Task {
     height: number;
     type: 'panel' | 'bubble' | 'character';
   } | null;
+  regions?: Array<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    type: string;
+    comment?: string;
+  }>;
   completedAt?: string;
   reviewNote?: string;
   reviewedAt?: string;

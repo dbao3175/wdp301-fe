@@ -22,7 +22,7 @@ export const EditorApp: React.FC<EditorAppProps> = ({ onLogout }) => {
         <Route path="review/:seriesId" element={<ManuscriptReviewPage />} />
         <Route path="series" element={<SeriesManagementPage />} />
         <Route path="series/:id" element={<SeriesDetailPage />} />
-        <Route path="*" element={<Navigate to="dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/editor/dashboard" replace />} />
       </Routes>
     </EditorLayout>
   );

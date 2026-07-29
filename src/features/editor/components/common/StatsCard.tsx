@@ -1,5 +1,6 @@
 import React from 'react';
 import { LucideIcon } from 'lucide-react';
+import { useLanguage } from '../../../../i18n/LanguageContext';
 
 interface StatsCardProps {
   title: string;
@@ -34,6 +35,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
   variant = 'default',
   className = '',
 }) => {
+  const { t } = useLanguage();
   return (
     <div
       className={`border-2 ${variantStyles[variant]} p-5 shadow-[4px_4px_0px_#141414] relative overflow-hidden ${className}`}
@@ -49,13 +51,13 @@ export const StatsCard: React.FC<StatsCardProps> = ({
       <div className="flex items-start justify-between relative z-10">
         <div className="flex-1">
           <p className="text-[10px] font-mono font-extrabold uppercase tracking-widest text-neutral-500 mb-1">
-            {title}
+            {t(title)}
           </p>
           <p className="text-3xl font-black font-syne text-ink-black leading-none">
             {value}
           </p>
           {subtitle && (
-            <p className="text-xs font-sans text-neutral-500 mt-1 font-medium">{subtitle}</p>
+            <p className="text-xs font-sans text-neutral-500 mt-1 font-medium">{t(subtitle)}</p>
           )}
           {trend && (
             <div className="mt-2 flex items-center gap-1">
@@ -70,7 +72,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
               >
                 {trend.value > 0 ? '▲' : trend.value < 0 ? '▼' : '─'} {Math.abs(trend.value)}
               </span>
-              <span className="text-[10px] font-mono text-neutral-400">{trend.label}</span>
+              <span className="text-[10px] font-mono text-neutral-400">{t(trend.label)}</span>
             </div>
           )}
         </div>

@@ -73,7 +73,8 @@ export async function makeFetchRequest(
   const response = await fetch(url, {
     method,
     headers,
-    body: body ? JSON.stringify(body) : undefined
+    body: body ? JSON.stringify(body) : undefined,
+    cache: method === 'GET' ? 'no-store' : 'default',
   });
 
   const responseText = await response.text();

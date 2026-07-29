@@ -18,6 +18,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { User, Series, Chapter, Task } from "../types";
 import { apiClient } from "../api/client";
+import { useLanguage } from "../i18n/LanguageContext";
 import {
   Send,
   UploadCloud,
@@ -98,6 +99,7 @@ function MangakaView({
   currentUser: User;
   onSubmit: (draft: ProposalDraft) => void;
 }) {
+  const { language, t } = useLanguage();
   const [title, setTitle] = useState("");
   const [genre, setGenre] = useState("");
   const [synopsis, setSynopsis] = useState("");
@@ -144,7 +146,7 @@ function MangakaView({
     e.preventDefault();
     if (!title.trim() || !genre || !synopsis.trim() || !file) {
       setStatusMsg({
-        text: "Please fill in all required fields and upload a storyboard file.",
+        text: t("Please fill in all required fields and upload a storyboard file."),
         ok: false,
       });
       return;
@@ -170,13 +172,13 @@ function MangakaView({
         storyboardFile: file,
         storyboardPreviewName: file?.name ?? "",
         storyboardPreviewSize: file ? formatSize(file.size) : "",
-        submittedAt: new Date().toLocaleString(),
+        submittedAt: new Date().toLocaleString(language === "vi" ? "vi-VN" : "en-US"),
         submittedBy: currentUser.name,
       };
 
       onSubmit(draft);
     } catch (err: any) {
-      setStatusMsg({ text: `Submission failed: ${err.message}`, ok: false });
+      setStatusMsg({ text: `${t("Submission failed")}: ${t(err.message)}`, ok: false });
     } finally {
       setIsSubmitting(false);
     }
@@ -191,12 +193,11 @@ function MangakaView({
             <Brush className="w-3.5 h-3.5 text-white" />
           </div>
           <h2 className="text-base font-bold text-white uppercase tracking-wide">
-            New Series Proposal
+            {t("New Series Proposal")}
           </h2>
         </div>
         <p className="text-[11px] text-slate-500 leading-relaxed">
-          Submit your series concept and required storyboard archive to the
-          Tantou Editor for review.
+          {t("Submit your series concept and required storyboard archive to the Tantou Editor for review.")}
         </p>
       </div>
 
@@ -223,14 +224,14 @@ function MangakaView({
         {/* Series Title */}
         <div>
           <label className={LABEL} htmlFor="prop-title">
-            Series Title <span className="text-red-500">*</span>
+            {t("Series Title")} <span className="text-red-500">*</span>
           </label>
           <input
             id="prop-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Neon Ronin Chronicles"
+            placeholder={t("e.g. Neon Ronin Chronicles")}
             className={INPUT}
             required
           />
@@ -239,7 +240,7 @@ function MangakaView({
         {/* Genre */}
         <div>
           <label className={LABEL} htmlFor="prop-genre">
-            Genre <span className="text-red-500">*</span>
+            {t("Genre")} <span className="text-red-500">*</span>
           </label>
           <div className="flex flex-wrap gap-1.5">
             {GENRES.map((g) => (
@@ -259,7 +260,7 @@ function MangakaView({
           </div>
           {!genre && (
             <p className="text-[9px] text-slate-700 mt-1.5">
-              Select a genre above
+              {t("Select a genre above")}
             </p>
           )}
         </div>
@@ -267,28 +268,28 @@ function MangakaView({
         {/* Synopsis */}
         <div>
           <label className={LABEL} htmlFor="prop-synopsis">
-            Synopsis <span className="text-red-500">*</span>
+            {t("Synopsis")} <span className="text-red-500">*</span>
           </label>
           <textarea
             id="prop-synopsis"
             value={synopsis}
             onChange={(e) => setSynopsis(e.target.value)}
             rows={5}
-            placeholder="Summarise the core concept, target audience, main character arc, and the unique hook of your series..."
+            placeholder={t("Summarise the core concept, target audience, main character arc, and the unique hook of your series...")}
             className={`${INPUT} resize-none leading-relaxed`}
             required
           />
           <p className="text-[9px] text-slate-700 mt-1 text-right">
-            {synopsis.length} chars
+            {synopsis.length} {t("chars")}
           </p>
         </div>
 
         {/* Storyboard Upload */}
         <div>
           <label className={LABEL}>
-            Upload Rough Storyboard / Story Archive{" "}
+            {t("Upload Rough Storyboard / Story Archive")}{" "}
             <span className="text-slate-600 normal-case font-normal">
-              (Optional — .zip, .pdf, .png)
+              {t("Optional")} — .zip, .pdf, .png
             </span>
           </label>
 
@@ -309,7 +310,7 @@ function MangakaView({
               <button
                 type="button"
                 onClick={handleRemoveFile}
-                title="Remove file"
+                title={t("Remove file")}
                 className="w-5 h-5 rounded-full bg-[#2d2d34] flex items-center justify-center text-slate-500 hover:text-red-400 transition-colors cursor-pointer shrink-0"
               >
                 <X className="w-3 h-3" />
@@ -343,15 +344,15 @@ function MangakaView({
               </div>
               <div className="text-center space-y-1">
                 <p className="text-sm font-medium text-slate-400">
-                  Click to upload storyboard or rough sketch
+                  {t("Click to upload storyboard or rough sketch")}
                 </p>
                 <p className="text-[10px] text-slate-700 font-mono">
-                  .zip · .pdf · .png · .jpg · .psd · .clip — max 50 MB
+                  .zip ? .pdf ? .png ? .jpg ? .psd ? .clip ? {t('Maximum size')}: 50 MB
                 </p>
               </div>
               <div className="px-4 py-1.5 rounded-md bg-[#2d2d34] border border-[#3a3a44]">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Browse files
+                  {t("Browse files")}
                 </span>
               </div>
             </div>
@@ -367,7 +368,7 @@ function MangakaView({
               e.target.value = "";
             }}
             className="hidden"
-            aria-label="Upload storyboard archive"
+            aria-label={t("Upload storyboard archive")}
           />
         </div>
 
@@ -381,7 +382,7 @@ function MangakaView({
             className="w-full py-3 rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg"
           >
             <Send className="w-4 h-4" />
-            {isSubmitting ? "Submitting…" : "Submit Proposal to Editor"}
+            {isSubmitting ? t("Submitting...") : t("Submit Proposal to Editor")}
           </button>
         </div>
       </form>
@@ -404,6 +405,7 @@ function EditorView({
   onReject: (comment: string) => void;
   onReset: () => void;
 }) {
+  const { t } = useLanguage();
   const [editorComment, setEditorComment] = useState("");
   const [actionDone, setActionDone] = useState<"forwarded" | "rejected" | null>(
     null,
@@ -417,7 +419,7 @@ function EditorView({
       await apiClient.proposals.downloadStoryboard((proposal as any)._id);
     } catch (err: any) {
       console.error(err);
-      alert("Failed to download storyboard");
+      alert(t("Failed to download storyboard"));
     } finally {
       setIsLoading(false);
     }
@@ -467,20 +469,20 @@ function EditorView({
         <div>
           <h3 className="text-base font-bold text-white mb-1">
             {actionDone === "forwarded"
-              ? "Forwarded to Publishing Board"
-              : "Revision Requested"}
+              ? t("Forwarded to Publishing Board")
+              : t("Revision Requested")}
           </h3>
           <p className="text-[11px] text-slate-500">
             {actionDone === "forwarded"
-              ? `"${proposal.title}" has been escalated to the Editorial Board.`
-              : `"${proposal.title}" has been returned to ${proposal.submittedBy} with your feedback.`}
+              ? t("{{title}} has been escalated to the Editorial Board.", { title: proposal.title })
+              : t("{{title}} has been returned to {{author}} with your feedback.", { title: proposal.title, author: proposal.submittedBy })}
           </p>
         </div>
         <button
           onClick={onReset}
           className="flex items-center gap-1.5 px-4 py-2 rounded-md border border-[#2d2d34] text-sm font-medium text-slate-400 hover:text-white hover:border-slate-500 transition-all cursor-pointer"
         >
-          <RotateCcw className="w-3.5 h-3.5" /> Review Another Proposal
+          <RotateCcw className="w-3.5 h-3.5" /> {t("Review Another Proposal")}
         </button>
       </div>
     );
@@ -495,14 +497,14 @@ function EditorView({
             <BookOpen className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-            Proposal Details
+            {t("Proposal Details")}
           </h2>
         </div>
 
         {/* Title */}
         <div className="bg-[#121214] border border-[#2d2d34] rounded-md px-4 py-3">
           <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">
-            Series Title
+            {t("Series Title")}
           </p>
           <p className="text-lg font-bold text-white leading-snug">
             {proposal.title}
@@ -512,7 +514,7 @@ function EditorView({
         {/* Genre */}
         <div className="bg-[#121214] border border-[#2d2d34] rounded-md px-4 py-3">
           <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">
-            Genre
+            {t("Genre")}
           </p>
           <span className="inline-block text-xs font-semibold text-white bg-[#2d2d34] border border-[#3a3a44] px-2.5 py-1 rounded-md">
             {proposal.genre}
@@ -522,7 +524,7 @@ function EditorView({
         {/* Synopsis */}
         <div className="bg-[#121214] border border-[#2d2d34] rounded-md px-4 py-3 flex-1">
           <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-2">
-            Synopsis
+            {t("Synopsis")}
           </p>
           <p className="text-sm text-white leading-relaxed">
             {proposal.synopsis}
@@ -532,7 +534,7 @@ function EditorView({
         {/* Submission meta */}
         <div className="flex items-center justify-between text-[9px] text-slate-600 font-mono px-1">
           <span>
-            By <span className="text-slate-400">{proposal.submittedBy}</span>
+            {t("By")} <span className="text-slate-400">{proposal.submittedBy}</span>
           </span>
           <span>{proposal.submittedAt}</span>
         </div>
@@ -545,7 +547,7 @@ function EditorView({
             <FileText className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-            Storyboard File
+            {t("Storyboard File")}
           </h2>
         </div>
 
@@ -573,11 +575,11 @@ function EditorView({
               className="w-full py-2.5 rounded-md bg-white hover:bg-slate-200 text-black font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
             >
               <Download className="w-4 h-4" />
-              Download Storyboard Archive
+              {t("Download Storyboard Archive")}
             </button>
 
             <p className="text-[9px] text-slate-700 text-center">
-              Review the complete storyboard before making a decision.
+              {t("Review the complete storyboard before making a decision.")}
             </p>
           </div>
         ) : (
@@ -585,10 +587,10 @@ function EditorView({
           <div className="bg-[#121214] border border-dashed border-[#2d2d34] rounded-md p-5 flex flex-col items-center justify-center gap-3 flex-1">
             <Eye className="w-10 h-10 stroke-[1] text-slate-700" />
             <p className="text-xs font-medium text-slate-600 text-center">
-              No storyboard attached
+              {t("No storyboard attached")}
             </p>
             <p className="text-[9px] text-slate-700 text-center leading-relaxed">
-              The mangaka did not attach a storyboard file with this proposal.
+              {t("The mangaka did not attach a storyboard file with this proposal.")}
             </p>
           </div>
         )}
@@ -601,26 +603,26 @@ function EditorView({
             <Brush className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-            Editor's Decision
+            {t("Editor's Decision")}
           </h2>
         </div>
 
         {/* Comment textarea */}
         <div className="flex-1 flex flex-col gap-2">
           <label className={LABEL} htmlFor="editor-comment">
-            Editor's Comments <span className="text-red-500">*</span>
+            {t("Editor's Comments")} <span className="text-red-500">*</span>
           </label>
           <textarea
             id="editor-comment"
             value={editorComment}
             onChange={(e) => setEditorComment(e.target.value)}
             rows={7}
-            placeholder="Provide detailed feedback on plot coherence, visual style, target demographic fit, commercial viability…"
+            placeholder={t("Provide detailed feedback on plot coherence, visual style, target demographic fit, commercial viability...")}
             className={`${INPUT} resize-none leading-relaxed flex-1`}
           />
           {!editorComment.trim() && (
             <p className="text-[9px] text-slate-700">
-              A comment is required before taking action.
+              {t("A comment is required before taking action.")}
             </p>
           )}
         </div>
@@ -634,7 +636,7 @@ function EditorView({
             className="w-full py-3 rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-2"
           >
             <ChevronRight className="w-4 h-4" />
-            {isLoading ? "Processing…" : "Forward to Publishing Board"}
+            {isLoading ? t("Processing...") : t("Forward to Publishing Board")}
           </button>
 
           {/* Reject / Request Revision — dark slate */}
@@ -644,7 +646,7 @@ function EditorView({
             className="w-full py-2.5 rounded-md bg-[#1e1e24] hover:bg-[#26262e] border border-[#3a3a44] hover:border-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-semibold text-white transition-all cursor-pointer flex items-center justify-center gap-2"
           >
             <XCircle className="w-4 h-4 text-slate-500" />
-            Reject / Request Revision
+            {t("Reject / Request Revision")}
           </button>
         </div>
       </div>
@@ -665,6 +667,7 @@ export default function TaskDelegation({
   onSelectSeries,
   onSelectChapter,
 }: TaskDelegationProps) {
+  const { language, t } = useLanguage();
   // Toast status
   const [toast, setToast] = useState<{
     msg: string;
@@ -720,7 +723,7 @@ export default function TaskDelegation({
 
   const handleMangakaSubmit = async (draft: ProposalDraft) => {
     if (!draft.storyboardFile) {
-      showToast("Storyboard file is required", "warn");
+      showToast(t("Storyboard file is required"), "warn");
       return;
     }
     try {
@@ -731,10 +734,10 @@ export default function TaskDelegation({
         draft.storyboardFile,
       );
       setSubmittedProposal(draft);
-      showToast("Proposal submitted successfully!", "success");
+      showToast(t("Proposal submitted successfully!"), "success");
       onRefreshAll();
     } catch (err: any) {
-      showToast(err.message || "Submission failed", "warn");
+      showToast(t(err.message || "Submission failed"), "warn");
     }
   };
 
@@ -753,20 +756,17 @@ export default function TaskDelegation({
 
       await apiClient.notifications.create(
         mangakaIdStr,
-        "Đề xuất Series mới đã được chuyển tiếp lên Board!",
-        `Biên tập viên ${currentUser.name} đã chuyển tiếp đề xuất Series "${selectedProposal.title}" của bạn lên Hội đồng để bỏ phiếu. Nhận xét: ${comment}`,
-        "INFO",
+        'Series proposal forwarded to the Board',
+        `Editor ${currentUser.name} forwarded your series proposal "${selectedProposal.title}" to the Editorial Board for voting. Comment: ${comment}`,
+        'INFO',
       );
 
-      showToast(
-        "Đã chuyển tiếp đề xuất lên Hội đồng biên tập và khởi tạo Voting Session.",
-        "success",
-      );
+      showToast(t('Proposal forwarded to the Editorial Board and voting session created.'), 'success');
       fetchProposals();
       onRefreshAll();
       handleReset();
     } catch (err: any) {
-      showToast(err.message || "Chuyển tiếp thất bại", "warn");
+      showToast(t(err.message || 'Failed to forward proposal'), 'warn');
     }
   };
 
@@ -783,17 +783,17 @@ export default function TaskDelegation({
 
       await apiClient.notifications.create(
         mangakaIdStr,
-        "Yêu cầu chỉnh sửa đề xuất Series mới",
-        `Biên tập viên ${currentUser.name} yêu cầu chỉnh sửa đề xuất Series "${selectedProposal.title}". Nhận xét: ${comment}`,
-        "WARNING",
+        'Revision requested for series proposal',
+        `Editor has requested revision for your proposal "${selectedProposal.title}". Reason: ${comment}`,
+        'WARNING',
       );
 
-      showToast("Đã từ chối đề xuất và gửi nhận xét cho tác giả.", "warn");
+      showToast(t('Proposal rejected and feedback sent to the author.'), 'warn');
       fetchProposals();
       onRefreshAll();
       handleReset();
     } catch (err: any) {
-      showToast(err.message || "Từ chối đề xuất thất bại", "warn");
+      showToast(t(err.message || 'Failed to reject proposal'), 'warn');
     }
   };
 
@@ -815,8 +815,8 @@ export default function TaskDelegation({
           selectedProposal.storyboardOriginalName || "storyboard.zip",
         storyboardPreviewSize: "N/A",
         submittedAt: selectedProposal.submittedAt
-          ? new Date(selectedProposal.submittedAt).toLocaleString()
-          : new Date().toLocaleString(),
+          ? new Date(selectedProposal.submittedAt).toLocaleString(language === "vi" ? "vi-VN" : "en-US")
+          : new Date().toLocaleString(language === "vi" ? "vi-VN" : "en-US"),
         submittedBy:
           typeof selectedProposal.mangakaId === "object" &&
           selectedProposal.mangakaId !== null
@@ -842,10 +842,10 @@ export default function TaskDelegation({
           </div>
           <div>
             <h1 className="text-[13px] font-bold text-white leading-none uppercase tracking-wide">
-              Series Proposal{isEditor ? " — Review Queue" : " — Submission"}
+              {t("Series Proposal")}{isEditor ? ` — ${t("Review Queue")}` : ` — ${t("Submission")}`}
             </h1>
             <p className="text-[10px] text-slate-500 mt-0.5">
-              {currentUser.role} ·{" "}
+              {t(currentUser.role)} ·{" "}
               <span className="text-slate-400">{currentUser.name}</span>
             </p>
           </div>
@@ -872,7 +872,7 @@ export default function TaskDelegation({
               : "bg-red-600/10 border-red-600/20 text-red-400"
           }`}
         >
-          {isMangaka ? "✏ Mangaka View" : "👁 Editor View"}
+          {isMangaka ? `✏ ${t("Mangaka View")}` : `👁 ${t("Editor View")}`}
         </div>
       </header>
 
@@ -894,21 +894,21 @@ export default function TaskDelegation({
             </div>
             <div>
               <h2 className="text-base font-bold text-white mb-2">
-                Proposal Submitted!
+                {t("Proposal Submitted!")}
               </h2>
               <p className="text-sm text-slate-400 leading-relaxed">
                 <span className="text-white font-semibold">
                   "{submittedProposal!.title}"
                 </span>{" "}
-                has been sent to the Tantou Editor for review.
+                {t("has been sent to the Tantou Editor for review.")}
                 {submittedProposal!.storyboardPreviewName && (
                   <>
                     {" "}
-                    The storyboard archive{" "}
+                    {t("The storyboard archive")}{" "}
                     <span className="text-white font-medium">
                       {submittedProposal!.storyboardPreviewName}
                     </span>{" "}
-                    was attached.
+                    {t("was attached.")}
                   </>
                 )}
               </p>
@@ -918,7 +918,7 @@ export default function TaskDelegation({
             <div className="w-full bg-[#1e1e24] border border-[#2d2d34] rounded-md px-5 py-4 text-left space-y-3">
               <div>
                 <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">
-                  Title
+                  {t("Title")}
                 </p>
                 <p className="text-sm text-white font-semibold">
                   {submittedProposal!.title}
@@ -926,14 +926,14 @@ export default function TaskDelegation({
               </div>
               <div>
                 <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">
-                  Genre
+                  {t("Genre")}
                 </p>
                 <p className="text-sm text-white">{submittedProposal!.genre}</p>
               </div>
               {submittedProposal!.storyboardPreviewName && (
                 <div>
                   <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">
-                    Attachment
+                    {t("Attachment")}
                   </p>
                   <p className="text-sm text-white font-mono">
                     {submittedProposal!.storyboardPreviewName} (
@@ -947,7 +947,7 @@ export default function TaskDelegation({
               onClick={handleReset}
               className="flex items-center gap-1.5 px-5 py-2.5 rounded-md border border-[#2d2d34] text-sm font-medium text-slate-400 hover:text-white hover:border-slate-500 transition-all cursor-pointer"
             >
-              <RotateCcw className="w-3.5 h-3.5" /> Submit Another Proposal
+              <RotateCcw className="w-3.5 h-3.5" /> {t("Submit Another Proposal")}
             </button>
           </div>
         )}
@@ -958,7 +958,7 @@ export default function TaskDelegation({
             {/* Sidebar list of pending proposals */}
             <div className="lg:col-span-3 bg-[#1e1e24] border border-[#2d2d34] rounded-md p-4 space-y-2 max-h-[500px] overflow-y-auto">
               <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
-                Pending Proposals
+                {t("Pending Proposals")}
               </h3>
               {pendingProposals.map((s) => (
                 <button
@@ -973,7 +973,7 @@ export default function TaskDelegation({
                 >
                   <p className="text-xs truncate">{s.title}</p>
                   <p className="text-[9px] text-slate-500 mt-1 uppercase">
-                    By{" "}
+                    {t("By")}{" "}
                     {typeof s.mangakaId === "object" && s.mangakaId !== null
                       ? (s.mangakaId as any).name
                       : "Author"}
@@ -1002,10 +1002,10 @@ export default function TaskDelegation({
             </div>
             <div>
               <p className="text-sm font-semibold text-slate-500">
-                No proposals in queue
+                {t("No proposals in queue")}
               </p>
               <p className="text-[11px] text-slate-700 mt-1">
-                Waiting for a Mangaka to submit a new series proposal.
+                {t("Waiting for a Mangaka to submit a new series proposal.")}
               </p>
             </div>
           </div>
@@ -1016,7 +1016,7 @@ export default function TaskDelegation({
           <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
             <AlertCircle className="w-10 h-10 stroke-[1] text-slate-700" />
             <p className="text-sm text-slate-600">
-              This section is available to Mangaka and Editor roles only.
+              {t("This section is available to Mangaka and Editor roles only.")}
             </p>
           </div>
         )}

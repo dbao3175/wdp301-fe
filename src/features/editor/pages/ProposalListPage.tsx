@@ -7,13 +7,14 @@ import type { Proposal, ProposalStatus } from '../types/index.ts';
 import { SearchInput, FilterDropdown, DataTable } from '../components/common/DataTable.tsx';
 import type { Column } from '../components/common/DataTable.tsx';
 import { LoadingState, ErrorState, StatusBadge } from '../components/common/States.tsx';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
-const handleDownloadClick = async (id: string) => {
+const handleDownloadClick = async (id: string, errorMessage: string) => {
   try {
     await apiClient.proposals.downloadStoryboard(id);
   } catch (err) {
     console.error(err);
-    alert('Something went wrong downloading the file');
+    alert(errorMessage);
   }
 };
 
@@ -58,6 +59,7 @@ const statusLabels: Record<ProposalStatus, string> = {
 };
 
 export const ProposalListPage: React.FC = () => {
+  const { language, t } = useLanguage();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -70,7 +72,7 @@ export const ProposalListPage: React.FC = () => {
     tags: p.tags || [],
     mangaka: {
       id: p.mangakaId?._id || p.mangaka?.id || '',
-      name: p.mangakaId?.name || p.mangaka?.name || 'Unknown',
+      name: p.mangakaId?.name || p.mangaka?.name || t('Unknown'),
       avatar: p.mangaka?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default',
       email: p.mangakaId?.email || p.mangaka?.email || '',
       totalSeries: p.mangaka?.totalSeries || 0,
@@ -159,7 +161,7 @@ export const ProposalListPage: React.FC = () => {
       header: 'Submitted',
       render: (row) => (
         <span className="font-mono text-[10px] text-neutral-500">
-          {new Date(row.submittedDate).toLocaleDateString('en-US', {
+          {new Date(row.submittedDate).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', {
             month: 'short',
             day: 'numeric',
             year: 'numeric',
@@ -172,7 +174,7 @@ export const ProposalListPage: React.FC = () => {
       header: 'Status',
       render: (row) => (
         <StatusBadge
-          label={statusLabels[row.status]}
+          label={t(statusLabels[row.status])}
           variant={statusVariantMap[row.status] as any}
         />
       ),
@@ -187,14 +189,14 @@ export const ProposalListPage: React.FC = () => {
             className="inline-flex items-center gap-1 px-3 py-1.5 bg-ink-black text-white text-[9px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-neutral-800 transition-colors shadow-[2px_2px_0px_#141414] cursor-pointer"
           >
             <Eye className="w-3 h-3" />
-            Review
+            {t('Review')}
           </Link>
           <button
-            onClick={() => handleDownloadClick(row.id)}
+            onClick={() => handleDownloadClick(row.id, t('Something went wrong downloading the file'))}
             className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#E63946] text-white text-[9px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-red-600 transition-colors shadow-[2px_2px_0px_#141414] cursor-pointer"
           >
             <Download className="w-3 h-3" />
-            Download
+            {t('Download')}
           </button>
         </div>
       ),
@@ -207,10 +209,10 @@ export const ProposalListPage: React.FC = () => {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="font-syne font-extrabold text-2xl text-ink-black tracking-tight">
-            Proposals
+            {t('Proposals')}
           </h1>
           <p className="font-mono text-xs text-neutral-500 mt-0.5 uppercase tracking-widest">
-            Assigned Manga Proposals — Review Queue
+            {t('Assigned Manga Proposals — Review Queue')}
           </p>
         </div>
         <button
@@ -218,7 +220,7 @@ export const ProposalListPage: React.FC = () => {
           className="flex items-center gap-1.5 px-3 py-2 bg-white border-2 border-ink-black text-xs font-mono font-bold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-50 transition-colors cursor-pointer"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          Refresh
+          {t('Refresh')}
         </button>
       </div>
 
@@ -227,14 +229,14 @@ export const ProposalListPage: React.FC = () => {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Search proposals..."
+          placeholder={t('Search proposals...')}
           className="flex-1 min-w-48"
         />
         <FilterDropdown
           value={statusFilter}
           onChange={setStatusFilter}
           options={STATUS_OPTIONS}
-          label="Status"
+          label={t('Status')}
         />
         <button
           onClick={() => setSortOrder((s) => (s === 'desc' ? 'asc' : 'desc'))}
@@ -242,11 +244,11 @@ export const ProposalListPage: React.FC = () => {
         >
           {sortOrder === 'desc' ? (
             <>
-              <SortDesc className="w-3.5 h-3.5" /> Newest
+              <SortDesc className="w-3.5 h-3.5" /> {t('Newest')}
             </>
           ) : (
             <>
-              <SortAsc className="w-3.5 h-3.5" /> Oldest
+              <SortAsc className="w-3.5 h-3.5" /> {t('Oldest')}
             </>
           )}
         </button>
@@ -256,16 +258,16 @@ export const ProposalListPage: React.FC = () => {
       {proposals && (
         <div className="flex items-center gap-4 text-xs font-mono text-neutral-500">
           <span>
-            <strong className="text-ink-black">{proposals.length}</strong> proposals
+            <strong className="text-ink-black">{proposals.length}</strong> {t('proposals')}
           </span>
           <span>
-            <strong className="text-amber-600">{proposals.filter(p => p.status === 'SUBMITTED' || p.status === 'UNDER_REVIEW').length}</strong> need review
+            <strong className="text-amber-600">{proposals.filter(p => p.status === 'SUBMITTED' || p.status === 'UNDER_REVIEW').length}</strong> {t('need review')}
           </span>
           <span>
-            <strong className="text-orange-600">{proposals.filter(p => p.status === 'REVISION_REQUESTED').length}</strong> revision requested
+            <strong className="text-orange-600">{proposals.filter(p => p.status === 'REVISION_REQUESTED').length}</strong> {t('revision requested')}
           </span>
           <span>
-            <strong className="text-emerald-600">{proposals.filter(p => p.status === 'APPROVED_BY_TANTOU' || p.status === 'APPROVED').length}</strong> approved
+            <strong className="text-emerald-600">{proposals.filter(p => p.status === 'APPROVED_BY_TANTOU' || p.status === 'APPROVED').length}</strong> {t('approved')}
           </span>
         </div>
       )}

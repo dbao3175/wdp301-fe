@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { BookCheck, ChevronDown, Gavel, LoaderCircle, RefreshCw } from 'lucide-react';
 import { apiClient } from '../../api/client';
+import { useLanguage } from '../../i18n/LanguageContext';
 import {
   BoardPublication,
   PublicationDecision,
@@ -63,6 +64,7 @@ export default function BoardPublicationPanel({
   boardMembers,
   onChanged,
 }: BoardPublicationPanelProps) {
+  const { t } = useLanguage();
   const [items, setItems] = useState<BoardPublication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -93,11 +95,11 @@ export default function BoardPublicationPanel({
           : [];
       setItems(list.map(normalizePublication));
     } catch (err: any) {
-      setError(err.message || 'Unable to load publication reviews.');
+      setError(t(err.message || 'Unable to load publication reviews.'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load();
@@ -126,7 +128,7 @@ export default function BoardPublicationPanel({
       await load();
       onChanged();
     } catch (err: any) {
-      setMessage(err.message || 'The board action could not be completed.');
+      setMessage(t(err.message || 'The board action could not be completed.'));
     } finally {
       setSubmitting(false);
     }
@@ -135,11 +137,11 @@ export default function BoardPublicationPanel({
   const openSession = async () => {
     if (!selected) return;
     if (voterIds.length === 0) {
-      setMessage('Select at least one required voter.');
+      setMessage(t('Select at least one required voter.'));
       return;
     }
     if (!chairpersonId) {
-      setMessage('Select a chairperson for tie-break decisions.');
+      setMessage(t('Select a chairperson for tie-break decisions.'));
       return;
     }
     await runAndRefresh(
@@ -148,7 +150,7 @@ export default function BoardPublicationPanel({
         chairpersonId,
         newSchedule,
       }),
-      'Publication voting session opened.',
+      t('Publication voting session opened.'),
     );
   };
 
@@ -156,11 +158,11 @@ export default function BoardPublicationPanel({
     if (!selected?.session?._id) return;
     const tiedDecisions = selected.session.tiedDecisions || [];
     if (tieBreak && !tiedDecisions.includes(decision)) {
-      setMessage('Choose one of the tied publication decisions.');
+      setMessage(t('Choose one of the tied publication decisions.'));
       return;
     }
     if (!comment.trim()) {
-      setMessage('A board comment is required.');
+      setMessage(t('A board comment is required.'));
       return;
     }
     const submit = tieBreak
@@ -168,7 +170,7 @@ export default function BoardPublicationPanel({
       : apiClient.boardPublications.vote;
     await runAndRefresh(
       () => submit(selected.session!._id, decision, comment.trim()),
-      tieBreak ? 'Tie-break decision recorded.' : 'Publication vote recorded.',
+      tieBreak ? t('Tie-break decision recorded.') : t('Publication vote recorded.'),
     );
   };
 
@@ -178,10 +180,10 @@ export default function BoardPublicationPanel({
         <div>
           <h2 className="font-syne text-lg font-black uppercase flex items-center gap-2">
             <BookCheck className="w-5 h-5 text-[#E63946]" />
-            Chapter Publication Review
+            {t('Chapter Publication Review')}
           </h2>
           <p className="font-mono text-[9px] text-neutral-500 font-bold uppercase mt-1">
-            Open a voting session, review the tally, and decide publication.
+            {t('Open a voting session, review the tally, and decide publication.')}
           </p>
         </div>
         <button
@@ -189,7 +191,7 @@ export default function BoardPublicationPanel({
           onClick={load}
           disabled={loading}
           className="border-2 border-ink-black p-2 hover:bg-manuscript-gray disabled:opacity-50"
-          aria-label="Refresh publication reviews"
+          aria-label={t('Refresh publication reviews')}
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
@@ -208,11 +210,11 @@ export default function BoardPublicationPanel({
 
       {loading ? (
         <div className="p-10 flex items-center justify-center gap-2 font-mono text-xs uppercase text-neutral-500">
-          <LoaderCircle className="w-4 h-4 animate-spin" /> Loading publication queue...
+          <LoaderCircle className="w-4 h-4 animate-spin" /> {t('Loading publication queue...')}
         </div>
       ) : items.length === 0 ? (
         <div className="m-5 p-8 border-2 border-dashed border-neutral-400 text-center font-mono text-xs uppercase text-neutral-500">
-          No chapters are waiting for Editorial Board review.
+          {t('No chapters are waiting for Editorial Board review.')}
         </div>
       ) : (
         <div className="divide-y-4 divide-ink-black">
@@ -252,23 +254,23 @@ export default function BoardPublicationPanel({
                 >
                   <div>
                     <p className="font-syne font-black uppercase text-sm">
-                      {series?.title || 'Unknown Series'} ? Chapter {chapter?.chapterNumber ?? '?'}
+                      {series?.title || t('Unknown Series')} · {t('Chapter')} {chapter?.chapterNumber ?? '?'}
                     </p>
                     <p className="text-xs text-neutral-500 font-bold mt-1">
-                      {chapter?.title || 'Untitled chapter'}
+                      {chapter?.title || t('Untitled chapter')}
                     </p>
                     <div className="flex flex-wrap gap-2 mt-3">
                       <span className={`px-2 py-1 border text-[9px] font-mono font-black uppercase ${statusClass(status)}`}>
-                        {status.replaceAll('_', ' ')}
+                        {t(status)}
                       </span>
                       {session && (
                         <span className="px-2 py-1 border border-ink-black text-[9px] font-mono font-black uppercase">
-                          {item.tally?.total || 0}/{item.tally?.required || session.requiredVoters?.length || 0} votes
+                          {item.tally?.total || 0}/{item.tally?.required || session.requiredVoters?.length || 0} {t('votes')}
                         </span>
                       )}
                       {session?.newSchedule && (
                         <span className="px-2 py-1 border border-ink-black bg-[#FFF3B0] text-[9px] font-mono font-black uppercase">
-                          Proposed schedule: {session.newSchedule}
+                          {t('Proposed schedule')}: {t(session.newSchedule)}
                         </span>
                       )}
                     </div>
@@ -280,15 +282,15 @@ export default function BoardPublicationPanel({
                   <div className="mt-5 pt-5 border-t-2 border-ink-black space-y-4">
                     {(tasks.length > 0 || pages.length > 0) && (
                       <div className="border-2 border-ink-black bg-manuscript-gray p-4 space-y-3">
-                        <p className="font-mono text-[10px] font-black uppercase">Review evidence</p>
+                        <p className="font-mono text-[10px] font-black uppercase">{t('Review evidence')}</p>
                         {tasks.length > 0 && (
                           <div>
-                            <p className="font-mono text-[9px] font-bold uppercase mb-2">Tasks ({tasks.length})</p>
+                            <p className="font-mono text-[9px] font-bold uppercase mb-2">{t('Tasks')} ({tasks.length})</p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                               {tasks.map((task) => (
                                 <div key={task._id} className="bg-white border border-neutral-400 p-2">
                                   <p className="text-[10px] font-bold">{task.title}</p>
-                                  <p className="font-mono text-[8px] uppercase text-neutral-500">{task.status.replaceAll('_', ' ')}</p>
+                                  <p className="font-mono text-[8px] uppercase text-neutral-500">{t(task.status.replaceAll('_', ' '))}</p>
                                 </div>
                               ))}
                             </div>
@@ -296,11 +298,11 @@ export default function BoardPublicationPanel({
                         )}
                         {pages.length > 0 && (
                           <div>
-                            <p className="font-mono text-[9px] font-bold uppercase mb-2">Pages ({pages.length})</p>
+                            <p className="font-mono text-[9px] font-bold uppercase mb-2">{t('Pages')} ({pages.length})</p>
                             <div className="flex flex-wrap gap-2">
                               {pages.map((page, index) => (
                                 <span key={page._id || index} className="bg-white border border-neutral-400 px-2 py-1 font-mono text-[8px] font-bold uppercase">
-                                  Page {page.pageNumber ?? index + 1}: {page.status?.replaceAll('_', ' ') || 'Available'}
+                                  {t('Page')} {page.pageNumber ?? index + 1}: {page.status ? t(page.status) : t('Available')}
                                 </span>
                               ))}
                             </div>
@@ -314,7 +316,7 @@ export default function BoardPublicationPanel({
                           {(['PUBLISH', 'REJECT', 'RESCHEDULE'] as const).map((option) => (
                             <div key={option} className="border-2 border-ink-black p-3 text-center bg-manuscript-gray">
                               <p className="font-mono text-xl font-black">{item.tally?.[option] || 0}</p>
-                              <p className="font-mono text-[8px] font-black uppercase">{option}</p>
+                              <p className="font-mono text-[8px] font-black uppercase">{t(option)}</p>
                             </div>
                           ))}
                         </div>
@@ -322,7 +324,7 @@ export default function BoardPublicationPanel({
                         <div className="space-y-2">
                           {item.votes.map((vote) => (
                             <div key={vote._id} className="border-2 border-neutral-300 p-3">
-                              <span className="font-mono text-[9px] font-black uppercase">{vote.decision}</span>
+                              <span className="font-mono text-[9px] font-black uppercase">{t(vote.decision)}</span>
                               {vote.comment && <p className="text-[10px] text-neutral-600 mt-1">{vote.comment}</p>}
                             </div>
                           ))}
@@ -330,17 +332,17 @@ export default function BoardPublicationPanel({
 
                         {isTieBreak && !isChair && (
                           <p className="p-3 border-2 border-[#FFF3B0] bg-[#FFF3B0]/40 font-mono text-[10px] font-bold uppercase">
-                            Waiting for the assigned chairperson to resolve the tie.
+                            {t('Waiting for the assigned chairperson to resolve the tie.')}
                           </p>
                         )}
                         {!isTieBreak && !assigned && (
                           <p className="p-3 border-2 border-neutral-300 bg-neutral-50 font-mono text-[10px] font-bold uppercase text-neutral-500">
-                            You are not assigned to vote in this session.
+                            {t('You are not assigned to vote in this session.')}
                           </p>
                         )}
                         {!isTieBreak && hasVoted && (
                           <p className="p-3 border-2 border-status-success bg-status-success/10 font-mono text-[10px] font-bold uppercase">
-                            Your vote has already been recorded.
+                            {t('Your vote has already been recorded.')}
                           </p>
                         )}
 
@@ -348,7 +350,7 @@ export default function BoardPublicationPanel({
                           <div className="border-4 border-ink-black p-4 space-y-3">
                             <p className="font-mono text-[10px] font-black uppercase flex items-center gap-2">
                               <Gavel className="w-4 h-4 text-[#E63946]" />
-                              {isTieBreak ? 'Chairperson tie-break' : 'Cast publication vote'}
+                              {isTieBreak ? t('Chairperson tie-break') : t('Cast publication vote')}
                             </p>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                               {voteOptions.map((option) => (
@@ -360,7 +362,7 @@ export default function BoardPublicationPanel({
                                     checked={decision === option}
                                     onChange={() => setDecision(option)}
                                   />
-                                  {option}
+                                  {t(option)}
                                 </label>
                               ))}
                             </div>
@@ -368,7 +370,7 @@ export default function BoardPublicationPanel({
                               rows={3}
                               value={comment}
                               onChange={(event) => setComment(event.target.value)}
-                              placeholder="Required board reasoning..."
+                              placeholder={t('Required board reasoning...')}
                               className="w-full border-2 border-ink-black p-3 text-xs resize-none bg-manuscript-gray"
                             />
                             <button
@@ -377,17 +379,17 @@ export default function BoardPublicationPanel({
                               disabled={submitting}
                               className="w-full bg-[#E63946] text-white border-2 border-ink-black py-3 font-syne text-xs font-black uppercase shadow-[3px_3px_0px_#141414] disabled:opacity-50"
                             >
-                              {submitting ? 'Submitting...' : isTieBreak ? 'Resolve tie' : 'Submit vote'}
+                              {submitting ? t('Submitting...') : isTieBreak ? t('Resolve tie') : t('Submit vote')}
                             </button>
                           </div>
                         )}
                       </>
                     ) : (
                       <div className="border-4 border-ink-black p-4 space-y-3">
-                        <p className="font-mono text-[10px] font-black uppercase">Open publication voting</p>
+                        <p className="font-mono text-[10px] font-black uppercase">{t('Open publication voting')}</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
-                            <p className="text-[10px] font-mono font-bold uppercase mb-1">Required voters</p>
+                            <p className="text-[10px] font-mono font-bold uppercase mb-1">{t('Required voters')}</p>
                             <div className="border-2 border-ink-black p-2 bg-white max-h-36 overflow-y-auto space-y-1">
                               {boardMembers.map((member) => (
                                 <label key={member._id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-manuscript-gray p-1">
@@ -403,13 +405,13 @@ export default function BoardPublicationPanel({
                             </div>
                           </div>
                           <label className="text-[10px] font-mono font-bold uppercase">
-                            Chairperson
+                            {t('Chairperson')}
                             <select
                               value={chairpersonId}
                               onChange={(event) => setChairpersonId(event.target.value)}
                               className="mt-1 w-full border-2 border-ink-black p-2 bg-white text-xs"
                             >
-                              <option value="">Select chairperson...</option>
+                              <option value="">{t('Select chairperson...')}</option>
                               {boardMembers.map((member) => (
                                 <option key={member._id} value={member._id}>{member.name}</option>
                               ))}
@@ -417,14 +419,14 @@ export default function BoardPublicationPanel({
                           </label>
                         </div>
                         <label className="block text-[10px] font-mono font-bold uppercase">
-                          Proposed publication schedule
+                          {t('Proposed publication schedule')}
                           <select
                             value={newSchedule}
                             onChange={(event) => setNewSchedule(event.target.value as PubSchedule)}
                             className="mt-1 w-full border-2 border-ink-black p-2 bg-white text-xs"
                           >
-                            <option value="WEEKLY">Weekly</option>
-                            <option value="MONTHLY">Monthly</option>
+                            <option value="WEEKLY">{t('Weekly')}</option>
+                            <option value="MONTHLY">{t('Monthly')}</option>
                           </select>
                         </label>
                         <button
@@ -433,7 +435,7 @@ export default function BoardPublicationPanel({
                           disabled={submitting}
                           className="w-full bg-ink-black text-white border-2 border-ink-black py-3 font-syne text-xs font-black uppercase shadow-[3px_3px_0px_#E63946] disabled:opacity-50"
                         >
-                          {submitting ? 'Opening...' : 'Open voting session'}
+                          {submitting ? t('Opening...') : t('Open voting session')}
                         </button>
                       </div>
                     )}

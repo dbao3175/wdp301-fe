@@ -50,6 +50,10 @@
   isolation: isolate;
 }
 
+.landing-motion-scene {
+  overflow-x: clip;
+}
+
 .motion-scene::after {
   content: "";
   position: absolute;

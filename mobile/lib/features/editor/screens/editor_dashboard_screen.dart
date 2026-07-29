@@ -26,6 +26,8 @@ class EditorDashboardScreen extends ConsumerWidget {
             title: l10n.editor,
             subtitle: l10n.production,
             icon: Icons.edit_note_rounded),
+        const SizedBox(height: 14),
+        const WebWorkspaceBanner(compact: true),
         const SizedBox(height: 16),
         dashboard.when(
           data: (data) => Row(children: [

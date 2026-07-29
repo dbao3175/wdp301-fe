@@ -1,5 +1,6 @@
 import React from 'react';
 import { FileSearch, AlertCircle, Loader2 } from 'lucide-react';
+import { useLanguage } from '../../../../i18n/LanguageContext';
 
 // =========================================================
 // LOADING STATE
@@ -12,11 +13,12 @@ interface LoadingStateProps {
 export const LoadingState: React.FC<LoadingStateProps> = ({
   message = 'Loading...',
 }) => {
+  const { t } = useLanguage();
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4">
       <div className="w-12 h-12 border-4 border-ink-black border-t-transparent animate-spin" />
       <p className="font-mono text-xs font-bold text-neutral-500 uppercase tracking-widest">
-        {message}
+        {t(message)}
       </p>
     </div>
   );
@@ -39,6 +41,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   action,
   icon,
 }) => {
+  const { t } = useLanguage();
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4 border-2 border-dashed border-neutral-300 bg-neutral-50">
       <div className="w-14 h-14 bg-neutral-200 border-2 border-neutral-400 flex items-center justify-center">
@@ -46,10 +49,10 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       </div>
       <div className="text-center">
         <h3 className="font-syne font-extrabold text-sm text-neutral-700 uppercase tracking-wide">
-          {title}
+          {t(title)}
         </h3>
         {description && (
-          <p className="font-sans text-xs text-neutral-500 mt-1 max-w-xs">{description}</p>
+          <p className="font-sans text-xs text-neutral-500 mt-1 max-w-xs">{t(description)}</p>
         )}
       </div>
       {action && <div className="mt-2">{action}</div>}
@@ -72,6 +75,7 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
   message = 'An unexpected error occurred. Please try again.',
   onRetry,
 }) => {
+  const { t } = useLanguage();
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4 border-2 border-red-300 bg-red-50">
       <div className="w-14 h-14 bg-red-100 border-2 border-red-400 flex items-center justify-center">
@@ -79,16 +83,16 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
       </div>
       <div className="text-center">
         <h3 className="font-syne font-extrabold text-sm text-red-700 uppercase tracking-wide">
-          {title}
+          {t(title)}
         </h3>
-        <p className="font-sans text-xs text-red-500 mt-1 max-w-xs">{message}</p>
+        <p className="font-sans text-xs text-red-500 mt-1 max-w-xs">{t(message)}</p>
       </div>
       {onRetry && (
         <button
           onClick={onRetry}
           className="px-4 py-2 bg-red-600 text-white border-2 border-red-700 text-xs font-mono font-extrabold uppercase shadow-[2px_2px_0px_#141414] hover:bg-red-700 transition-colors cursor-pointer"
         >
-          Try Again
+          {t('Try Again')}
         </button>
       )}
     </div>
@@ -139,11 +143,12 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   label,
   variant = 'default',
 }) => {
+  const { t } = useLanguage();
   return (
     <span
       className={`inline-block px-2 py-0.5 text-[9px] font-mono font-extrabold uppercase tracking-widest border ${badgeStyles[variant]}`}
     >
-      {label}
+      {t(label)}
     </span>
   );
 };

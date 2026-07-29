@@ -239,10 +239,23 @@ class _SubmissionCard extends ConsumerWidget {
             total: total,
             requiredVotes: requiredVotes),
         const SizedBox(height: 14),
-        FilledButton.icon(
-            onPressed: () => _vote(context, ref),
-            icon: const Icon(Icons.how_to_vote_rounded),
-            label: Text(l10n.vote.toUpperCase())),
+        Row(children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => downloadManuscriptFile(item.title, context),
+              icon: const Icon(Icons.download_rounded, size: 18),
+              label: Text(l10n.downloadProposal),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: () => _vote(context, ref),
+              icon: const Icon(Icons.how_to_vote_rounded, size: 18),
+              label: Text(l10n.vote.toUpperCase()),
+            ),
+          ),
+        ]),
       ]),
     );
   }

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { User, UserRole } from "../types";
 import { apiClient } from "../api/client";
+import LanguageToggle from "./LanguageToggle";
+import { localizeNotificationText, useLanguage } from "../i18n/LanguageContext";
 import {
   Compass,
   Layers,
@@ -30,6 +32,7 @@ export default function Navigation({
   onLogout,
   onConfigChange,
 }: NavigationProps) {
+  const { language, t } = useLanguage();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -75,35 +78,35 @@ export default function Navigation({
   const navItems = [
     {
       id: "workspace",
-      label: "Manga Workspace",
+      label: t("Manga Workspace"),
       icon: Compass,
       roles: ["MANGAKA", "EDITOR"],
     },
     {
       id: "chapters",
-      label: "Chapter Management",
+      label: t("Chapter Management"),
       icon: BookOpen,
       roles: ["MANGAKA", "EDITOR"],
     },
     {
       id: "tasks",
-      label: "Series Proposals",
+      label: t("Series Proposals"),
       icon: Layers,
       roles: ["MANGAKA", "EDITOR"],
     },
     {
       id: "board",
-      label: "Editorial Board",
+      label: t("Editorial Board"),
       icon: CheckSquare,
       roles: ["EDITOR", "BOARD_MEMBER"],
     },
     {
       id: "analytics",
-      label: "Rankings Dashboard",
+      label: t("Rankings Dashboard"),
       icon: TrendingUp,
       roles: ["BOARD_MEMBER", "MANGAKA"],
     },
-    { id: "admin", label: "Admin Panel", icon: Shield, roles: ["ADMIN"] },
+    { id: "admin", label: t("Admin Panel"), icon: Shield, roles: ["ADMIN"] },
   ];
 
   const filteredNavItems = navItems.filter((item) => {
@@ -124,12 +127,13 @@ export default function Navigation({
           </span>
         </div>
         <div className="flex items-center gap-3">
+          <LanguageToggle tone="red" compact />
           {/* Mobile Bell Button */}
           <div className="relative">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
               className={`p-1.5 border-2 border-ink-black rounded-xs transition-colors cursor-pointer relative bg-white text-ink-black`}
-              title="Notifications"
+              title={t("Notifications")}
             >
               <Bell className="w-3.5 h-3.5" />
               {notifications.filter((n) => !n.isRead).length > 0 && (
@@ -142,7 +146,7 @@ export default function Navigation({
               <div className="fixed top-16 right-4 left-4 bg-white border-4 border-ink-black shadow-[6px_6px_0px_#141414] z-50 flex flex-col max-h-[350px]">
                 <div className="bg-[#E63946] text-white p-2.5 border-b-4 border-ink-black flex justify-between items-center select-none">
                   <span className="font-syne font-black text-xs uppercase tracking-wider">
-                    Thông báo
+                    {t("Notifications")}
                   </span>
                   <div className="flex items-center gap-2">
                     {notifications.filter((n) => !n.isRead).length > 0 && (
@@ -151,7 +155,7 @@ export default function Navigation({
                         onClick={handleMarkAllRead}
                         className="px-1.5 py-0.5 border border-white hover:bg-white/20 text-[9px] font-mono font-bold uppercase transition-all cursor-pointer"
                       >
-                        Đọc hết
+                        {t("Mark all read")}
                       </button>
                     )}
                     <button
@@ -166,7 +170,7 @@ export default function Navigation({
                 <div className="overflow-y-auto divide-y-2 divide-[#141414] flex-1 bg-white text-ink-black max-h-[250px]">
                   {notifications.length === 0 ? (
                     <div className="p-6 text-center text-neutral-400 font-mono text-[10px]">
-                      Không có thông báo mới nào
+                      {t("No new notifications")}
                     </div>
                   ) : (
                     notifications.map((n) => (
@@ -181,13 +185,13 @@ export default function Navigation({
                       >
                         <div className="flex-1 min-w-0">
                           <h4 className="text-[11px] font-extrabold text-ink-black leading-tight mb-0.5">
-                            {n.title}
+                            {localizeNotificationText(n.title, language)}
                           </h4>
                           <p className="text-[10px] text-neutral-600 leading-snug">
-                            {n.content}
+                            {localizeNotificationText(n.content, language)}
                           </p>
                           <span className="text-[8px] font-mono text-neutral-400 mt-1 block">
-                            {new Date(n.createdAt).toLocaleString()}
+                            {new Date(n.createdAt).toLocaleString(language === "vi" ? "vi-VN" : "en-US")}
                           </span>
                         </div>
                       </div>
@@ -228,29 +232,40 @@ export default function Navigation({
                 Studio OS
               </span>
             </div>
+            <LanguageToggle tone="red" compact className="ml-auto" />
           </div>
 
           {currentUser && (
             <div className="p-4 border-b-2 border-ink-black bg-manuscript-gray">
               <span className="text-neutral-500 font-mono text-[9px] uppercase font-bold tracking-widest block mb-1">
-                Studio Auth & Role
+                {t("Studio Auth & Role")}
               </span>
 
               <div className="flex items-center gap-3 bg-white p-2.5 border-2 border-ink-black rounded-sm shadow-[2px_2px_0px_#141414] relative">
-                <img
-                  src={
-                    currentUser.avatar ||
-                    "https://lh3.googleusercontent.com/aida-public/AB6AXuCHg4AqOzqTV4dewyU1i46CaCUf4pdWEGhiU2lW3liCFs9JIde6fE9uwaRXVueKT86jIlGpymMPHJCh6-Coee4I6o2JxMGU-b-ts2Dmy6dKXtzK6RPgJ9XIL-1TYRm1JkqG8CkCx_ZgdB3cBNUUJyT9pvzu7uKesV0D55DoIMkLIv6PspHUrWtqKEj3H2tBogMUnEDiuCIIKF5mSpOCdwVfdskbQpvNQx3V_lA8OtcIk6q8LZ9AmfiRwuw0bF5K5naoU52pMuRXDiP2"
-                  }
-                  alt={currentUser.name}
-                  className="w-10 h-10 rounded-full border-2 border-ink-black object-cover shrink-0 bg-neutral-100"
-                />
+                <div className="relative w-10 h-10 rounded-full border-2 border-ink-black bg-neutral-100 text-ink-black flex items-center justify-center shrink-0 overflow-hidden">
+                  <span className="font-syne text-[10px] font-black uppercase" aria-hidden="true">
+                    {currentUser.name
+                      .split(/\s+/)
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .map((part) => part[0])
+                      .join('') || 'MS'}
+                  </span>
+                  {currentUser.avatar && (
+                    <img
+                      src={currentUser.avatar}
+                      alt={currentUser.name}
+                      onError={(event) => { event.currentTarget.style.display = 'none'; }}
+                      className="absolute inset-0 w-full h-full object-cover bg-neutral-100"
+                    />
+                  )}
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-sans text-xs text-ink-black font-extrabold truncate leading-tight">
                     {currentUser.name}
                   </div>
                   <div className="font-mono text-[9px] text-[#E63946] font-bold tracking-tight uppercase mt-0.5 italic">
-                    {currentUser.role}
+                    {t(currentUser.role)}
                   </div>
                 </div>
                 <button
@@ -261,7 +276,7 @@ export default function Navigation({
                       ? "bg-ink-black text-white"
                       : "bg-white hover:bg-neutral-100 text-ink-black"
                   }`}
-                  title="View Notifications"
+                  title={t("Notifications")}
                 >
                   <Bell className="w-4 h-4" />
                   {notifications.filter((n) => !n.isRead).length > 0 && (
@@ -275,7 +290,7 @@ export default function Navigation({
                   <div className="absolute left-[260px] top-0 w-80 bg-white border-4 border-ink-black shadow-[6px_6px_0px_#141414] z-50 flex flex-col max-h-[400px]">
                     <div className="bg-[#E63946] text-white p-3 border-b-4 border-ink-black flex justify-between items-center select-none">
                       <span className="font-syne font-black text-xs uppercase tracking-wider">
-                        NOTIFICATIONS
+                        {t("Notifications")}
                       </span>
                       <div className="flex items-center gap-2">
                         {notifications.filter((n) => !n.isRead).length > 0 && (
@@ -283,9 +298,9 @@ export default function Navigation({
                             type="button"
                             onClick={handleMarkAllRead}
                             className="px-1.5 py-0.5 border border-white hover:bg-white/20 text-[9px] font-mono font-bold uppercase transition-all cursor-pointer"
-                            title="Mark all as read"
+                            title={t("Mark all read")}
                           >
-                            Mark all read
+                            {t("Mark all read")}
                           </button>
                         )}
                         <button
@@ -300,7 +315,7 @@ export default function Navigation({
                     <div className="overflow-y-auto divide-y-2 divide-ink-black flex-1 bg-white text-ink-black max-h-[300px]">
                       {notifications.length === 0 ? (
                         <div className="p-6 text-center text-neutral-400 font-mono text-[10px]">
-                          No new notifications
+                          {t("No new notifications")}
                         </div>
                       ) : (
                         notifications.map((n) => (
@@ -315,13 +330,13 @@ export default function Navigation({
                           >
                             <div className="flex-1 min-w-0">
                               <h4 className="text-[11px] font-extrabold text-ink-black leading-tight mb-0.5">
-                                {n.title}
+                                {localizeNotificationText(n.title, language)}
                               </h4>
                               <p className="text-[10px] text-neutral-600 leading-snug">
-                                {n.content}
+                                {localizeNotificationText(n.content, language)}
                               </p>
                               <span className="text-[8px] font-mono text-neutral-400 mt-1 block">
-                                {new Date(n.createdAt).toLocaleString()}
+                                {new Date(n.createdAt).toLocaleString(language === "vi" ? "vi-VN" : "en-US")}
                               </span>
                             </div>
                           </div>
@@ -334,7 +349,7 @@ export default function Navigation({
 
               <div className="border-t border-dashed border-neutral-300 mt-2.5 pt-2 text-center">
                 <span className="text-neutral-500 font-mono text-[8px] uppercase tracking-wider block font-bold">
-                  STUDIO SESSION ACCOUNT ACTIVE
+                  {t("Studio session account active")}
                 </span>
               </div>
             </div>
@@ -342,7 +357,7 @@ export default function Navigation({
 
           <nav className="p-4 space-y-1">
             <div className="text-[10px] font-extrabold text-neutral-400 uppercase tracking-widest pl-1 mb-2">
-              Quy trình sáng tác
+              {t("Creative workflow")}
             </div>
             {filteredNavItems.map((item) => {
               const IconComp = item.icon;
@@ -365,12 +380,12 @@ export default function Navigation({
                     <IconComp
                       className={`w-4 h-4 ${isActive ? "text-[#E63946]" : "text-neutral-500"}`}
                     />
-                    <span>{item.label}</span>
+                    <span>{t(item.label)}</span>
                   </span>
 
                   {isActive && (
                     <span className="bg-[#E63946] text-white text-[9px] px-1.5 py-0.5 rounded-none font-sans font-bold">
-                      ACTIVE
+                      {t("Active")}
                     </span>
                   )}
                 </button>
@@ -385,7 +400,7 @@ export default function Navigation({
             className="w-full flex items-center justify-center gap-2 bg-white border-2 border-ink-black hover:bg-neutral-50 text-ink-black font-syne text-[10px] uppercase font-black tracking-tight py-2 rounded-none shadow-[2px_2px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5 text-[#E63946]" />
-            Exit Studio OS
+            {t("Exit Studio OS")}
           </button>
         </div>
       </aside>

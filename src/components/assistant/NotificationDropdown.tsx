@@ -15,6 +15,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { AssistantNotification, NotificationType } from './assistantTypes';
+import { useLanguage, type AppLanguage } from '../../i18n/LanguageContext';
 
 type FilterTab = 'all' | 'unread';
 
@@ -28,17 +29,17 @@ interface NotificationDropdownProps {
   onNotificationClick: (notification: AssistantNotification) => void;
 }
 
-function formatRelativeTime(iso: string): string {
+function formatRelativeTime(iso: string, language: AppLanguage): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'Just now';
+  if (mins < 1) return language === 'vi' ? 'Vừa xong' : 'Just now';
   if (mins < 60) return `${mins}m`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h`;
   const days = Math.floor(hours / 24);
   if (days === 1) return '1d';
   if (days < 7) return `${days}d`;
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return new Date(iso).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { month: 'short', day: 'numeric' });
 }
 
 function typeIcon(type: NotificationType) {
@@ -89,6 +90,7 @@ export default function NotificationDropdown({
   onMarkAllRead,
   onNotificationClick,
 }: NotificationDropdownProps) {
+  const { language, t } = useLanguage();
   const panelRef = useRef<HTMLDivElement>(null);
   const [filter, setFilter] = React.useState<FilterTab>('all');
 
@@ -152,20 +154,20 @@ export default function NotificationDropdown({
           {/* Header */}
           <div className="px-4 pt-4 pb-3 border-b border-[#3a3a48] shrink-0">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[15px] font-bold text-white">Notifications</h3>
+              <h3 className="text-[15px] font-bold text-white">{t("Notifications")}</h3>
               <div className="flex items-center gap-1">
                 {unreadCount > 0 && (
                   <button
                     onClick={onMarkAllRead}
                     className="p-1.5 rounded-full hover:bg-[#2d2d34] text-slate-500 hover:text-blue-400 transition-colors cursor-pointer"
-                    title="Mark all as read"
+                    title={t("Mark all read")}
                   >
                     <CheckCheck className="w-4 h-4" />
                   </button>
                 )}
                 <button
                   className="p-1.5 rounded-full hover:bg-[#2d2d34] text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
-                  title="Notification settings"
+                  title={t("Notification settings")}
                 >
                   <Settings className="w-4 h-4" />
                 </button>
@@ -184,7 +186,7 @@ export default function NotificationDropdown({
                       : 'bg-[#2d2d34] text-slate-400 hover:bg-[#353545] hover:text-slate-300'
                   }`}
                 >
-                  {tab}
+                  {t(tab === "all" ? "All" : "Unread")}
                   {tab === 'unread' && unreadCount > 0 && (
                     <span className="ml-1 opacity-80">({unreadCount})</span>
                   )}
@@ -201,12 +203,12 @@ export default function NotificationDropdown({
                   <Bell className="w-5 h-5 text-slate-600" />
                 </div>
                 <p className="text-[13px] font-semibold text-slate-400">
-                  {filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
+                  {filter === 'unread' ? t("No unread notifications") : t("No notifications yet")}
                 </p>
                 <p className="text-[11px] text-slate-600 mt-1">
                   {filter === 'unread'
-                    ? "You're all caught up!"
-                    : 'Task updates and alerts will appear here.'}
+                    ? t("You're all caught up!")
+                    : t("Task updates and alerts will appear here.")}
                 </p>
               </div>
             ) : (
@@ -240,7 +242,7 @@ export default function NotificationDropdown({
                           {n.message}
                         </p>
                         <p className="text-[11px] text-blue-400 font-semibold mt-1">
-                          {formatRelativeTime(n.createdAt)}
+                          {formatRelativeTime(n.createdAt, language)}
                         </p>
                       </div>
 
@@ -262,7 +264,7 @@ export default function NotificationDropdown({
                 onClick={onClose}
                 className="w-full py-2 text-[12px] font-bold text-blue-400 hover:text-blue-300 hover:bg-[#2d2d34]/60 rounded-md transition-colors cursor-pointer"
               >
-                See all notifications
+                {t("See all notifications")}
               </button>
             </div>
           )}
