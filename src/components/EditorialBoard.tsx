@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { User, Series, Rating, Vote, Directive, DirectiveAction } from '../types';
 import { apiClient } from '../api/client';
-import { CheckSquare, X, Gavel, Plus } from 'lucide-react';
+import { CheckSquare, X, Gavel, Plus, Download } from 'lucide-react';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import BoardPublicationPanel from '../features/board/BoardPublicationPanel';
 import ReaderMetricsPanel from '../features/board/ReaderMetricsPanel';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -611,7 +613,37 @@ export default function EditorialBoard({
                       <button
                         onClick={async () => {
                           try {
-                            await apiClient.proposals.downloadStoryboard(selectedProposal.proposalRecordId);
+                            const proposalId = selectedProposal.proposalRecordId;
+                            const proposalData = await apiClient.proposals.getById(proposalId);
+                            const images = proposalData?.storyboardImages || [];
+                            if (images.length > 1) {
+                              const zip = new JSZip();
+                              const imgFolder = zip.folder("storyboard")!;
+                              for (let i = 0; i < images.length; i++) {
+                                const img = images[i];
+                                try {
+                                  const resp = await fetch(img.url);
+                                  const blob = await resp.blob();
+                                  const ext = img.originalName?.includes(".")
+                                    ? img.originalName.split(".").pop()
+                                    : "png";
+                                  imgFolder.file(`page_${i + 1}.${ext}`, blob);
+                                } catch (e) {
+                                  console.warn("Failed to fetch image", img.url, e);
+                                }
+                              }
+                              const blob = await zip.generateAsync({ type: "blob" });
+                              saveAs(blob, `${selectedProposal.title}_storyboard.zip`);
+                            } else if (images.length === 1) {
+                              const resp = await fetch(images[0].url);
+                              const blob = await resp.blob();
+                              const ext = images[0].originalName?.includes(".")
+                                ? images[0].originalName.split(".").pop()
+                                : "png";
+                              saveAs(blob, `${selectedProposal.title}_storyboard.${ext}`);
+                            } else {
+                              await apiClient.proposals.downloadStoryboard(proposalId);
+                            }
                           } catch (err) {
                             console.error('Download failed', err);
                             alert(t('Failed to download storyboard'));
@@ -619,9 +651,7 @@ export default function EditorialBoard({
                         }}
                         className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#E63946] text-white text-[9px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-red-600 transition-colors shadow-[2px_2px_0px_#141414] cursor-pointer"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
+                        <Download className="w-3.5 h-3.5" />
                         {t('Download Storyboard')}
                       </button>
                     </div>

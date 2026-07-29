@@ -13,7 +13,7 @@ import {
   ChevronLeft,
   Send,
   Clock,
-  XCircle,
+  Download,
 } from "lucide-react";
 import { apiClient } from "../../../api/client.ts";
 import type {
@@ -105,7 +105,7 @@ const SamplePageViewer: React.FC<SamplePageViewerProps> = ({ pages }) => {
         <img
           src={pages[current].imageUrl}
           alt={`Sample page ${pages[current].pageNumber}`}
-          className="w-full object-contain max-h-[400px]"
+          className="w-full object-contain max-h-100"
         />
         {pages[current].caption && (
           <div className="absolute bottom-0 left-0 right-0 bg-ink-black/80 px-3 py-1.5">
@@ -151,7 +151,6 @@ export const ProposalReviewPage: React.FC = () => {
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
-  const [showRejectDialog, setShowRejectDialog] = useState(false);
 
   const mapProposal = (p: any) => ({
     id: p._id || p.id,
@@ -232,19 +231,6 @@ export const ProposalReviewPage: React.FC = () => {
     onError: (err: any) => {
       console.error("Failed to approve proposal:", err);
       setShowApproveDialog(false);
-    },
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: () =>
-      apiClient.proposals.reject(id!, "Proposal rejected by editor."),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["proposal", id] });
-      queryClient.invalidateQueries({ queryKey: ["proposals"] });
-      setShowRejectDialog(false);
-    },
-    onError: (err: any) => {
-      console.error("Failed to reject proposal:", err);
     },
   });
 
@@ -519,9 +505,55 @@ export const ProposalReviewPage: React.FC = () => {
                 {t('Approve & Submit to Board')}
               </button>
               <button
-                disabled={!canTakeAction || rejectMutation.isPending}
+                onClick={async () => {
+                  try {
+                    const proposalData = await apiClient.proposals.getById(id!);
+                    const images = proposalData?.storyboardImages || [];
+                    if (images.length > 1) {
+                      const JSZip = (await import('jszip')).default;
+                      const { saveAs } = await import('file-saver');
+                      const zip = new JSZip();
+                      const imgFolder = zip.folder("storyboard")!;
+                      for (let i = 0; i < images.length; i++) {
+                        const img = images[i];
+                        try {
+                          const resp = await fetch(img.url);
+                          const blob = await resp.blob();
+                          const ext = img.originalName?.includes(".")
+                            ? img.originalName.split(".").pop()
+                            : "png";
+                          imgFolder.file(`page_${i + 1}.${ext}`, blob);
+                        } catch (e) {
+                          console.warn("Failed to fetch image", img.url, e);
+                        }
+                      }
+                      const blob = await zip.generateAsync({ type: "blob" });
+                      saveAs(blob, `${proposal.title}_storyboard.zip`);
+                    } else if (images.length === 1) {
+                      const { saveAs } = await import('file-saver');
+                      const resp = await fetch(images[0].url);
+                      const blob = await resp.blob();
+                      const ext = images[0].originalName?.includes(".")
+                        ? images[0].originalName.split(".").pop()
+                        : "png";
+                      saveAs(blob, `${proposal.title}_storyboard.${ext}`);
+                    } else {
+                      await apiClient.proposals.downloadStoryboard(id!);
+                    }
+                  } catch (err) {
+                    console.error('Download failed', err);
+                    alert('Failed to download storyboard');
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-ink-black text-white border-2 border-ink-black text-xs font-mono font-extrabold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-800 transition-colors cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {t('Download Storyboard')}
+              </button>
+              <button
+                disabled={!canTakeAction}
                 onClick={() => setShowRejectDialog(true)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 text-white border-2 border-red-700 text-xs font-mono font-extrabold uppercase shadow-[2px_2px_0px_#141414] hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-ink-black text-white border-2 border-ink-black text-xs font-mono font-extrabold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-800 transition-colors cursor-pointer"
               >
                 <XCircle className="w-3.5 h-3.5" />
                 {t('Reject Proposal')}

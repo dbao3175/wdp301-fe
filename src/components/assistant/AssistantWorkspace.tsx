@@ -320,7 +320,7 @@ function AssistantWorkspaceContent({ task, onRefresh }: { task: AssistantTask; o
         </main>
 
         {/* Right panel — 268px */}
-        <aside className="w-[268px] shrink-0 flex flex-col bg-[#1e1e24] border-l border-[#2d2d34] overflow-hidden">
+        <aside className="w-67 shrink-0 flex flex-col bg-[#1e1e24] border-l border-[#2d2d34] overflow-hidden">
           <div className="px-4 py-3 border-b border-[#2d2d34] shrink-0">
             <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-red-500" /> {t("AI Production Suite")}
