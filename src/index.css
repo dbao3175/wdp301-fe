@@ -40,3 +40,122 @@
   transform: translate(-2px, -2px);
 }
 
+
+/* =========================================================
+   MANGA MOTION SYSTEM
+   ========================================================= */
+
+.motion-scene {
+  position: relative;
+  isolation: isolate;
+}
+
+.motion-scene::after {
+  content: "";
+  position: absolute;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: min(180px, 36%);
+  height: 3px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, #e63946 28%, #141414 82%, transparent);
+  transform-origin: left center;
+  animation: manga-ink-sweep 720ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.motion-surface {
+  will-change: transform, box-shadow;
+  transition:
+    transform 240ms cubic-bezier(.16, 1, .3, 1),
+    box-shadow 240ms cubic-bezier(.16, 1, .3, 1),
+    border-color 180ms ease;
+}
+
+.motion-media {
+  transition: transform 600ms cubic-bezier(.16, 1, .3, 1), filter 300ms ease;
+  transform-origin: center;
+}
+
+.motion-scene button:not(:disabled),
+.motion-scene [role="button"] {
+  transition-duration: 180ms;
+  transition-timing-function: cubic-bezier(.16, 1, .3, 1);
+}
+
+.motion-scene button:not(:disabled):active,
+.motion-scene [role="button"]:active {
+  transform: translateY(1px) scale(.975);
+}
+
+.motion-scene :is(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid rgba(230, 57, 70, .34);
+  outline-offset: 3px;
+}
+
+.ambient-grid {
+  animation: manga-grid-drift 28s linear infinite;
+  will-change: background-position;
+}
+
+.motion-modal-backdrop {
+  animation: manga-backdrop-in 220ms ease-out both;
+}
+
+.motion-modal-panel {
+  transform-origin: 50% 42%;
+  animation: manga-panel-in 420ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .motion-surface:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 7px 7px 0 #141414;
+  }
+
+  .motion-surface:hover .motion-media {
+    transform: scale(1.035);
+    filter: saturate(1.06) contrast(1.02);
+  }
+}
+
+@keyframes manga-ink-sweep {
+  0% { opacity: 0; transform: translateX(-45%) scaleX(.1); }
+  38% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(560%) scaleX(1); }
+}
+
+@keyframes manga-grid-drift {
+  from { background-position: 0 0; }
+  to { background-position: 24px 24px; }
+}
+
+@keyframes manga-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes manga-panel-in {
+  0% { opacity: 0; transform: translateY(18px) scale(.965); }
+  58% { opacity: 1; transform: translateY(-2px) scale(1.006); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+
+  .motion-scene,
+  .motion-surface,
+  .motion-media,
+  .motion-modal-panel {
+    transform: none !important;
+    opacity: 1 !important;
+  }
+}
