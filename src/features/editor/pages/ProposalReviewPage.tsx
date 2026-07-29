@@ -14,6 +14,7 @@ import {
   Send,
   Clock,
   Download,
+  XCircle,
 } from "lucide-react";
 import { apiClient } from "../../../api/client.ts";
 import type {
@@ -151,6 +152,7 @@ export const ProposalReviewPage: React.FC = () => {
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
 
   const mapProposal = (p: any) => ({
     id: p._id || p.id,
@@ -231,6 +233,20 @@ export const ProposalReviewPage: React.FC = () => {
     onError: (err: any) => {
       console.error("Failed to approve proposal:", err);
       setShowApproveDialog(false);
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: () =>
+      apiClient.proposals.reject(
+        id!,
+        "Rejected by Tantou Editor.",
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["proposal", id] });
+      queryClient.invalidateQueries({ queryKey: ["proposals"] });
+      setShowRejectDialog(false);
+      navigate("/editor/proposals");
     },
   });
 

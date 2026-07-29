@@ -4,9 +4,10 @@
  * Replaces the old task-assignment form with a two-mode
  * "New Series Proposal & Storyboard Review" workflow.
  *
- * MANGAKA VIEW  — Submission form (title, genre, synopsis, file upload)
+ * MANGAKA VIEW  — Two tabs: "My Proposals" (list/detail/edit/resubmit) and
+ *                 "New Proposal" (submission form)
  * EDITOR VIEW   — Dual-panel review layout with storyboard download card +
- *                 decision buttons
+ *                 forward-to-board button (no reject)
  *
  * Color theme: Red · Matte Black · White · Slate Gray
  *   bg-app    #121214   deep matte black
@@ -18,7 +19,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { User, Series, Chapter, Task } from "../types";
 import { apiClient } from "../api/client";
-import { useLanguage } from "../i18n/LanguageContext";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
 import {
   Send,
   UploadCloud,
@@ -34,6 +36,11 @@ import {
   AlertCircle,
   RotateCcw,
   Eye,
+  List,
+  Plus,
+  MessageSquare,
+  Images,
+  ZoomIn,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -58,7 +65,7 @@ interface ProposalDraft {
   title: string;
   genre: string;
   synopsis: string;
-  storyboardFile: File | null;
+  storyboardFiles: File[];
   storyboardPreviewName: string;
   storyboardPreviewSize: string;
   submittedAt: string;
@@ -89,6 +96,606 @@ const INPUT =
   "w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2.5 text-sm text-white placeholder:text-slate-700 focus:outline-none focus:border-slate-500 transition-colors";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Status labels & colors for mangaka list
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STATUS_LABELS: Record<string, string> = {
+  SUBMITTED: "Submitted",
+  UNDER_REVIEW: "Under Review",
+  REVISION_REQUESTED: "Revision Requested",
+  RESUBMITTED: "Resubmitted",
+  APPROVED_BY_TANTOU: "Approved by Editor",
+  SENT_TO_EDITORIAL_BOARD: "Sent to Board",
+  APPROVED: "Board Approved",
+  SERIES_CREATED: "Series Created",
+  REJECTED: "Rejected",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  SUBMITTED: "#F59E0B",
+  UNDER_REVIEW: "#3B82F6",
+  REVISION_REQUESTED: "#F97316",
+  RESUBMITTED: "#8B5CF6",
+  APPROVED_BY_TANTOU: "#10B981",
+  SENT_TO_EDITORIAL_BOARD: "#6366F1",
+  APPROVED: "#059669",
+  SERIES_CREATED: "#047857",
+  REJECTED: "#EF4444",
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MANGAKA VIEW — My Proposals List
+// ─────────────────────────────────────────────────────────────────────────────
+
+function MyProposalsList({
+  currentUser,
+  onSelectProposal,
+}: {
+  currentUser: User;
+  onSelectProposal: (proposal: any) => void;
+}) {
+  const [proposals, setProposals] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchProposals = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiClient.proposals.getAll(undefined, currentUser._id);
+      setProposals(data || []);
+    } catch (err: any) {
+      setError(err.message || "Failed to load proposals");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProposals();
+  }, [currentUser._id]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-16">
+        <div className="w-8 h-8 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-slate-500 font-mono">
+          Loading your proposals...
+        </p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-16">
+        <AlertCircle className="w-10 h-10 text-red-400" />
+        <p className="text-sm text-red-400">{error}</p>
+        <button
+          onClick={fetchProposals}
+          className="px-4 py-2 rounded-md bg-[#2d2d34] text-sm text-slate-300 hover:bg-[#3a3a44] transition-colors cursor-pointer"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (proposals.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-16">
+        <div className="w-14 h-14 rounded-full bg-[#1e1e24] border border-[#2d2d34] flex items-center justify-center">
+          <BookOpen className="w-7 h-7 text-slate-600" />
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-slate-400">
+            No proposals yet
+          </p>
+          <p className="text-[11px] text-slate-600 mt-1">
+            Submit your first series proposal to get started.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {proposals.map((p) => {
+        const statusColor = STATUS_COLORS[p.status] || "#6B7280";
+        return (
+          <button
+            key={p._id}
+            onClick={() => onSelectProposal(p)}
+            className="w-full text-left bg-[#121214] border border-[#2d2d34] rounded-md p-4 hover:border-slate-500 transition-colors cursor-pointer group"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-sm font-bold text-white truncate">
+                    {p.title}
+                  </h3>
+                </div>
+                <p className="text-[11px] text-slate-500 mb-2">{p.genre}</p>
+                <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                  {p.synopsis}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <span
+                  className="inline-block px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider text-white"
+                  style={{ backgroundColor: statusColor }}
+                >
+                  {STATUS_LABELS[p.status] || p.status}
+                </span>
+                <span className="text-[9px] text-slate-600 font-mono">
+                  {new Date(
+                    p.submittedAt || p.submittedDate,
+                  ).toLocaleDateString()}
+                </span>
+              </div>
+            </div>
+            {p.comments && p.comments.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-[#2d2d34] flex items-center gap-1.5 text-[10px] text-slate-500">
+                <MessageSquare className="w-3 h-3" />
+                <span>
+                  {p.comments.length} comment
+                  {p.comments.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MANGAKA VIEW — Proposal Detail + Edit/Resubmit
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ProposalDetailView({
+  proposal,
+  currentUser,
+  onBack,
+  onResubmitted,
+}: {
+  proposal: any;
+  currentUser: User;
+  onBack: () => void;
+  onResubmitted: () => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [synopsis, setSynopsis] = useState(proposal.synopsis || "");
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [removedImageUrls, setRemovedImageUrls] = useState<string[]>([]);
+  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{
+    text: string;
+    ok: boolean;
+  } | null>(null);
+  const [isZipping, setIsZipping] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isRevisionRequested = proposal.status === "REVISION_REQUESTED";
+  const statusColor = STATUS_COLORS[proposal.status] || "#6B7280";
+  const images = (proposal.storyboardImages || []).filter(
+    (img: any) => !removedImageUrls.includes(img.url),
+  );
+
+  const handleDownloadAllZip = async () => {
+    setIsZipping(true);
+    try {
+      const zip = new JSZip();
+      const imgFolder = zip.folder("storyboard")!;
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        try {
+          const resp = await fetch(img.url);
+          const blob = await resp.blob();
+          const ext = img.originalName?.includes(".")
+            ? img.originalName.split(".").pop()
+            : "png";
+          imgFolder.file(`page_${i + 1}.${ext}`, blob);
+        } catch (e) {
+          console.warn("Failed to fetch image", img.url, e);
+        }
+      }
+      const blob = await zip.generateAsync({ type: "blob" });
+      saveAs(blob, `${proposal.title}_storyboard.zip`);
+    } catch (err) {
+      console.error("ZIP error:", err);
+      alert("Failed to create ZIP download");
+    } finally {
+      setIsZipping(false);
+    }
+  };
+
+  const handleResubmit = async () => {
+    if (!synopsis.trim()) {
+      setStatusMsg({ text: "Synopsis cannot be empty", ok: false });
+      return;
+    }
+    setIsSubmitting(true);
+    setStatusMsg(null);
+    try {
+      await apiClient.proposals.resubmit(
+        proposal._id,
+        newFiles,
+        removedImageUrls,
+        synopsis,
+      );
+      setStatusMsg({ text: "Proposal resubmitted successfully!", ok: true });
+      setTimeout(() => {
+        onResubmitted();
+      }, 1500);
+    } catch (err: any) {
+      setStatusMsg({ text: err.message || "Resubmit failed", ok: false });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Find latest editor comment (revision reason)
+  const editorComments = (proposal.comments || []).filter(
+    (c: any) => c.authorRole === "editor",
+  );
+  const latestEditorComment = editorComments[editorComments.length - 1];
+
+  return (
+    <div className="space-y-4">
+      {/* Back button */}
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-white transition-colors cursor-pointer"
+      >
+        <RotateCcw className="w-3 h-3" /> Back to My Proposals
+      </button>
+
+      {/* Status message */}
+      {statusMsg && (
+        <div
+          className={`flex items-start gap-2 px-3 py-2.5 rounded-md border text-xs font-medium ${
+            statusMsg.ok
+              ? "bg-white/5 border-white/15 text-white"
+              : "bg-red-500/10 border-red-500/20 text-red-400"
+          }`}
+        >
+          {statusMsg.ok ? (
+            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+          ) : (
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+          )}
+          {statusMsg.text}
+        </div>
+      )}
+
+      {/* Title + Status */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-white">{proposal.title}</h2>
+          <p className="text-xs text-slate-500 mt-0.5">{proposal.genre}</p>
+        </div>
+        <span
+          className="inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-white shrink-0"
+          style={{ backgroundColor: statusColor }}
+        >
+          {STATUS_LABELS[proposal.status] || proposal.status}
+        </span>
+      </div>
+
+      {/* Synopsis */}
+      <div className="bg-[#121214] border border-[#2d2d34] rounded-md p-4">
+        <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-2">
+          Synopsis
+        </p>
+        {isEditing ? (
+          <textarea
+            value={synopsis}
+            onChange={(e) => setSynopsis(e.target.value)}
+            rows={6}
+            className={`${INPUT} resize-none leading-relaxed`}
+          />
+        ) : (
+          <p className="text-sm text-white leading-relaxed">
+            {proposal.synopsis}
+          </p>
+        )}
+      </div>
+
+      {/* Storyboard Images Gallery */}
+      <div className="bg-[#121214] border border-[#2d2d34] rounded-md p-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">
+            Storyboard Images ({images.length})
+          </p>
+          {images.length > 0 && (
+            <button
+              onClick={handleDownloadAllZip}
+              disabled={isZipping}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-white text-black text-[10px] font-bold hover:bg-slate-200 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <Download className="w-3 h-3" />
+              {isZipping ? "Zipping..." : "Download All as ZIP"}
+            </button>
+          )}
+        </div>
+        {images.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            {images.map((img: any, idx: number) => (
+              <div
+                key={idx}
+                className="relative group bg-[#1e1e24] border border-[#2d2d34] rounded-md overflow-hidden cursor-pointer"
+                onClick={() => setLightboxImg(img.url)}
+              >
+                <img
+                  src={img.url}
+                  alt={img.originalName || `Storyboard ${idx + 1}`}
+                  className="w-full h-28 object-cover"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                  <ZoomIn className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <p className="text-[8px] text-slate-500 truncate px-1 py-0.5 text-center">
+                  {img.originalName || `Page ${idx + 1}`}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-600">
+            No storyboard images attached
+          </p>
+        )}
+      </div>
+
+      {/* Lightbox */}
+      {lightboxImg && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightboxImg(null)}
+        >
+          <button
+            onClick={() => setLightboxImg(null)}
+            className="absolute top-4 right-4 text-white hover:text-slate-300 cursor-pointer"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img
+            src={lightboxImg}
+            alt="Storyboard full view"
+            className="max-w-full max-h-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
+      {/* Submission meta */}
+      <div className="flex items-center gap-4 text-[10px] text-slate-600 font-mono">
+        <span>
+          Submitted:{" "}
+          {new Date(
+            proposal.submittedAt || proposal.submittedDate,
+          ).toLocaleString()}
+        </span>
+        <span>
+          Last updated:{" "}
+          {new Date(
+            proposal.updatedAt || proposal.lastUpdated,
+          ).toLocaleString()}
+        </span>
+      </div>
+
+      {/* Editor Comments */}
+      {editorComments.length > 0 && (
+        <div className="bg-[#121214] border border-[#2d2d34] rounded-md p-4">
+          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <MessageSquare className="w-3 h-3" /> Editor Feedback
+          </p>
+          <div className="space-y-3">
+            {editorComments.map((c: any, idx: number) => (
+              <div key={idx} className="bg-[#1e1e24] rounded-md p-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-bold text-slate-400">
+                    {c.authorName}
+                  </span>
+                  <span className="text-[9px] text-slate-600 font-mono">
+                    {new Date(c.createdAt).toLocaleString()}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {c.content}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Edit & Resubmit section (only when REVISION_REQUESTED) */}
+      {isRevisionRequested && (
+        <div className="bg-[#1e1e24] border border-orange-500/30 rounded-md p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-orange-400" />
+            <h3 className="text-sm font-bold text-orange-400">
+              Revision Requested
+            </h3>
+          </div>
+
+          {latestEditorComment && (
+            <div className="bg-[#121214] rounded-md p-3 border-l-4 border-orange-500">
+              <p className="text-[10px] text-slate-500 mb-1">
+                Editor's revision request:
+              </p>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {latestEditorComment.content}
+              </p>
+            </div>
+          )}
+
+          {!isEditing ? (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="w-full py-2.5 rounded-md bg-orange-600 hover:bg-orange-500 text-sm font-bold text-white transition-colors cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Brush className="w-4 h-4" /> Edit & Resubmit
+            </button>
+          ) : (
+            <div className="space-y-4">
+              {/* Existing images — can be removed */}
+              {(proposal.storyboardImages || []).length > 0 && (
+                <div>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                    Existing Storyboard Images (
+                    {(proposal.storyboardImages || []).length}) — click × to
+                    remove
+                  </p>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1.5">
+                    {(proposal.storyboardImages || []).map(
+                      (img: any, idx: number) => {
+                        const isRemoved = removedImageUrls.includes(img.url);
+                        return (
+                          <div
+                            key={idx}
+                            className={`relative bg-[#121214] border rounded overflow-hidden cursor-pointer transition-opacity ${isRemoved ? "border-red-500 opacity-40" : "border-[#2d2d34]"}`}
+                            onClick={() => {
+                              if (!isRemoved) {
+                                setRemovedImageUrls((prev) => [
+                                  ...prev,
+                                  img.url,
+                                ]);
+                              }
+                            }}
+                          >
+                            <img
+                              src={img.url}
+                              alt=""
+                              className="w-full h-16 object-cover"
+                            />
+                            {!isRemoved && (
+                              <div className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-red-600 flex items-center justify-center text-white">
+                                <X className="w-2.5 h-2.5" />
+                              </div>
+                            )}
+                            {isRemoved && (
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="text-[8px] text-red-400 font-bold uppercase">
+                                  Removed
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      },
+                    )}
+                  </div>
+                  {removedImageUrls.length > 0 && (
+                    <button
+                      onClick={() => setRemovedImageUrls([])}
+                      className="mt-2 text-[10px] text-slate-500 hover:text-white transition-colors cursor-pointer"
+                    >
+                      Undo removals
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Upload additional storyboard images (multiple) */}
+              <div>
+                <label className={LABEL}>
+                  Add More Images{" "}
+                  <span className="text-slate-600 normal-case font-normal">
+                    (optional, multiple)
+                  </span>
+                </label>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && fileInputRef.current?.click()
+                  }
+                  className="w-full py-2.5 px-3 rounded-md bg-[#121214] border border-[#2d2d34] text-xs text-slate-400 hover:border-slate-500 transition-colors cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Choose files to add</span>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".zip,.pdf,.png,.jpg,.jpeg,.psd,.clip"
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      const filesArray = Array.from(e.target.files!);
+                      setNewFiles((prev) => {
+                        const newFiles = [...prev, ...filesArray];
+                        return newFiles;
+                      });
+                    }
+                    e.target.value = "";
+                  }}
+                  className="hidden"
+                />
+                {newFiles.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-[9px] text-slate-500">
+                      {newFiles.length} new file(s) to add
+                    </p>
+                    {newFiles.map((f, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 text-xs text-slate-400"
+                      >
+                        <FileArchive className="w-3 h-3 shrink-0" />
+                        <span className="truncate flex-1">{f.name}</span>
+                        <button
+                          onClick={() =>
+                            setNewFiles((prev) =>
+                              prev.filter((_, i) => i !== idx),
+                            )
+                          }
+                          className="text-red-400 hover:text-red-300 cursor-pointer shrink-0"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* Action buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleResubmit}
+                  disabled={isSubmitting || !synopsis.trim()}
+                  className="flex-1 py-2.5 rounded-md bg-orange-600 hover:bg-orange-500 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-white transition-colors cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  {isSubmitting ? "Resubmitting..." : "Resubmit to Editor"}
+                </button>
+                <button
+                  onClick={() => {
+                    setIsEditing(false);
+                    setSynopsis(proposal.synopsis || "");
+                    setNewFiles([]);
+                  }}
+                  className="px-4 py-2.5 rounded-md border border-[#2d2d34] text-sm text-slate-400 hover:text-white hover:border-slate-500 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MANGAKA VIEW — Submission Form
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -99,11 +706,10 @@ function MangakaView({
   currentUser: User;
   onSubmit: (draft: ProposalDraft) => void;
 }) {
-  const { language, t } = useLanguage();
   const [title, setTitle] = useState("");
   const [genre, setGenre] = useState("");
   const [synopsis, setSynopsis] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [dropHover, setDropHover] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{
     text: string;
@@ -116,18 +722,20 @@ function MangakaView({
   // Accepted file types for storyboard archive
   const ACCEPTED = ".zip,.pdf,.png,.jpg,.jpeg,.psd,.clip";
 
-  const handleFile = (f: File) => {
-    setFile(f);
+  const handleFiles = (newFiles: FileList | null) => {
+    if (!newFiles) return;
+    setFiles((prev) => [...prev, ...Array.from(newFiles)]);
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDropHover(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f) handleFile(f);
+    handleFiles(e.dataTransfer.files);
   };
 
-  const handleRemoveFile = () => setFile(null);
+  const handleRemoveFile = (idx: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -135,18 +743,11 @@ function MangakaView({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // ── Submit handler ────────────────────────────────────────────────────────
-  // Placeholder for Axios multipart upload:
-  //   const fd = new FormData();
-  //   fd.append('title', title); fd.append('genre', genre);
-  //   fd.append('synopsis', synopsis);
-  //   if (file) fd.append('storyboard', file, file.name);
-  //   await axios.post('/api/series/proposal', fd);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !genre || !synopsis.trim() || !file) {
+    if (!title.trim() || !genre || !synopsis.trim() || files.length === 0) {
       setStatusMsg({
-        text: t("Please fill in all required fields and upload a storyboard file."),
+        text: "Please fill in all required fields and upload at least one storyboard image.",
         ok: false,
       });
       return;
@@ -156,29 +757,20 @@ function MangakaView({
     setStatusMsg(null);
 
     try {
-      // ── Real API placeholder ──
-      // await apiClient.proposals.create(
-      //   title.trim(),
-      //   genre.trim(),
-      //   synopsis.trim(),
-      //   file,
-      // );
-
-      // Optimistic local submit
       const draft: ProposalDraft = {
         title: title.trim(),
         genre,
         synopsis: synopsis.trim(),
-        storyboardFile: file,
-        storyboardPreviewName: file?.name ?? "",
-        storyboardPreviewSize: file ? formatSize(file.size) : "",
-        submittedAt: new Date().toLocaleString(language === "vi" ? "vi-VN" : "en-US"),
+        storyboardFiles: files,
+        storyboardPreviewName: files[0]?.name ?? "",
+        storyboardPreviewSize: files[0] ? formatSize(files[0].size) : "",
+        submittedAt: new Date().toLocaleString(),
         submittedBy: currentUser.name,
       };
 
       onSubmit(draft);
     } catch (err: any) {
-      setStatusMsg({ text: `${t("Submission failed")}: ${t(err.message)}`, ok: false });
+      setStatusMsg({ text: `Submission failed: ${err.message}`, ok: false });
     } finally {
       setIsSubmitting(false);
     }
@@ -193,11 +785,12 @@ function MangakaView({
             <Brush className="w-3.5 h-3.5 text-white" />
           </div>
           <h2 className="text-base font-bold text-white uppercase tracking-wide">
-            {t("New Series Proposal")}
+            New Series Proposal
           </h2>
         </div>
         <p className="text-[11px] text-slate-500 leading-relaxed">
-          {t("Submit your series concept and required storyboard archive to the Tantou Editor for review.")}
+          Submit your series concept and required storyboard archive to the
+          Tantou Editor for review.
         </p>
       </div>
 
@@ -224,14 +817,14 @@ function MangakaView({
         {/* Series Title */}
         <div>
           <label className={LABEL} htmlFor="prop-title">
-            {t("Series Title")} <span className="text-red-500">*</span>
+            Series Title <span className="text-red-500">*</span>
           </label>
           <input
             id="prop-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder={t("e.g. Neon Ronin Chronicles")}
+            placeholder="e.g. Neon Ronin Chronicles"
             className={INPUT}
             required
           />
@@ -240,7 +833,7 @@ function MangakaView({
         {/* Genre */}
         <div>
           <label className={LABEL} htmlFor="prop-genre">
-            {t("Genre")} <span className="text-red-500">*</span>
+            Genre <span className="text-red-500">*</span>
           </label>
           <div className="flex flex-wrap gap-1.5">
             {GENRES.map((g) => (
@@ -260,7 +853,7 @@ function MangakaView({
           </div>
           {!genre && (
             <p className="text-[9px] text-slate-700 mt-1.5">
-              {t("Select a genre above")}
+              Select a genre above
             </p>
           )}
         </div>
@@ -268,53 +861,68 @@ function MangakaView({
         {/* Synopsis */}
         <div>
           <label className={LABEL} htmlFor="prop-synopsis">
-            {t("Synopsis")} <span className="text-red-500">*</span>
+            Synopsis <span className="text-red-500">*</span>
           </label>
           <textarea
             id="prop-synopsis"
             value={synopsis}
             onChange={(e) => setSynopsis(e.target.value)}
             rows={5}
-            placeholder={t("Summarise the core concept, target audience, main character arc, and the unique hook of your series...")}
+            placeholder="Summarise the core concept, target audience, main character arc, and the unique hook of your series..."
             className={`${INPUT} resize-none leading-relaxed`}
             required
           />
           <p className="text-[9px] text-slate-700 mt-1 text-right">
-            {synopsis.length} {t("chars")}
+            {synopsis.length} chars
           </p>
         </div>
 
         {/* Storyboard Upload */}
         <div>
           <label className={LABEL}>
-            {t("Upload Rough Storyboard / Story Archive")}{" "}
+            Upload Rough Storyboard / Story Archive{" "}
             <span className="text-slate-600 normal-case font-normal">
-              {t("Optional")} — .zip, .pdf, .png
+              (Required — .zip, .pdf, .png)
             </span>
           </label>
 
-          {file ? (
-            /* File attached state */
-            <div className="flex items-center gap-3 px-3 py-2.5 rounded-md border border-[#2d2d34] bg-[#121214]">
-              <div className="w-8 h-8 rounded-md bg-[#2d2d34] flex items-center justify-center shrink-0">
-                <FileArchive className="w-4 h-4 text-slate-400" />
+          {files.length > 0 ? (
+            /* Files attached state - show thumbnail grid */
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {files.map((f, idx) => (
+                  <div
+                    key={idx}
+                    className="relative group bg-[#121214] border border-[#2d2d34] rounded-md p-2 flex flex-col items-center gap-1"
+                  >
+                    {f.type.startsWith("image/") ? (
+                      <img
+                        src={URL.createObjectURL(f)}
+                        alt={f.name}
+                        className="w-full h-24 object-cover rounded"
+                      />
+                    ) : (
+                      <div className="w-full h-24 rounded bg-[#1e1e24] flex items-center justify-center">
+                        <FileArchive className="w-6 h-6 text-slate-500" />
+                      </div>
+                    )}
+                    <p className="text-[9px] text-slate-400 truncate w-full text-center">
+                      {f.name}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile(idx)}
+                      title="Remove file"
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-white font-medium truncate">
-                  {file.name}
-                </p>
-                <p className="text-[9px] text-slate-600 font-mono">
-                  {formatSize(file.size)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleRemoveFile}
-                title={t("Remove file")}
-                className="w-5 h-5 rounded-full bg-[#2d2d34] flex items-center justify-center text-slate-500 hover:text-red-400 transition-colors cursor-pointer shrink-0"
-              >
-                <X className="w-3 h-3" />
-              </button>
+              <p className="text-[9px] text-slate-600 font-mono">
+                {files.length} file(s) selected
+              </p>
             </div>
           ) : (
             /* Dropzone */
@@ -344,15 +952,15 @@ function MangakaView({
               </div>
               <div className="text-center space-y-1">
                 <p className="text-sm font-medium text-slate-400">
-                  {t("Click to upload storyboard or rough sketch")}
+                  Click to upload storyboard or rough sketch
                 </p>
                 <p className="text-[10px] text-slate-700 font-mono">
-                  .zip ? .pdf ? .png ? .jpg ? .psd ? .clip ? {t('Maximum size')}: 50 MB
+                  .zip · .pdf · .png · .jpg · .psd · .clip — max 50 MB
                 </p>
               </div>
               <div className="px-4 py-1.5 rounded-md bg-[#2d2d34] border border-[#3a3a44]">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  {t("Browse files")}
+                  Browse files
                 </span>
               </div>
             </div>
@@ -361,14 +969,14 @@ function MangakaView({
           <input
             ref={fileInputRef}
             type="file"
+            multiple
             accept={ACCEPTED}
             onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleFile(f);
+              handleFiles(e.target.files);
               e.target.value = "";
             }}
             className="hidden"
-            aria-label={t("Upload storyboard archive")}
+            aria-label="Upload storyboard archive"
           />
         </div>
 
@@ -382,7 +990,7 @@ function MangakaView({
             className="w-full py-3 rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg"
           >
             <Send className="w-4 h-4" />
-            {isSubmitting ? t("Submitting...") : t("Submit Proposal to Editor")}
+            {isSubmitting ? "Submitting…" : "Submit Proposal to Editor"}
           </button>
         </div>
       </form>
@@ -391,37 +999,125 @@ function MangakaView({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EDITOR VIEW — Download & Evaluation Layout
+// MANGAKA VIEW — Post-submit confirmation
+// ─────────────────────────────────────────────────────────────────────────────
+
+function MangakaSuccessView({
+  proposal,
+  onReset,
+}: {
+  proposal: ProposalDraft;
+  onReset: () => void;
+}) {
+  return (
+    <div className="max-w-lg mx-auto flex flex-col items-center gap-6 py-16 text-center">
+      <div className="w-16 h-16 rounded-full bg-white/8 border border-white/15 flex items-center justify-center">
+        <CheckCircle2 className="w-8 h-8 text-white" />
+      </div>
+      <div>
+        <h2 className="text-base font-bold text-white mb-2">
+          Proposal Submitted!
+        </h2>
+        <p className="text-sm text-slate-400 leading-relaxed">
+          <span className="text-white font-semibold">"{proposal.title}"</span>{" "}
+          has been sent to the Tantou Editor for review.
+          {proposal.storyboardPreviewName && (
+            <>
+              {" "}
+              The storyboard archive{" "}
+              <span className="text-white font-medium">
+                {proposal.storyboardPreviewName}
+              </span>{" "}
+              was attached.
+            </>
+          )}
+        </p>
+      </div>
+
+      {/* Proposal summary card */}
+      <div className="w-full bg-[#1e1e24] border border-[#2d2d34] rounded-md px-5 py-4 text-left space-y-3">
+        <div>
+          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">
+            Title
+          </p>
+          <p className="text-sm text-white font-semibold">{proposal.title}</p>
+        </div>
+        <div>
+          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">
+            Genre
+          </p>
+          <p className="text-sm text-white">{proposal.genre}</p>
+        </div>
+        {proposal.storyboardPreviewName && (
+          <div>
+            <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">
+              Attachment
+            </p>
+            <p className="text-sm text-white font-mono">
+              {proposal.storyboardPreviewName} ({proposal.storyboardPreviewSize}
+              )
+            </p>
+          </div>
+        )}
+      </div>
+
+      <button
+        onClick={onReset}
+        className="flex items-center gap-1.5 px-5 py-2.5 rounded-md border border-[#2d2d34] text-sm font-medium text-slate-400 hover:text-white hover:border-slate-500 transition-all cursor-pointer"
+      >
+        <RotateCcw className="w-3.5 h-3.5" /> Submit Another Proposal
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EDITOR VIEW — Download & Evaluation Layout (no reject button)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function EditorView({
   proposal,
   onForward,
-  onReject,
   onReset,
 }: {
-  proposal: ProposalDraft;
+  proposal: ProposalDraft & { _id?: string; storyboardUrl?: string; storyboardImages?: any[] };
   onForward: (comment: string) => void;
-  onReject: (comment: string) => void;
   onReset: () => void;
 }) {
-  const { t } = useLanguage();
   const [editorComment, setEditorComment] = useState("");
-  const [actionDone, setActionDone] = useState<"forwarded" | "rejected" | null>(
-    null,
-  );
+  const [actionDone, setActionDone] = useState<"forwarded" | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isZipping, setIsZipping] = useState(false);
+  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
 
-  const handleDownload = async () => {
-    if (!(proposal as any)._id) return;
+  const images = (proposal as any).storyboardImages || [];
+
+  const handleDownloadZip = async () => {
+    if (!(proposal as any)._id || images.length === 0) return;
+    setIsZipping(true);
     try {
-      setIsLoading(true);
-      await apiClient.proposals.downloadStoryboard((proposal as any)._id);
-    } catch (err: any) {
-      console.error(err);
-      alert(t("Failed to download storyboard"));
+      const zip = new JSZip();
+      const imgFolder = zip.folder("storyboard")!;
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        try {
+          const resp = await fetch(img.url);
+          const blob = await resp.blob();
+          const ext = img.originalName?.includes(".")
+            ? img.originalName.split(".").pop()
+            : "png";
+          imgFolder.file(`page_${i + 1}.${ext}`, blob);
+        } catch (e) {
+          console.warn("Failed to fetch image", img.url, e);
+        }
+      }
+      const blob = await zip.generateAsync({ type: "blob" });
+      saveAs(blob, `${proposal.title}_storyboard.zip`);
+    } catch (err) {
+      console.error("ZIP error:", err);
+      alert("Failed to create ZIP download");
     } finally {
-      setIsLoading(false);
+      setIsZipping(false);
     }
   };
 
@@ -438,51 +1134,26 @@ function EditorView({
     }
   };
 
-  const handleReject = async () => {
-    if (!editorComment.trim()) return;
-    setIsLoading(true);
-    try {
-      await onReject(editorComment);
-      setActionDone("rejected");
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // ── Post-decision confirmation screen ────────────────────────────────────
   if (actionDone) {
     return (
       <div className="flex flex-col items-center justify-center gap-5 py-20 text-center">
-        <div
-          className={`w-14 h-14 rounded-full flex items-center justify-center ${
-            actionDone === "forwarded" ? "bg-white/10" : "bg-red-500/10"
-          }`}
-        >
-          {actionDone === "forwarded" ? (
-            <CheckCircle2 className="w-7 h-7 text-white" />
-          ) : (
-            <XCircle className="w-7 h-7 text-red-400" />
-          )}
+        <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
+          <CheckCircle2 className="w-7 h-7 text-white" />
         </div>
         <div>
           <h3 className="text-base font-bold text-white mb-1">
-            {actionDone === "forwarded"
-              ? t("Forwarded to Publishing Board")
-              : t("Revision Requested")}
+            Forwarded to Publishing Board
           </h3>
           <p className="text-[11px] text-slate-500">
-            {actionDone === "forwarded"
-              ? t("{{title}} has been escalated to the Editorial Board.", { title: proposal.title })
-              : t("{{title}} has been returned to {{author}} with your feedback.", { title: proposal.title, author: proposal.submittedBy })}
+            "{proposal.title}" has been escalated to the Editorial Board.
           </p>
         </div>
         <button
           onClick={onReset}
           className="flex items-center gap-1.5 px-4 py-2 rounded-md border border-[#2d2d34] text-sm font-medium text-slate-400 hover:text-white hover:border-slate-500 transition-all cursor-pointer"
         >
-          <RotateCcw className="w-3.5 h-3.5" /> {t("Review Another Proposal")}
+          <RotateCcw className="w-3.5 h-3.5" /> Review Another Proposal
         </button>
       </div>
     );
@@ -497,14 +1168,14 @@ function EditorView({
             <BookOpen className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-            {t("Proposal Details")}
+            Proposal Details
           </h2>
         </div>
 
         {/* Title */}
         <div className="bg-[#121214] border border-[#2d2d34] rounded-md px-4 py-3">
           <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">
-            {t("Series Title")}
+            Series Title
           </p>
           <p className="text-lg font-bold text-white leading-snug">
             {proposal.title}
@@ -514,7 +1185,7 @@ function EditorView({
         {/* Genre */}
         <div className="bg-[#121214] border border-[#2d2d34] rounded-md px-4 py-3">
           <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">
-            {t("Genre")}
+            Genre
           </p>
           <span className="inline-block text-xs font-semibold text-white bg-[#2d2d34] border border-[#3a3a44] px-2.5 py-1 rounded-md">
             {proposal.genre}
@@ -524,7 +1195,7 @@ function EditorView({
         {/* Synopsis */}
         <div className="bg-[#121214] border border-[#2d2d34] rounded-md px-4 py-3 flex-1">
           <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-2">
-            {t("Synopsis")}
+            Synopsis
           </p>
           <p className="text-sm text-white leading-relaxed">
             {proposal.synopsis}
@@ -534,119 +1205,149 @@ function EditorView({
         {/* Submission meta */}
         <div className="flex items-center justify-between text-[9px] text-slate-600 font-mono px-1">
           <span>
-            {t("By")} <span className="text-slate-400">{proposal.submittedBy}</span>
+            By <span className="text-slate-400">{proposal.submittedBy}</span>
           </span>
           <span>{proposal.submittedAt}</span>
         </div>
       </div>
 
-      {/* ── Center panel: Storyboard download card ── */}
+      {/* ── Center panel: Storyboard images gallery ── */}
       <div className="lg:col-span-3 flex flex-col gap-4">
         <div className="flex items-center gap-2 mb-1">
           <div className="w-6 h-6 rounded-md bg-[#2d2d34] flex items-center justify-center shrink-0">
             <FileText className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-            {t("Storyboard File")}
+            Storyboard Images
           </h2>
         </div>
 
-        {proposal.storyboardFile || proposal.storyboardPreviewName ? (
-          /* ── File attachment card ── */
-          <div className="bg-[#121214] border border-[#2d2d34] rounded-md p-5 flex flex-col items-center gap-4 flex-1">
-            {/* File icon */}
-            <div className="w-16 h-16 rounded-xl bg-[#1e1e24] border border-[#2d2d34] flex items-center justify-center">
-              <FileArchive className="w-8 h-8 text-slate-500" />
-            </div>
-
-            {/* File info */}
-            <div className="text-center">
-              <p className="text-sm font-semibold text-white leading-snug break-all px-2">
-                {proposal.storyboardPreviewName}
-              </p>
-              <p className="text-[10px] text-slate-600 font-mono mt-1">
-                {proposal.storyboardPreviewSize}
+        {images.length > 0 ? (
+          <div className="bg-[#121214] border border-[#2d2d34] rounded-md p-4 flex flex-col gap-3 flex-1">
+            <div className="flex items-center justify-between">
+              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">
+                {images.length} image{images.length !== 1 ? "s" : ""}
               </p>
             </div>
 
-            {/* Download button — white bg black text (spec requirement) */}
-            <button
-              onClick={handleDownload}
-              className="w-full py-2.5 rounded-md bg-white hover:bg-slate-200 text-black font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
-            >
-              <Download className="w-4 h-4" />
-              {t("Download Storyboard Archive")}
-            </button>
+            {/* Thumbnail grid */}
+            <div className="grid grid-cols-2 gap-2">
+              {images.map((img: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="relative group bg-[#1e1e24] border border-[#2d2d34] rounded-md overflow-hidden cursor-pointer"
+                  onClick={() => setLightboxImg(img.url)}
+                >
+                  <img
+                    src={img.url}
+                    alt={img.originalName || `Storyboard ${idx + 1}`}
+                    className="w-full h-20 object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                    <ZoomIn className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+              ))}
+            </div>
 
-            <p className="text-[9px] text-slate-700 text-center">
-              {t("Review the complete storyboard before making a decision.")}
-            </p>
+            {/* Download ZIP button */}
+            {images.length > 1 && (
+              <button
+                onClick={handleDownloadZip}
+                disabled={isZipping}
+                className="w-full py-2 rounded-md bg-white hover:bg-slate-200 text-black font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {isZipping ? "Zipping..." : "Download All as ZIP"}
+              </button>
+            )}
+            {images.length === 1 && (
+              <button
+                onClick={handleDownloadZip}
+                disabled={isZipping}
+                className="w-full py-2 rounded-md bg-white hover:bg-slate-200 text-black font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {isZipping ? "Zipping..." : "Download as ZIP"}
+              </button>
+            )}
           </div>
         ) : (
-          /* No file attached */
+          /* No images attached */
           <div className="bg-[#121214] border border-dashed border-[#2d2d34] rounded-md p-5 flex flex-col items-center justify-center gap-3 flex-1">
-            <Eye className="w-10 h-10 stroke-[1] text-slate-700" />
+            <Eye className="w-10 h-10 stroke-1 text-slate-700" />
             <p className="text-xs font-medium text-slate-600 text-center">
-              {t("No storyboard attached")}
+              No storyboard images attached
             </p>
             <p className="text-[9px] text-slate-700 text-center leading-relaxed">
-              {t("The mangaka did not attach a storyboard file with this proposal.")}
+              The mangaka did not attach any storyboard images with this proposal.
             </p>
           </div>
         )}
       </div>
 
-      {/* ── Right panel: Editor feedback + decisions ── */}
+      {/* Lightbox */}
+      {lightboxImg && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightboxImg(null)}
+        >
+          <button
+            onClick={() => setLightboxImg(null)}
+            className="absolute top-4 right-4 text-white hover:text-slate-300 cursor-pointer"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img
+            src={lightboxImg}
+            alt="Storyboard full view"
+            className="max-w-full max-h-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
+      {/* ── Right panel: Editor feedback + forward button (no reject) ── */}
       <div className="lg:col-span-4 flex flex-col gap-4">
         <div className="flex items-center gap-2 mb-1">
           <div className="w-6 h-6 rounded-md bg-[#2d2d34] flex items-center justify-center shrink-0">
             <Brush className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-            {t("Editor's Decision")}
+            Editor's Decision
           </h2>
         </div>
 
         {/* Comment textarea */}
         <div className="flex-1 flex flex-col gap-2">
           <label className={LABEL} htmlFor="editor-comment">
-            {t("Editor's Comments")} <span className="text-red-500">*</span>
+            Editor's Comments <span className="text-red-500">*</span>
           </label>
           <textarea
             id="editor-comment"
             value={editorComment}
             onChange={(e) => setEditorComment(e.target.value)}
             rows={7}
-            placeholder={t("Provide detailed feedback on plot coherence, visual style, target demographic fit, commercial viability...")}
+            placeholder="Provide detailed feedback on plot coherence, visual style, target demographic fit, commercial viability…"
             className={`${INPUT} resize-none leading-relaxed flex-1`}
           />
           {!editorComment.trim() && (
             <p className="text-[9px] text-slate-700">
-              {t("A comment is required before taking action.")}
+              A comment is required before forwarding.
             </p>
           )}
         </div>
 
-        {/* Action buttons */}
+        {/* Action buttons — only Forward, no Reject */}
         <div className="flex flex-col gap-2.5 pt-2">
-          {/* Forward to Publishing Board — red accent */}
+          {/* Forward to Editorial Board — red accent */}
           <button
             onClick={handleForward}
             disabled={!editorComment.trim() || isLoading}
             className="w-full py-3 rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-2"
           >
             <ChevronRight className="w-4 h-4" />
-            {isLoading ? t("Processing...") : t("Forward to Publishing Board")}
-          </button>
-
-          {/* Reject / Request Revision — dark slate */}
-          <button
-            onClick={handleReject}
-            disabled={!editorComment.trim() || isLoading}
-            className="w-full py-2.5 rounded-md bg-[#1e1e24] hover:bg-[#26262e] border border-[#3a3a44] hover:border-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-semibold text-white transition-all cursor-pointer flex items-center justify-center gap-2"
-          >
-            <XCircle className="w-4 h-4 text-slate-500" />
-            {t("Reject / Request Revision")}
+            {isLoading ? "Processing…" : "Forward to Editorial Board"}
           </button>
         </div>
       </div>
@@ -667,7 +1368,6 @@ export default function TaskDelegation({
   onSelectSeries,
   onSelectChapter,
 }: TaskDelegationProps) {
-  const { language, t } = useLanguage();
   // Toast status
   const [toast, setToast] = useState<{
     msg: string;
@@ -678,16 +1378,15 @@ export default function TaskDelegation({
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Which view is active:
-  //   null     = initial / pick a role
-  //   'submit' = mangaka has submitted; editor is reviewing
+  // Mangaka tab state: 'list' | 'new' | 'detail' | 'success'
+  const [mangakaTab, setMangakaTab] = useState<
+    "list" | "new" | "detail" | "success"
+  >("list");
+  const [selectedProposal, setSelectedProposal] = useState<any>(null);
   const [submittedProposal, setSubmittedProposal] =
     useState<ProposalDraft | null>(null);
-  const [finalStatus, setFinalStatus] = useState<
-    "forwarded" | "rejected" | null
-  >(null);
 
-  // Real backend pending proposal list for Editor
+  // Editor state
   const [proposalsList, setProposalsList] = useState<any[]>([]);
   const [loadingProposals, setLoadingProposals] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
@@ -713,8 +1412,14 @@ export default function TaskDelegation({
     fetchProposals();
   }, [currentUser]);
 
-  const pendingProposals = proposalsList.filter((p) => p.status === "PENDING");
-  const selectedProposal =
+  const pendingProposals = proposalsList.filter(
+    (p) =>
+      p.status === "PENDING" ||
+      p.status === "SUBMITTED" ||
+      p.status === "UNDER_REVIEW" ||
+      p.status === "RESUBMITTED",
+  );
+  const selectedProposalEditor =
     pendingProposals.find((p) => p._id === selectedSeriesId) ||
     pendingProposals[0] ||
     null;
@@ -722,8 +1427,8 @@ export default function TaskDelegation({
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleMangakaSubmit = async (draft: ProposalDraft) => {
-    if (!draft.storyboardFile) {
-      showToast(t("Storyboard file is required"), "warn");
+    if (!draft.storyboardFiles.length) {
+      showToast("At least one storyboard file is required", "warn");
       return;
     }
     try {
@@ -731,103 +1436,90 @@ export default function TaskDelegation({
         draft.title,
         draft.genre,
         draft.synopsis,
-        draft.storyboardFile,
+        draft.storyboardFiles,
       );
       setSubmittedProposal(draft);
-      showToast(t("Proposal submitted successfully!"), "success");
+      setMangakaTab("success");
+      showToast("Proposal submitted successfully!", "success");
       onRefreshAll();
     } catch (err: any) {
-      showToast(t(err.message || "Submission failed"), "warn");
+      showToast(err.message || "Submission failed", "warn");
     }
   };
 
   const handleForward = async (comment: string) => {
-    if (!selectedProposal) return;
+    if (!selectedProposalEditor) return;
     try {
-      // 1. Update proposal status to FORWARDED
-      await apiClient.proposals.forward(selectedProposal._id, comment);
+      await apiClient.proposals.forward(selectedProposalEditor._id, comment);
 
-      // The backend creates one idempotent voting submission.
       const mangakaIdStr =
-        typeof selectedProposal.mangakaId === "object" &&
-        selectedProposal.mangakaId !== null
-          ? (selectedProposal.mangakaId as any)._id
-          : selectedProposal.mangakaId;
+        typeof selectedProposalEditor.mangakaId === "object" &&
+        selectedProposalEditor.mangakaId !== null
+          ? (selectedProposalEditor.mangakaId as any)._id
+          : selectedProposalEditor.mangakaId;
 
       await apiClient.notifications.create(
         mangakaIdStr,
-        'Series proposal forwarded to the Board',
-        `Editor ${currentUser.name} forwarded your series proposal "${selectedProposal.title}" to the Editorial Board for voting. Comment: ${comment}`,
-        'INFO',
+        "Đề xuất Series mới đã được chuyển tiếp lên Board!",
+        `Biên tập viên ${currentUser.name} đã chuyển tiếp đề xuất Series "${selectedProposalEditor.title}" của bạn lên Hội đồng để bỏ phiếu. Nhận xét: ${comment}`,
+        "INFO",
       );
 
-      showToast(t('Proposal forwarded to the Editorial Board and voting session created.'), 'success');
+      showToast(
+        "Đã chuyển tiếp đề xuất lên Hội đồng biên tập và khởi tạo Voting Session.",
+        "success",
+      );
       fetchProposals();
       onRefreshAll();
       handleReset();
     } catch (err: any) {
-      showToast(t(err.message || 'Failed to forward proposal'), 'warn');
-    }
-  };
-
-  const handleReject = async (comment: string) => {
-    if (!selectedProposal) return;
-    try {
-      await apiClient.proposals.reject(selectedProposal._id, comment);
-
-      const mangakaIdStr =
-        typeof selectedProposal.mangakaId === "object" &&
-        selectedProposal.mangakaId !== null
-          ? (selectedProposal.mangakaId as any)._id
-          : selectedProposal.mangakaId;
-
-      await apiClient.notifications.create(
-        mangakaIdStr,
-        'Revision requested for series proposal',
-        `Editor has requested revision for your proposal "${selectedProposal.title}". Reason: ${comment}`,
-        'WARNING',
-      );
-
-      showToast(t('Proposal rejected and feedback sent to the author.'), 'warn');
-      fetchProposals();
-      onRefreshAll();
-      handleReset();
-    } catch (err: any) {
-      showToast(t(err.message || 'Failed to reject proposal'), 'warn');
+      showToast(err.message || "Chuyển tiếp thất bại", "warn");
     }
   };
 
   const handleReset = () => {
     setSubmittedProposal(null);
-    setFinalStatus(null);
     setSelectedSeriesId(null);
+    setMangakaTab("list");
+    setSelectedProposal(null);
   };
 
-  // Map backend selectedProposal to EditorView proposal input
-  const activeProposal = selectedProposal
+  const handleSelectProposal = (proposal: any) => {
+    setSelectedProposal(proposal);
+    setMangakaTab("detail");
+  };
+
+  const handleResubmitted = () => {
+    setMangakaTab("list");
+    setSelectedProposal(null);
+    onRefreshAll();
+  };
+
+  // Map backend selectedProposalEditor to EditorView proposal input
+  const activeProposal = selectedProposalEditor
     ? {
-        _id: selectedProposal._id,
-        title: selectedProposal.title,
-        genre: selectedProposal.genre || "Shonen",
-        synopsis: selectedProposal.synopsis,
-        storyboardFile: null,
+        _id: selectedProposalEditor._id,
+        title: selectedProposalEditor.title,
+        genre: selectedProposalEditor.genre || "Shonen",
+        synopsis: selectedProposalEditor.synopsis,
+        storyboardFiles: [],
+        storyboardImages: selectedProposalEditor.storyboardImages || [],
+        storyboardUrl: selectedProposalEditor.storyboardUrl,
         storyboardPreviewName:
-          selectedProposal.storyboardOriginalName || "storyboard.zip",
+          selectedProposalEditor.storyboardOriginalName || "storyboard.zip",
         storyboardPreviewSize: "N/A",
-        submittedAt: selectedProposal.submittedAt
-          ? new Date(selectedProposal.submittedAt).toLocaleString(language === "vi" ? "vi-VN" : "en-US")
-          : new Date().toLocaleString(language === "vi" ? "vi-VN" : "en-US"),
+        submittedAt: selectedProposalEditor.submittedAt
+          ? new Date(selectedProposalEditor.submittedAt).toLocaleString()
+          : new Date().toLocaleString(),
         submittedBy:
-          typeof selectedProposal.mangakaId === "object" &&
-          selectedProposal.mangakaId !== null
-            ? (selectedProposal.mangakaId as any).name
+          typeof selectedProposalEditor.mangakaId === "object" &&
+          selectedProposalEditor.mangakaId !== null
+            ? (selectedProposalEditor.mangakaId as any).name
             : "Unknown Mangaka",
       }
     : null;
 
   // ── Determine which content to show ───────────────────────────────────────
-  const showMangakaForm = isMangaka && !submittedProposal;
-  const showMangakaSuccess = isMangaka && !!submittedProposal;
   const showEditorReview = isEditor && pendingProposals.length > 0;
   const showEditorEmpty = isEditor && pendingProposals.length === 0;
 
@@ -842,10 +1534,10 @@ export default function TaskDelegation({
           </div>
           <div>
             <h1 className="text-[13px] font-bold text-white leading-none uppercase tracking-wide">
-              {t("Series Proposal")}{isEditor ? ` — ${t("Review Queue")}` : ` — ${t("Submission")}`}
+              Series Proposal{isEditor ? " — Review Queue" : ""}
             </h1>
             <p className="text-[10px] text-slate-500 mt-0.5">
-              {t(currentUser.role)} ·{" "}
+              {currentUser.role} ·{" "}
               <span className="text-slate-400">{currentUser.name}</span>
             </p>
           </div>
@@ -872,93 +1564,88 @@ export default function TaskDelegation({
               : "bg-red-600/10 border-red-600/20 text-red-400"
           }`}
         >
-          {isMangaka ? `✏ ${t("Mangaka View")}` : `👁 ${t("Editor View")}`}
+          {isMangaka ? "✏ Mangaka View" : "👁 Editor View"}
         </div>
       </header>
 
       {/* ── Main content ── */}
       <div className="flex-1 overflow-y-auto px-6 py-8">
-        {/* MANGAKA: Submission form */}
-        {showMangakaForm && (
-          <MangakaView
-            currentUser={currentUser}
-            onSubmit={handleMangakaSubmit}
-          />
+        {/* ======================== MANGAKA VIEW ======================== */}
+        {isMangaka && (
+          <>
+            {/* Tab switcher */}
+            <div className="flex gap-1 mb-6 border-b border-[#2d2d34] pb-2">
+              <button
+                onClick={() => {
+                  setMangakaTab("list");
+                  setSelectedProposal(null);
+                }}
+                className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-t-md transition-colors cursor-pointer ${
+                  mangakaTab === "list" || mangakaTab === "detail"
+                    ? "bg-[#2d2d34] text-white border-b-2 border-red-500"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                <List className="w-3.5 h-3.5" /> My Proposals
+              </button>
+              <button
+                onClick={() => setMangakaTab("new")}
+                className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-t-md transition-colors cursor-pointer ${
+                  mangakaTab === "new" || mangakaTab === "success"
+                    ? "bg-[#2d2d34] text-white border-b-2 border-red-500"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5" /> New Proposal
+              </button>
+            </div>
+
+            {/* Tab content */}
+            {mangakaTab === "list" && (
+              <MyProposalsList
+                currentUser={currentUser}
+                onSelectProposal={handleSelectProposal}
+              />
+            )}
+
+            {mangakaTab === "detail" && selectedProposal && (
+              <ProposalDetailView
+                proposal={selectedProposal}
+                currentUser={currentUser}
+                onBack={() => {
+                  setMangakaTab("list");
+                  setSelectedProposal(null);
+                }}
+                onResubmitted={handleResubmitted}
+              />
+            )}
+
+            {mangakaTab === "new" && (
+              <MangakaView
+                currentUser={currentUser}
+                onSubmit={handleMangakaSubmit}
+              />
+            )}
+
+            {mangakaTab === "success" && submittedProposal && (
+              <MangakaSuccessView
+                proposal={submittedProposal}
+                onReset={() => {
+                  setMangakaTab("new");
+                  setSubmittedProposal(null);
+                }}
+              />
+            )}
+          </>
         )}
 
-        {/* MANGAKA: Post-submit confirmation */}
-        {showMangakaSuccess && (
-          <div className="max-w-lg mx-auto flex flex-col items-center gap-6 py-16 text-center">
-            <div className="w-16 h-16 rounded-full bg-white/8 border border-white/15 flex items-center justify-center">
-              <CheckCircle2 className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white mb-2">
-                {t("Proposal Submitted!")}
-              </h2>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                <span className="text-white font-semibold">
-                  "{submittedProposal!.title}"
-                </span>{" "}
-                {t("has been sent to the Tantou Editor for review.")}
-                {submittedProposal!.storyboardPreviewName && (
-                  <>
-                    {" "}
-                    {t("The storyboard archive")}{" "}
-                    <span className="text-white font-medium">
-                      {submittedProposal!.storyboardPreviewName}
-                    </span>{" "}
-                    {t("was attached.")}
-                  </>
-                )}
-              </p>
-            </div>
-
-            {/* Proposal summary card */}
-            <div className="w-full bg-[#1e1e24] border border-[#2d2d34] rounded-md px-5 py-4 text-left space-y-3">
-              <div>
-                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">
-                  {t("Title")}
-                </p>
-                <p className="text-sm text-white font-semibold">
-                  {submittedProposal!.title}
-                </p>
-              </div>
-              <div>
-                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">
-                  {t("Genre")}
-                </p>
-                <p className="text-sm text-white">{submittedProposal!.genre}</p>
-              </div>
-              {submittedProposal!.storyboardPreviewName && (
-                <div>
-                  <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">
-                    {t("Attachment")}
-                  </p>
-                  <p className="text-sm text-white font-mono">
-                    {submittedProposal!.storyboardPreviewName} (
-                    {submittedProposal!.storyboardPreviewSize})
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-md border border-[#2d2d34] text-sm font-medium text-slate-400 hover:text-white hover:border-slate-500 transition-all cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" /> {t("Submit Another Proposal")}
-            </button>
-          </div>
-        )}
-
-        {/* EDITOR: Review layout with real proposals */}
-        {showEditorReview && activeProposal && (
+        {/* ======================== EDITOR VIEW ======================== */}
+        {isEditor && showEditorReview && activeProposal && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
             {/* Sidebar list of pending proposals */}
-            <div className="lg:col-span-3 bg-[#1e1e24] border border-[#2d2d34] rounded-md p-4 space-y-2 max-h-[500px] overflow-y-auto">
+            <div className="lg:col-span-3 bg-[#1e1e24] border border-[#2d2d34] rounded-md p-4 space-y-2 max-h-125 overflow-y-auto">
               <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
-                {t("Pending Proposals")}
+                Pending Proposals
               </h3>
               {pendingProposals.map((s) => (
                 <button
@@ -973,7 +1660,7 @@ export default function TaskDelegation({
                 >
                   <p className="text-xs truncate">{s.title}</p>
                   <p className="text-[9px] text-slate-500 mt-1 uppercase">
-                    {t("By")}{" "}
+                    By{" "}
                     {typeof s.mangakaId === "object" && s.mangakaId !== null
                       ? (s.mangakaId as any).name
                       : "Author"}
@@ -987,8 +1674,10 @@ export default function TaskDelegation({
               <EditorView
                 proposal={activeProposal}
                 onForward={handleForward}
-                onReject={handleReject}
-                onReset={handleReset}
+                onReset={() => {
+                  setSelectedSeriesId(null);
+                  fetchProposals();
+                }}
               />
             </div>
           </div>
@@ -998,14 +1687,14 @@ export default function TaskDelegation({
         {showEditorEmpty && (
           <div className="flex flex-col items-center justify-center gap-5 py-24 text-center">
             <div className="w-14 h-14 rounded-full bg-[#1e1e24] border border-[#2d2d34] flex items-center justify-center">
-              <BookOpen className="w-7 h-7 stroke-[1] text-slate-700" />
+              <BookOpen className="w-7 h-7 stroke-1 text-slate-700" />
             </div>
             <div>
               <p className="text-sm font-semibold text-slate-500">
-                {t("No proposals in queue")}
+                No proposals in queue
               </p>
               <p className="text-[11px] text-slate-700 mt-1">
-                {t("Waiting for a Mangaka to submit a new series proposal.")}
+                Waiting for a Mangaka to submit a new series proposal.
               </p>
             </div>
           </div>
@@ -1014,9 +1703,9 @@ export default function TaskDelegation({
         {/* Other roles (ASSISTANT) — informational placeholder */}
         {!isMangaka && !isEditor && (
           <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
-            <AlertCircle className="w-10 h-10 stroke-[1] text-slate-700" />
+            <AlertCircle className="w-10 h-10 stroke-1 text-slate-700" />
             <p className="text-sm text-slate-600">
-              {t("This section is available to Mangaka and Editor roles only.")}
+              This section is available to Mangaka and Editor roles only.
             </p>
           </div>
         )}
