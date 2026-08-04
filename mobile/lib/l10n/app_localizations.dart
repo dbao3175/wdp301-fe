@@ -89,24 +89,16 @@ class AppLocalizations {
   String get recentSeries => isVi ? 'Series gần đây' : 'Recent series';
   String get editorQueue => isVi ? 'Hàng chờ editor' : 'Editor queue';
   String get boardQueue => isVi ? 'Hàng chờ hội đồng' : 'Board queue';
-  String get webNoticeTitle => isVi
-      ? 'Chế độ Mobile Companion'
-      : 'Mobile Companion Mode';
+  String get webNoticeTitle =>
+      isVi ? 'Chế độ Mobile Companion' : 'Mobile Companion Mode';
   String get webNoticeBody => isVi
       ? 'App mobile tập trung theo dõi thông báo và trạng thái các bên. Đăng nhập bản Web để thực hiện thao tác canvas & chỉnh sửa phức tạp.'
       : 'Mobile app is optimized for real-time notifications & status monitoring. Log into Web for full canvas & complex editing.';
   String get openWebHint => isVi
       ? 'Mở bản Web khi cần thao tác chi tiết'
       : 'Open Web app for complex tasks';
-  String get roleStatusOverview => isVi
-      ? 'Trạng thái quy trình các bên'
-      : 'Role Workflow Status Overview';
-  String get downloadProposal => isVi ? 'Tải bản thảo' : 'Download Proposal';
-  String get downloadingProposal => isVi
-      ? 'Đang tải bản thảo...'
-      : 'Downloading manuscript...';
-
-
+  String get roleStatusOverview =>
+      isVi ? 'Trạng thái quy trình các bên' : 'Role Workflow Status Overview';
   String roleLabel(String role) => switch (role) {
         'ADMIN' => isVi ? 'Quản trị viên' : 'Admin',
         'MANGAKA' => 'Mangaka',

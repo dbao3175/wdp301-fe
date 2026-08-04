@@ -60,7 +60,8 @@ class StudioShell extends ConsumerWidget {
           child: Row(
             children: items.map((item) {
               final active = location == item.path ||
-                  (item.path != '/app' && location.startsWith(item.path));
+                  (item.path != '/app' && location.startsWith(item.path)) ||
+                  (item.path == '/library' && location.startsWith('/series/'));
               return Expanded(
                 child: _NavButton(
                     item: item,
@@ -76,9 +77,13 @@ class StudioShell extends ConsumerWidget {
 
   List<_ShellItem> _itemsFor(BuildContext context, StudioRole role) {
     final l10n = AppLocalizations.of(context);
+    final library = _ShellItem(
+      '/library',
+      l10n.isVi ? 'Truyện' : 'Library',
+      Icons.auto_stories_outlined,
+      Icons.auto_stories_rounded,
+    );
     final common = <_ShellItem>[
-      _ShellItem('/notifications', l10n.inbox, Icons.notifications_none_rounded,
-          Icons.notifications_rounded),
       _ShellItem('/profile', l10n.profile, Icons.person_outline_rounded,
           Icons.person_rounded),
     ];
@@ -88,6 +93,7 @@ class StudioShell extends ConsumerWidget {
               Icons.task_alt_rounded),
           _ShellItem('/assistant/income', l10n.income, Icons.payments_outlined,
               Icons.payments_rounded),
+          library,
           ...common,
         ],
       StudioRole.editor => [
@@ -95,6 +101,7 @@ class StudioShell extends ConsumerWidget {
               Icons.dashboard_outlined, Icons.dashboard_rounded),
           _ShellItem('/editor/proposals', l10n.proposals,
               Icons.rate_review_outlined, Icons.rate_review_rounded),
+          library,
           _ShellItem('/rankings', l10n.rankings, Icons.trending_up_outlined,
               Icons.trending_up_rounded),
           ...common,
@@ -102,8 +109,7 @@ class StudioShell extends ConsumerWidget {
       StudioRole.boardMember => [
           _ShellItem('/board/voting', l10n.board, Icons.how_to_vote_outlined,
               Icons.how_to_vote_rounded),
-          _ShellItem('/board/publications', l10n.publications,
-              Icons.newspaper_outlined, Icons.newspaper_rounded),
+          library,
           _ShellItem('/rankings', l10n.rankings, Icons.trending_up_outlined,
               Icons.trending_up_rounded),
           ...common,
@@ -111,15 +117,12 @@ class StudioShell extends ConsumerWidget {
       StudioRole.admin => [
           _ShellItem('/admin', l10n.admin, Icons.admin_panel_settings_outlined,
               Icons.admin_panel_settings_rounded),
-          _ShellItem('/board/voting', l10n.board, Icons.how_to_vote_outlined,
-              Icons.how_to_vote_rounded),
-          _ShellItem('/rankings', l10n.rankings, Icons.trending_up_outlined,
-              Icons.trending_up_rounded),
           ...common,
         ],
       _ => [
           _ShellItem('/app', l10n.studio, Icons.dashboard_outlined,
               Icons.dashboard_rounded),
+          library,
           _ShellItem('/rankings', l10n.rankings, Icons.trending_up_outlined,
               Icons.trending_up_rounded),
           ...common,
@@ -152,7 +155,7 @@ class _NavButton extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
         decoration: BoxDecoration(
           color: active ? AppColors.red : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
@@ -161,15 +164,15 @@ class _NavButton extends StatelessWidget {
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(active ? item.activeIcon : item.icon,
-              color: active ? Colors.white : AppColors.ink, size: 21),
+              color: active ? Colors.white : AppColors.ink, size: 20),
           const SizedBox(height: 3),
           Text(item.label.toUpperCase(),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   color: active ? Colors.white : AppColors.muted,
-                  fontSize: 9,
-                  letterSpacing: 0.4,
+                  fontSize: 8,
+                  letterSpacing: 0.2,
                   fontWeight: FontWeight.w900)),
         ]),
       ),

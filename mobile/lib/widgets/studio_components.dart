@@ -470,8 +470,15 @@ class AvatarBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (imageUrl != null && imageUrl!.isNotEmpty) {
+    final avatar = imageUrl?.trim() ?? '';
+    final lowerAvatar = avatar.toLowerCase();
+    final isSvg = lowerAvatar.startsWith('data:image/svg') ||
+        lowerAvatar.contains('/svg?') ||
+        Uri.tryParse(avatar)?.path.toLowerCase().endsWith('.svg') == true;
+    if (avatar.isNotEmpty && !isSvg) {
       return Container(
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           border: Border.all(color: AppColors.ink, width: 1.6),
           borderRadius: BorderRadius.circular(8),
@@ -482,8 +489,24 @@ class AvatarBadge extends StatelessWidget {
         ),
         child: ClipRRect(
             borderRadius: BorderRadius.circular(6),
-            child: Image.network(imageUrl!,
-                width: size, height: size, fit: BoxFit.cover)),
+            child: Image.network(
+              avatar,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => ColoredBox(
+                color: AppColors.ink,
+                child: Center(
+                  child: Text(
+                    initials(name),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            )),
       );
     }
     return Container(
@@ -631,7 +654,9 @@ class RoleStatusSummaryCard extends StatelessWidget {
                 icon: Icons.draw_outlined,
                 color: AppColors.red,
                 statusText: '$seriesCount ${l10n.series.toLowerCase()}',
-                actionHint: l10n.isVi ? 'Theo dõi series & bản thảo' : 'Track series & drafts',
+                actionHint: l10n.isVi
+                    ? 'Theo dõi series & bản thảo'
+                    : 'Track series & drafts',
               ),
               const Divider(height: 18, thickness: 1, color: AppColors.line),
               _RoleStatusRow(
@@ -639,23 +664,31 @@ class RoleStatusSummaryCard extends StatelessWidget {
                 icon: Icons.brush_outlined,
                 color: AppColors.violet,
                 statusText: '$openTasksCount ${l10n.openTasks.toLowerCase()}',
-                actionHint: l10n.isVi ? 'Nộp task & cập nhật tiến độ' : 'Submit tasks & progress',
+                actionHint: l10n.isVi
+                    ? 'Nộp task & cập nhật tiến độ'
+                    : 'Submit tasks & progress',
               ),
               const Divider(height: 18, thickness: 1, color: AppColors.line),
               _RoleStatusRow(
                 roleName: 'EDITOR',
                 icon: Icons.rate_review_outlined,
                 color: AppColors.blue,
-                statusText: '$pendingProposalsCount ${l10n.pendingReview.toLowerCase()}',
-                actionHint: l10n.isVi ? 'Duyệt đề xuất & sắp xếp lịch' : 'Review proposals & queue',
+                statusText:
+                    '$pendingProposalsCount ${l10n.pendingReview.toLowerCase()}',
+                actionHint: l10n.isVi
+                    ? 'Duyệt đề xuất & sắp xếp lịch'
+                    : 'Review proposals & queue',
               ),
               const Divider(height: 18, thickness: 1, color: AppColors.line),
               _RoleStatusRow(
                 roleName: 'EDITORIAL BOARD',
                 icon: Icons.gavel_outlined,
                 color: AppColors.amber,
-                statusText: '$pendingVotesCount ${l10n.boardQueue.toLowerCase()}',
-                actionHint: l10n.isVi ? 'Biểu quyết xuất bản' : 'Cast publication votes',
+                statusText:
+                    '$pendingVotesCount ${l10n.boardQueue.toLowerCase()}',
+                actionHint: l10n.isVi
+                    ? 'Biểu quyết xuất bản'
+                    : 'Cast publication votes',
               ),
             ],
           ),
@@ -740,4 +773,3 @@ class _RoleStatusRow extends StatelessWidget {
     );
   }
 }
-

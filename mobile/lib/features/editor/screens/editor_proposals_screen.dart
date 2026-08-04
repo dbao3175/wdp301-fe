@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../../core/utils/app_utils.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/app_models.dart';
-import '../../../services/studio_services.dart';
 import '../../../widgets/studio_components.dart';
 import '../providers/editor_provider.dart';
 
@@ -20,149 +19,110 @@ class EditorProposalsScreen extends ConsumerWidget {
       onRefresh: () async => ref.invalidate(editorProposalsProvider),
       children: [
         StudioHeaderCard(
-            title: l10n.proposals,
-            subtitle: l10n.editorQueue,
-            icon: Icons.rate_review_rounded),
-        const SizedBox(height: 16),
+          title: l10n.proposals,
+          subtitle: l10n.isVi
+              ? 'Xem trực tiếp bản thảo proposal trên mobile.'
+              : 'View proposal manuscripts directly on mobile.',
+          icon: Icons.visibility_rounded,
+        ),
+        const SizedBox(height: 12),
+        StudioCard(
+          color: AppColors.warmWhite,
+          child: Row(children: [
+            const Icon(Icons.info_outline_rounded, color: AppColors.red),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                l10n.isVi
+                    ? 'Duyệt, yêu cầu sửa và bình luận được thực hiện trên bản Web.'
+                    : 'Review, revision requests and comments are available on Web.',
+                style: const TextStyle(fontSize: 12, height: 1.35),
+              ),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 14),
         proposals.when(
           data: (items) => items.isEmpty
               ? EmptyState(
-                  message: l10n.noData, icon: Icons.rate_review_outlined)
+                  message: l10n.noData,
+                  icon: Icons.rate_review_outlined,
+                )
               : Column(
                   children: items
                       .map((item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _ProposalCard(proposal: item)))
-                      .toList()),
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _ProposalCard(proposal: item),
+                          ))
+                      .toList(),
+                ),
           loading: () => const LoadingPanel(),
           error: (error, _) => ErrorState(
-              error: error,
-              onRetry: () => ref.invalidate(editorProposalsProvider)),
+            error: error,
+            onRetry: () => ref.invalidate(editorProposalsProvider),
+          ),
         ),
       ],
     );
   }
 }
 
-class _ProposalCard extends ConsumerWidget {
+class _ProposalCard extends StatelessWidget {
   const _ProposalCard({required this.proposal});
 
   final SeriesProposal proposal;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return StudioCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(
-              child: Text(proposal.title,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w900, fontSize: 16))),
+            child: Text(
+              proposal.title,
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+            ),
+          ),
           StatusPill(status: proposal.status),
         ]),
         const SizedBox(height: 6),
-        Text('${proposal.authorName} • ${proposal.genre}',
-            style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+        Text(
+          '${proposal.authorName} · ${proposal.genre}',
+          style: const TextStyle(color: AppColors.muted, fontSize: 12),
+        ),
         if (proposal.synopsis.isNotEmpty) ...[
           const SizedBox(height: 10),
-          Text(proposal.synopsis, maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(
+            proposal.synopsis,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
         ],
         const SizedBox(height: 12),
-        Row(children: [
-          Expanded(
-              child: OutlinedButton.icon(
-                  onPressed: () => _download(context),
-                  icon: const Icon(Icons.download_rounded, size: 18),
-                  label: Text(l10n.downloadProposal))),
-          const SizedBox(width: 8),
-          Expanded(
-              child: OutlinedButton.icon(
-                  onPressed: () => _act(context, ref, 'revision'),
-                  icon: const Icon(Icons.edit_note, size: 18),
-                  label: const Text('Revision'))),
-          const SizedBox(width: 8),
-          Expanded(
-              child: FilledButton.icon(
-                  onPressed: () => _act(context, ref, 'forward'),
-                  icon: const Icon(Icons.forward_rounded, size: 18),
-                  label: const Text('Forward'))),
-        ]),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _openPreview(context, l10n.isVi),
+            icon: const Icon(Icons.visibility_outlined, size: 18),
+            label: Text(l10n.isVi ? 'XEM TRỰC TIẾP' : 'PREVIEW'),
+          ),
+        ),
       ]),
     );
   }
 
-  void _download(BuildContext context) {
-    downloadManuscriptFile(proposal.title, context);
-  }
-
-  Future<void> _act(BuildContext context, WidgetRef ref, String action) async {
-    final comment = await showModalBottomSheet<String>(
-        context: context,
-        isScrollControlled: true,
-        builder: (_) => const _CommentSheet());
-    if (comment == null) return;
-    try {
-      final service = ref.read(studioServiceProvider);
-      if (action == 'forward') {
-        await service.forwardProposal(proposal.id, comment);
-      } else {
-        await service.requestProposalRevision(proposal.id, comment);
-      }
-      ref.invalidate(editorProposalsProvider);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Proposal updated.')));
-      }
-    } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(readableApiError(error))));
-      }
+  void _openPreview(BuildContext context, bool isVi) {
+    if (proposal.id.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isVi
+              ? 'Proposal này thiếu mã định danh nên chưa thể mở.'
+              : 'This proposal is missing its identifier.'),
+        ),
+      );
+      return;
     }
-  }
-}
-
-class _CommentSheet extends StatefulWidget {
-  const _CommentSheet();
-
-  @override
-  State<_CommentSheet> createState() => _CommentSheetState();
-}
-
-class _CommentSheetState extends State<_CommentSheet> {
-  final _comment = TextEditingController();
-
-  @override
-  void dispose() {
-    _comment.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          20, 18, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
-      child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(l10n.comment,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-            const SizedBox(height: 12),
-            TextField(
-                controller: _comment,
-                minLines: 3,
-                maxLines: 5,
-                decoration: InputDecoration(labelText: l10n.comment)),
-            const SizedBox(height: 16),
-            FilledButton(
-                onPressed: () => Navigator.pop(context, _comment.text.trim()),
-                child: Text(l10n.sendVote)),
-          ]),
-    );
+    context.push('/proposal/${proposal.id}/preview');
   }
 }
