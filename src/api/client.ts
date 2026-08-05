@@ -351,6 +351,11 @@ export const apiClient = {
       return res.data;
     },
 
+    getById: async (chapterId: string): Promise<any> => {
+      const res = await makeFetchRequest(`/api/chapters/${chapterId}`, "GET");
+      return res.data;
+    },
+
     create: async (
       seriesId: string,
       chapterNumber: number,
@@ -394,6 +399,21 @@ export const apiClient = {
       const res = await makeFetchRequest(`/api/chapters/${chapterId}`, "PUT", {
         status: nextStatus,
       });
+      return res.data;
+    },
+
+    submitPageToEditor: async (
+      chapterId: string,
+      payload: {
+        imageUrl: string;
+        note?: string;
+      },
+    ): Promise<any> => {
+      const res = await makeFetchRequest(
+        `/api/chapters/${chapterId}/submit-page`,
+        "POST",
+        payload,
+      );
       return res.data;
     },
 
@@ -673,6 +693,14 @@ export const apiClient = {
       });
       return res.data;
     },
+    resolve: async (annotationId: string): Promise<any> => {
+      const res = await makeFetchRequest(
+        `/api/annotations/${annotationId}/resolve`,
+        "PUT",
+        {},
+      );
+      return res.data;
+    },
   },
 
   assistant: {
@@ -894,6 +922,13 @@ export const apiClient = {
         );
       }
       return responseData.data;
+    },
+    getByChapter: async (chapterId: string): Promise<any[]> => {
+      const res = await makeFetchRequest(
+        `/api/files?chapterId=${encodeURIComponent(chapterId)}`,
+        "GET",
+      );
+      return res.data || [];
     },
   },
 

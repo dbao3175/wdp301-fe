@@ -44,6 +44,7 @@ export interface Chapter {
   title?: string;
   status: ChapterStatus;
   deadline: string;
+  pages?: any[];
 }
 
 export type TaskStatus = 

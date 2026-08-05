@@ -51,7 +51,7 @@ const mapPages = (pages: any[] = []) =>
           authorName: annotation.annotatorId?.name || 'Editor',
           authorAvatar: '',
           createdAt: annotation.createdAt || '',
-          resolved: false,
+          resolved: !!annotation.resolved,
         };
       }),
     };
@@ -167,12 +167,16 @@ export const ManuscriptReviewPage: React.FC = () => {
       apiClient.editor.getMySeries().then((data: any[]) => {
         const found = data.find((s: any) => s._id === seriesId || s.id === seriesId);
         if (!found) return null;
+        const seriesIdOf = (ch: any) =>
+          typeof ch.seriesId === 'object' && ch.seriesId !== null
+            ? ch.seriesId._id || seriesId
+            : ch.seriesId || seriesId;
         return {
           id: found._id,
           title: found.title || '',
           chapters: (found.chapters || []).map((ch: any) => ({
             id: ch._id || ch.id,
-            seriesId: ch.seriesId || seriesId,
+            seriesId: seriesIdOf(ch),
             chapterNumber: ch.chapterNumber || 0,
             title: ch.title || '',
             status: ch.status || 'DRAFT',
@@ -194,10 +198,14 @@ export const ManuscriptReviewPage: React.FC = () => {
   const { data: chapters, isLoading: chaptersLoading } = useQuery<Chapter[]>({
     queryKey: ['chapters', seriesId],
     queryFn: () =>
-      apiClient.chapters.getAll(seriesId).then((data: any[]) =>
-        (data || []).map((ch: any) => ({
+      apiClient.chapters.getAll(seriesId).then((data: any[]) => {
+        const seriesIdOf = (ch: any) =>
+          typeof ch.seriesId === 'object' && ch.seriesId !== null
+            ? ch.seriesId._id || seriesId
+            : ch.seriesId || seriesId;
+        return (data || []).map((ch: any) => ({
           id: ch._id || ch.id,
-          seriesId: ch.seriesId || seriesId,
+          seriesId: seriesIdOf(ch),
           chapterNumber: ch.chapterNumber || 0,
           title: ch.title || '',
           status: ch.status || 'DRAFT',
@@ -209,8 +217,8 @@ export const ManuscriptReviewPage: React.FC = () => {
           reviewNotes: ch.reviewNotes || '',
           deadline: ch.deadline || '',
           mangakaName: ch.mangakaName || '',
-        })),
-      ),
+        }));
+      }),
     enabled: !!seriesId,
   });
 
@@ -233,7 +241,10 @@ export const ManuscriptReviewPage: React.FC = () => {
         if (!found) return null;
         return {
           id: found._id || found.id,
-          seriesId: found.seriesId || seriesId,
+          seriesId:
+            typeof found.seriesId === 'object' && found.seriesId !== null
+              ? found.seriesId._id || seriesId
+              : found.seriesId || seriesId,
           chapterNumber: found.chapterNumber || 0,
           title: found.title || '',
           status: found.status || 'DRAFT',
@@ -283,8 +294,8 @@ export const ManuscriptReviewPage: React.FC = () => {
   });
 
   const resolveAnnotationMutation = useMutation({
-    mutationFn: ({ chapterId, annotationId }: { chapterId: string; annotationId: string }) =>
-      apiClient.annotations.getForPage(annotationId), // placeholder - backend may have its own resolve endpoint
+    mutationFn: ({ annotationId }: { chapterId: string; annotationId: string }) =>
+      apiClient.annotations.resolve(annotationId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chapter', selectedChapterId] });
       queryClient.invalidateQueries({ queryKey: ['series', seriesId] });
@@ -299,13 +310,11 @@ export const ManuscriptReviewPage: React.FC = () => {
       const tasksToRevise = reviewTasks.filter(
         (task: any) => task.status === 'MANGAKA_APPROVED',
       );
-      if (tasksToRevise.length === 0) {
-        throw new Error('No Mangaka-approved tasks are ready for Editor review.');
-      }
-
       for (const task of tasksToRevise) {
         await apiClient.tasks.review(task._id, 'REVISION_REQUESTED', note);
       }
+
+      await apiClient.chapters.update(selectedChapterId!, { status: 'REVISION_REQUESTED' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chapter', selectedChapterId] });
@@ -321,12 +330,11 @@ export const ManuscriptReviewPage: React.FC = () => {
       const tasksToApprove = reviewTasks.filter(
         (task: any) => task.status === 'MANGAKA_APPROVED',
       );
-      if (tasksToApprove.length === 0) {
-        throw new Error('No Mangaka-approved tasks are ready for final review.');
-      }
       for (const task of tasksToApprove) {
         await apiClient.tasks.review(task._id, 'APPROVE', 'Final approval by editor');
       }
+
+      await apiClient.chapters.update(selectedChapterId!, { status: 'SENT_TO_EDITORIAL' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chapter', selectedChapterId] });
@@ -342,7 +350,9 @@ export const ManuscriptReviewPage: React.FC = () => {
   };
 
   const handleAddAnnotation = (data: Omit<Annotation, 'id' | 'createdAt' | 'resolved'>) => {
-    addAnnotationMutation.mutate({ ...data, chapterId: selectedChapterId! });
+    // NOTE: data.chapterId intentionally carries the PAGE id (see AnnotationCanvas).
+    // Do not override it with selectedChapterId — the backend needs the real pageId.
+    addAnnotationMutation.mutate({ ...data });
   };
 
   const handleResolveAnnotation = (chapterId: string, annotationId: string) => {
@@ -358,12 +368,9 @@ export const ManuscriptReviewPage: React.FC = () => {
     series.chapters.find((c) => c.id === selectedChapterId);
 
   const allChapters = series.chapters.length > 0 ? series.chapters : (chapters ?? []);
-  const finalReviewReady =
-    reviewTasks.length > 0 &&
-    reviewTasks.every((task: any) =>
-      ['MANGAKA_APPROVED', 'APPROVED'].includes(task.status),
-    ) &&
-    reviewTasks.some((task: any) => task.status === 'MANGAKA_APPROVED');
+  const canReview =
+    !!displayChapter &&
+    ['SUBMITTED', 'UNDER_REVIEW', 'REVISION_REQUESTED'].includes(displayChapter.status);
   const reviewError = revisionMutation.error || approveMutation.error;
 
   return (
@@ -454,7 +461,7 @@ export const ManuscriptReviewPage: React.FC = () => {
                 onApprove={() => setShowApproveDialog(true)}
                 loading={revisionMutation.isPending || approveMutation.isPending}
                 chapterStatus={displayChapter.status}
-                canReview={finalReviewReady}
+                canReview={canReview}
               />
             </>
           )}

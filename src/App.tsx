@@ -181,6 +181,25 @@ export default function App() {
     }
   };
 
+  // Open a specific chapter in the workspace from a notification click.
+  const handleOpenChapter = (chapterId: string) => {
+    const chapter = chapterList.find((c) => c._id === chapterId);
+    if (!chapter) {
+      setActiveTab("workspace");
+      return;
+    }
+    const sid =
+      typeof chapter.seriesId === "object" &&
+      chapter.seriesId !== null &&
+      (chapter.seriesId as any)?._id
+        ? (chapter.seriesId as any)._id
+        : (chapter.seriesId as any);
+    const series = seriesList.find((s) => s._id === sid) || null;
+    setActiveSeries(series);
+    setActiveChapter(chapter);
+    setActiveTab("workspace");
+  };
+
   // Logout session
   const handleLogout = () => {
     apiClient.auth.logout();
@@ -250,6 +269,7 @@ export default function App() {
             onChangeTab={setActiveTab}
             onLogout={handleLogout}
             onConfigChange={refreshAllModelCaches}
+            onOpenChapter={handleOpenChapter}
           />
 
           {/* Core Content canvas viewports */}
@@ -263,6 +283,7 @@ export default function App() {
                     activeSeries={activeSeries}
                     activeChapter={activeChapter}
                     onRefreshTasks={refreshAllModelCaches}
+                    onPageSubmitted={refreshAllModelCaches}
                   />
                 </div>
               )}

@@ -232,7 +232,10 @@ export const SeriesDetailPage: React.FC = () => {
     ...series,
     chapters: (chaptersData || []).map((ch: any) => ({
       id: ch._id || ch.id,
-      seriesId: ch.seriesId || id,
+      seriesId:
+        typeof ch.seriesId === 'object' && ch.seriesId !== null
+          ? ch.seriesId._id || id
+          : ch.seriesId || id,
       chapterNumber: ch.chapterNumber || 0,
       title: ch.title || '',
       status: ch.status || 'DRAFT',

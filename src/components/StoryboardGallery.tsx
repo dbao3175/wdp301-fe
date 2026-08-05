@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X, ZoomIn } from 'lucide-react';
 
 export interface StoryboardImage {
@@ -68,58 +69,61 @@ const StoryboardGallery: React.FC<StoryboardGalleryProps> = ({ images, title }) 
         ))}
       </div>
 
-      {/* Lightbox */}
-      {active !== null && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90"
-          onClick={close}
-        >
-          <button
-            type="button"
+      {/* Lightbox — rendered via portal so the fixed backdrop covers the whole viewport
+          even when the gallery is mounted inside a transformed modal panel */}
+      {active !== null &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90"
             onClick={close}
-            className="absolute top-4 right-4 p-2 text-white hover:bg-white/10 transition-colors cursor-pointer"
-            aria-label="Close storyboard viewer"
           >
-            <X className="w-6 h-6" />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              prev();
-            }}
-            className="absolute left-2 md:left-6 p-2 text-white hover:bg-white/10 transition-colors cursor-pointer"
-            aria-label="Previous storyboard page"
-          >
-            <ChevronLeft className="w-7 h-7" />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              next();
-            }}
-            className="absolute right-2 md:right-6 p-2 text-white hover:bg-white/10 transition-colors cursor-pointer"
-            aria-label="Next storyboard page"
-          >
-            <ChevronRight className="w-7 h-7" />
-          </button>
-          <figure
-            className="max-w-full max-h-full flex flex-col items-center gap-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <img
-              src={images[active].url}
-              alt={images[active].originalName || `Storyboard ${active + 1}`}
-              className="max-w-full max-h-[85vh] object-contain border-2 border-white/20"
-            />
-            <figcaption className="font-mono text-[10px] text-white/70 uppercase font-bold">
-              Page {active + 1} / {images.length}
-              {images[active].originalName ? ` — ${images[active].originalName}` : ''}
-            </figcaption>
-          </figure>
-        </div>
-      )}
+            <button
+              type="button"
+              onClick={close}
+              className="absolute top-4 right-4 p-2 text-white hover:bg-white/10 transition-colors cursor-pointer"
+              aria-label="Close storyboard viewer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                prev();
+              }}
+              className="absolute left-2 md:left-6 p-2 text-white hover:bg-white/10 transition-colors cursor-pointer"
+              aria-label="Previous storyboard page"
+            >
+              <ChevronLeft className="w-7 h-7" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                next();
+              }}
+              className="absolute right-2 md:right-6 p-2 text-white hover:bg-white/10 transition-colors cursor-pointer"
+              aria-label="Next storyboard page"
+            >
+              <ChevronRight className="w-7 h-7" />
+            </button>
+            <figure
+              className="max-w-full max-h-full flex flex-col items-center gap-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+                src={images[active].url}
+                alt={images[active].originalName || `Storyboard ${active + 1}`}
+                className="max-w-full max-h-[85vh] object-contain border-2 border-white/20"
+              />
+              <figcaption className="font-mono text-[10px] text-white/70 uppercase font-bold">
+                Page {active + 1} / {images.length}
+                {images[active].originalName ? ` — ${images[active].originalName}` : ''}
+              </figcaption>
+            </figure>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };

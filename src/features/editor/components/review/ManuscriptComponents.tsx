@@ -58,7 +58,10 @@ export const AnnotationPin: React.FC<AnnotationPinProps> = ({
 
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       title={annotation.comment}
       className={`absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 flex items-center justify-center text-white text-[9px] font-mono font-extrabold transition-all z-10 cursor-pointer ${
         annotation.resolved
@@ -161,7 +164,6 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
           onClick={() => onSelectAnnotation(selectedAnnotationId === ann.id ? null : ann.id)}
         />
       ))}
-
       {/* Draft pin */}
       {draft && (
         <div
@@ -169,9 +171,11 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
           className="absolute -translate-x-1/2 -translate-y-1/2 z-20"
         >
           <div className="w-4 h-4 bg-[#E63946] border-2 border-ink-black animate-pulse" />
-          {/* Inline form */}
+          {/* Inline form — flips to stay inside the page near edges */}
           <div
-            className="absolute left-6 top-0 bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414] p-3 w-64 z-30"
+            className={`absolute bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414] p-3 w-64 z-30 ${
+              draft.x > 55 ? 'right-6' : 'left-6'
+            } ${draft.y > 55 ? 'bottom-6' : 'top-0'}`}
             onClick={(e) => e.stopPropagation()}
           >
             <p className="font-mono text-[9px] font-extrabold uppercase text-ink-black mb-2">
@@ -355,7 +359,7 @@ export const ManuscriptViewer: React.FC<ManuscriptViewerProps> = ({
   const { t } = useLanguage();
   const [currentPage, setCurrentPage] = useState(0);
   const [zoom, setZoom] = useState(100);
-  const [isAddingAnnotation, setIsAddingAnnotation] = useState(false);
+  const [isAddingAnnotation, setIsAddingAnnotation] = useState(true);
 
   const page = pages[currentPage];
   if (!page) return null;

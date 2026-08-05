@@ -10,6 +10,7 @@ import {
   LogOut,
   Bell,
   X,
+  FileSearch,
 } from 'lucide-react';
 import { getStoredUser } from '@/src/api/base';
 import { useQuery } from '@tanstack/react-query';
@@ -34,6 +35,11 @@ const navItems: NavItem[] = [
     path: '/editor/proposals',
     label: 'Proposals',
     icon: <FileText className="w-4 h-4" />,
+  },
+  {
+    path: '/editor/review',
+    label: 'Review',
+    icon: <FileSearch className="w-4 h-4" />,
   },
   {
     path: '/editor/series',
@@ -80,6 +86,25 @@ export const EditorSidebar: React.FC<EditorSidebarProps> = ({
       setPendingCount(pendingCountData.length || 0);
     }
   }, [pendingCountData, setPendingCount]);
+
+  const { data: pendingChapters = 0 } = useQuery({
+    queryKey: ['sidebar-pending-chapters'],
+    queryFn: async () => {
+      const series = await apiClient.editor.getMySeries();
+      let count = 0;
+      for (const s of series || []) {
+        const chapters = await apiClient.chapters.getAll(s._id).then((d: any[]) => d || []);
+        count += chapters.filter(
+          (ch: any) =>
+            ch.status === 'SUBMITTED' || ch.status === 'UNDER_REVIEW',
+        ).length;
+      }
+      return count;
+    },
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+  });
   
   const currentUser = getStoredUser();
   const location = useLocation();
@@ -178,6 +203,11 @@ export const EditorSidebar: React.FC<EditorSidebarProps> = ({
                 {item.path === '/editor/proposals' && (pendingCount ?? 0) > 0 && (
                   <span className="ml-auto bg-[#E63946] text-white text-[9px] font-mono font-bold w-5 h-5 flex items-center justify-center border border-red-400">
                     {pendingCount}
+                  </span>
+                )}
+                {item.path === '/editor/review' && (pendingChapters ?? 0) > 0 && (
+                  <span className="ml-auto bg-[#E63946] text-white text-[9px] font-mono font-bold w-5 h-5 flex items-center justify-center border border-red-400">
+                    {pendingChapters > 99 ? '99+' : pendingChapters}
                   </span>
                 )}
                 {/* Tooltip for collapsed */}

@@ -125,8 +125,9 @@ const priorityTextStyles = {
 export const DeadlineCard: React.FC<DeadlineCardProps> = ({ deadline }) => {
   const { t } = useLanguage();
   return (
-    <div
-      className={`border-l-4 ${priorityStyles[deadline.priority]} px-4 py-3 border border-l-4`}
+    <Link
+      to="/editor/review"
+      className={`border-l-4 ${priorityStyles[deadline.priority]} px-4 py-3 border border-l-4 block hover:bg-neutral-50 transition-colors`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
@@ -146,7 +147,7 @@ export const DeadlineCard: React.FC<DeadlineCardProps> = ({ deadline }) => {
           <p className="font-mono text-[9px] text-neutral-400">{deadline.dueDate}</p>
         </div>
       </div>
-    </div>
+    </Link>
   );
 };
 

@@ -176,13 +176,16 @@ export const DashboardPage: React.FC = () => {
           variant={stats.pendingProposals > 0 ? 'warning' : 'default'}
           trend={{ value: stats.pendingProposals, label: 'awaiting review' }}
         />
-        <StatsCard
-          title="Chapter Reviews"
-          value={stats.pendingChapterReviews}
-          icon={BookMarked}
-          variant={stats.pendingChapterReviews > 0 ? 'warning' : 'default'}
-          subtitle="Manuscripts pending"
-        />
+        <Link to="/editor/review" className="block group">
+          <StatsCard
+            title="Chapter Reviews"
+            value={stats.pendingChapterReviews}
+            icon={BookMarked}
+            variant={stats.pendingChapterReviews > 0 ? 'warning' : 'default'}
+            subtitle="Manuscripts pending"
+            className="group-hover:-translate-y-0.5 group-hover:shadow-[4px_4px_0px_#E63946] transition-all"
+          />
+        </Link>
         <StatsCard
           title="Upcoming Deadlines"
           value={stats.upcomingDeadlines}

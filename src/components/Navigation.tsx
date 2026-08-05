@@ -24,6 +24,7 @@ interface NavigationProps {
   onChangeTab: (tab: string) => void;
   onLogout: () => void;
   onConfigChange?: () => void;
+  onOpenChapter?: (chapterId: string) => void;
 }
 
 export default function Navigation({
@@ -32,6 +33,7 @@ export default function Navigation({
   onChangeTab,
   onLogout,
   onConfigChange,
+  onOpenChapter,
 }: NavigationProps) {
   const navigate = useNavigate();
   const { language, t } = useLanguage();
@@ -89,7 +91,11 @@ export default function Navigation({
         if (n.link) navigate(n.link);
         else onChangeTab('chapters');
       } else if (currentUser?.role === 'MANGAKA') {
-        onChangeTab('workspace');
+        if (onOpenChapter) {
+          onOpenChapter(n.targetId);
+        } else {
+          onChangeTab('workspace');
+        }
       } else if (currentUser?.role === 'BOARD_MEMBER') {
         onChangeTab('board');
       }

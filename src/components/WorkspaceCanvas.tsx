@@ -7,12 +7,15 @@
  *  bg-panel  #1e1e24  — deep slate gray    (sidebar panels)
  *  divider   #2d2d34  — medium gray        (all borders/separators)
  *
- * Two modes:
+ * Three modes:
  *   "REVIEW"   — normal 3-col review workflow
  *   "CREATION" — canvas-based task creation:
  *       Left   → muted task list (disabled interaction, visual opacity)
  *       Center → sketch upload dropzone → full-image canvas + bounding-box draw
  *       Right  → task assignment form (title / type / assistant / instructions)
+ *   "SUBMIT"   — canvas-based page submission to the editor:
+ *       Center → page-image upload dropzone → full-image canvas + zone draw
+ *       Right  → note + submit form (creates a Page, marks the chapter SUBMITTED)
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -367,6 +370,87 @@ function DrawableCanvas({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// AnnotationPageCanvas — chapter-page image with annotation pins overlay
+// Used in PAGES mode (mangaka reviews / adds annotations)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ANN_COLORS: Record<string, string> = {
+  DIALOGUE_ISSUE: '#E63946',
+  CONTENT_CORRECTION: '#F4A261',
+  SCRIPT_REVISION: '#2A9D8F',
+  GENERAL_FEEDBACK: '#457B9D',
+};
+
+interface PageAnnotation {
+  id: string;
+  x: number;
+  y: number;
+  category: string;
+  comment: string;
+  authorName: string;
+  createdAt: string;
+  resolved: boolean;
+}
+
+function AnnotationPageCanvas({
+  imageUrl,
+  annotations,
+  selectedAnnId,
+  onPinClick,
+}: {
+  imageUrl: string;
+  annotations: PageAnnotation[];
+  selectedAnnId: string | null;
+  onPinClick: (id: string) => void;
+}) {
+  const { t } = useLanguage();
+
+  return (
+    <div className="relative w-full h-full select-none overflow-hidden">
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt={t('Chapter page')}
+          className="w-full h-full object-contain pointer-events-none select-none"
+          draggable={false}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-[#181820] flex items-center justify-center">
+          <p className="text-[10px] text-slate-600 font-mono">{t('No image')}</p>
+        </div>
+      )}
+
+      {/* Existing annotation pins */}
+      {annotations.map((ann) => {
+        const color = ANN_COLORS[ann.category] || ANN_COLORS.GENERAL_FEEDBACK;
+        return (
+          <button
+            key={ann.id}
+            onClick={(e) => { e.stopPropagation(); onPinClick(ann.id); }}
+            title={ann.comment}
+            className={`absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 flex items-center justify-center text-white text-[9px] font-mono font-extrabold transition-all z-10 cursor-pointer ${
+              ann.resolved
+                ? 'opacity-50 grayscale'
+                : selectedAnnId === ann.id
+                  ? 'scale-150 shadow-lg'
+                  : 'hover:scale-125'
+            }`}
+            style={{
+              left: `${ann.x}%`,
+              top: `${ann.y}%`,
+              backgroundColor: color,
+              borderColor: ann.resolved ? '#9ca3af' : '#141414',
+            }}
+          >
+            {ann.resolved ? '✓' : '!'}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Props
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -375,17 +459,18 @@ interface WorkspaceCanvasProps {
   activeSeries: Series | null;
   activeChapter: Chapter | null;
   onRefreshTasks: () => void;
+  onPageSubmitted?: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapter }: WorkspaceCanvasProps) {
+export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapter, onRefreshTasks, onPageSubmitted }: WorkspaceCanvasProps) {
   const { t } = useLanguage();
 
   // ── Workspace mode ─────────────────────────────────────────────────────────
-  const [mode, setMode] = useState<'REVIEW' | 'CREATION'>('REVIEW');
+  const [mode, setMode] = useState<'REVIEW' | 'CREATION' | 'SUBMIT' | 'PAGES'>('REVIEW');
 
   // ── Review mode state ──────────────────────────────────────────────────────
   const [tasks,        setTasks]       = useState<WTask[]>([]);
@@ -412,6 +497,13 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
     return d.toISOString().split('T')[0];
   });
   const [deployToast,   setDeployToast]   = useState<string | null>(null);
+  const [submitNote,    setSubmitNote]    = useState('');
+
+  // ── Chapter pages mode state ───────────────────────────────────────────────
+  const [chapterPages,   setChapterPages]   = useState<any[]>([]);
+  const [activePageId,   setActivePageId]   = useState('');
+  const [selectedAnnId,  setSelectedAnnId]  = useState<string | null>(null);
+  const [pagesLoading,   setPagesLoading]   = useState(false);
 
   const [assistantsList, setAssistantsList] = useState<any[]>([]);
 
@@ -421,6 +513,17 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
   const activeTask    = tasks.find(t => t.id === activeTaskId) ?? null;
   const activeBox     = reviewBoxes.find(b => b.id === activeBoxId) ?? null;
   const activeCreateBox = createBoxes.find(b => b.id === activeCreateBoxId) ?? null;
+  const activePage    = chapterPages.find(p => (p._id || p.id) === activePageId) ?? null;
+  const pageAnnotations = (activePage?.annotations || []).map((ann: any) => ({
+    id: ann._id || ann.id,
+    x: ann.coords?.x || 0,
+    y: ann.coords?.y || 0,
+    category: ann.type || 'GENERAL_FEEDBACK',
+    comment: ann.content || '',
+    authorName: ann.annotatorId?.name || 'Mangaka',
+    createdAt: ann.createdAt || '',
+    resolved: !!ann.resolved,
+  }));
   const episodeLabel  = activeSeries
     ? `${activeSeries.title} - ${t('Chapter')} ${activeChapter?.chapterNumber ?? '??'}`
     : `${t('Chapter')} 12 - ${t('Page')} 04 ${t('Workspace')}`;
@@ -564,6 +667,96 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
     setMode('REVIEW');
   };
 
+  /** Enter submit-to-editor mode — upload a page image onto the canvas directly */
+  const enterSubmitMode = () => {
+    if (sketchPreview) URL.revokeObjectURL(sketchPreview);
+    setSketchFile(null);
+    setSketchPreview(null);
+    setCreateBoxes([]);
+    setActiveCreateBoxId(null);
+    setSubmitNote('');
+    setDeployToast(null);
+    setMode('SUBMIT');
+  };
+
+  /** Cancel submit mode — back to review */
+  const exitSubmitMode = () => {
+    if (sketchPreview) URL.revokeObjectURL(sketchPreview);
+    setSketchFile(null);
+    setSketchPreview(null);
+    setCreateBoxes([]);
+    setActiveCreateBoxId(null);
+    setSubmitNote('');
+    setMode('REVIEW');
+  };
+
+  /** Enter chapter-pages (annotation viewer) mode */
+  const enterPagesMode = async () => {
+    setMode('PAGES');
+    setPagesLoading(true);
+    setSelectedAnnId(null);
+    try {
+      const chapterData = await apiClient.chapters.getById(activeChapter?._id || '');
+      const pages = chapterData?.pages || chapterData?.data?.pages || [];
+      setChapterPages(pages);
+      if (pages.length > 0) {
+        const firstId = pages[0]._id || pages[0].id;
+        setActivePageId((prev) => pages.some((p: any) => (p._id || p.id) === prev) ? prev : firstId);
+      } else {
+        setActivePageId('');
+      }
+    } catch (err: any) {
+      showToast(t(err.message || 'Failed to load chapter pages'), 'warn');
+    } finally {
+      setPagesLoading(false);
+    }
+  };
+
+  /** Exit chapter-pages mode — back to review */
+  const exitPagesMode = () => {
+    setChapterPages([]);
+    setActivePageId('');
+    setSelectedAnnId(null);
+    setMode('REVIEW');
+  };
+
+  /** Submit the annotated page image directly to the editor */
+  const handleSubmitToEditor = async () => {
+    if (!activeSeries || !activeChapter) {
+      showToast(t('Select a series and chapter before submitting.'), 'warn');
+      return;
+    }
+    if (!sketchFile) {
+      showToast(t('A page image is required before submitting.'), 'warn');
+      return;
+    }
+    try {
+      setDeployToast(t('Uploading the page image to the server...'));
+
+      let fileUrl = "";
+      const fileRes = await apiClient.files.upload(sketchFile, activeChapter._id);
+      fileUrl = fileRes.fileUrl || fileRes.data?.fileUrl || "";
+      if (!fileUrl) throw new Error('Failed to resolve uploaded image URL');
+
+      setDeployToast(t('Submitting the page to the editor...'));
+
+      await apiClient.chapters.submitPageToEditor(activeChapter._id, {
+        imageUrl: fileUrl,
+        note: submitNote.trim(),
+      });
+
+      setDeployToast(t('Page submitted to the editor for review!'));
+      setTimeout(() => {
+        exitSubmitMode();
+        fetchWorkspaceData();
+        if (onPageSubmitted) onPageSubmitted();
+      }, 1400);
+    } catch (err: any) {
+      setDeployToast(null);
+      showToast(t(err.message || 'Failed to submit page'), 'warn');
+    }
+  };
+
   /** Handle sketch file selection */
   const handleSketchFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -695,7 +888,11 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
             <p className="text-[10px] text-slate-500 mt-0.5">
               {mode === 'CREATION'
                 ? <span className="text-red-400 font-semibold">{t("Creation Mode — Assign a new task")}</span>
-                : <>{t("Author")}: <span className="text-slate-400 font-medium">{currentUser.name}</span></>
+                : mode === 'SUBMIT'
+                  ? <span className="text-red-400 font-semibold">{t("Submit Mode — Upload a page to the editor")}</span>
+                  : mode === 'PAGES'
+                    ? <span className="text-red-400 font-semibold">{t("Chapter Pages — Annotation review")}</span>
+                    : <>{t("Author")}: <span className="text-slate-400 font-medium">{currentUser.name}</span></>
               }
             </p>
           </div>
@@ -720,9 +917,9 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
         )}
 
         {/* Mode indicator + cancel */}
-        {mode === 'CREATION' ? (
+        {mode !== 'REVIEW' ? (
           <button
-            onClick={exitCreationMode}
+            onClick={mode === 'CREATION' ? exitCreationMode : mode === 'SUBMIT' ? exitSubmitMode : exitPagesMode}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#2d2d34] text-[11px] font-bold text-slate-400 hover:text-white hover:border-slate-500 transition-all cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" /> {t("Cancel")}
@@ -747,7 +944,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
 
           {/* Create button (review mode only) */}
           {mode === 'REVIEW' && (
-            <div className="p-3 border-b border-[#2d2d34] shrink-0">
+            <div className="p-3 border-b border-[#2d2d34] shrink-0 space-y-2">
               <button
                 onClick={enterCreationMode}
                 className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-white hover:bg-slate-100 transition-all text-xs font-bold text-black cursor-pointer"
@@ -755,31 +952,97 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 <Plus className="w-3.5 h-3.5" />
                 {t("Create & Assign New Task")}
               </button>
+              <button
+                onClick={enterSubmitMode}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-[#2d2d34] hover:bg-[#3a3a44] transition-all text-xs font-bold text-slate-200 cursor-pointer"
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                {t("Upload Page & Submit to Editor")}
+              </button>
+              <button
+                onClick={enterPagesMode}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-[#2d2d34] hover:bg-[#3a3a44] transition-all text-xs font-bold text-slate-200 cursor-pointer"
+              >
+                <FileImage className="w-3.5 h-3.5" />
+                {t("Chapter Pages & Annotations")}
+              </button>
             </div>
           )}
 
           {/* Section label */}
-          <div className={`px-3 pt-3 pb-1.5 shrink-0 ${mode === 'CREATION' ? 'opacity-40' : ''}`}>
+          <div className={`px-3 pt-3 pb-1.5 shrink-0 ${mode === 'CREATION' || mode === 'SUBMIT' ? 'opacity-40' : ''}`}>
             <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600">
-              {t("Tasks")} — {tasks.length}
+              {mode === 'PAGES' ? `${t("Pages")} — ${chapterPages.length}` : `${t("Tasks")} — ${tasks.length}`}
             </span>
           </div>
 
           {/* Cards */}
-          <div className={`flex-1 overflow-y-auto px-3 pb-3 space-y-1.5 ${mode === 'CREATION' ? 'overflow-hidden' : ''}`}>
-            {tasks.map(task => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                isActive={task.id === activeTaskId}
-                muted={mode === 'CREATION'}
-                onClick={() => mode === 'REVIEW' && setActiveTaskId(task.id)}
-              />
-            ))}
-          </div>
+          {mode === 'PAGES' ? (
+            <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1.5">
+              {pagesLoading && (
+                <p className="text-center text-[10px] text-slate-600 font-mono py-4">
+                  {t("Loading pages...")}
+                </p>
+              )}
+              {!pagesLoading && chapterPages.map((page: any) => {
+                const pageId = page._id || page.id;
+                const annCount = (page.annotations || []).length;
+                return (
+                  <button
+                    key={pageId}
+                    onClick={() => { setActivePageId(pageId); setSelectedAnnId(null); }}
+                    className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-md border text-left transition-all cursor-pointer ${
+                      activePageId === pageId
+                        ? 'bg-[#2a2a32] border-[#4a4a55]'
+                        : 'bg-[#1e1e24] border-[#2d2d34] hover:border-[#3a3a44]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileImage className="w-3.5 h-3.5 text-slate-500" />
+                      <div>
+                        <p className="text-[11px] font-bold text-white leading-tight">
+                          {t("Page")} {page.pageNumber || 0}
+                        </p>
+                        <p className="text-[8px] text-slate-600 font-mono">
+                          {page.status || ''}
+                        </p>
+                      </div>
+                    </div>
+                    {annCount > 0 && (
+                      <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
+                        {annCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+              {!pagesLoading && chapterPages.length === 0 && (
+                <p className="text-center text-[10px] text-slate-600 font-mono py-4">
+                  {t("No pages in this chapter yet.")}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className={`flex-1 overflow-y-auto px-3 pb-3 space-y-1.5 ${mode !== 'REVIEW' ? 'overflow-hidden' : ''}`}>
+              {tasks.map(task => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  isActive={task.id === activeTaskId}
+                  muted={mode !== 'REVIEW'}
+                  onClick={() => mode === 'REVIEW' && setActiveTaskId(task.id)}
+                />
+              ))}
+              {tasks.length === 0 && (
+                <p className="text-center text-[10px] text-slate-600 font-mono py-4">
+                  {t("No tasks for this chapter yet.")}
+                </p>
+              )}
+            </div>
+          )}
 
-          {/* CREATION mode overlay — blocks interaction, shows label */}
-          {mode === 'CREATION' && (
+          {/* Mode overlay — blocks interaction during CREATION/SUBMIT */}
+          {mode === 'CREATION' || mode === 'SUBMIT' ? (
             <div className="absolute inset-0 bg-[#121214]/60 flex flex-col items-center justify-center gap-2 pointer-events-auto cursor-not-allowed select-none">
               <div className="w-8 h-8 rounded-full bg-[#2d2d34] flex items-center justify-center">
                 <Plus className="w-4 h-4 text-slate-500 rotate-45" />
@@ -788,14 +1051,13 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 {t("Task list paused")}<br />{t("during creation")}
               </span>
             </div>
-          )}
+          ) : null}
         </aside>
 
         {/* ── COL 2 — Center Canvas ── */}
         <main className="flex-1 flex flex-col bg-[#121214] overflow-hidden">
 
           {mode === 'REVIEW' ? (
-            /* ── REVIEW: existing canvas with mock manga ── */
             <>
               <div className="flex items-center justify-between px-4 py-2.5 bg-[#181820] border-b border-[#2d2d34] shrink-0 select-none">
                 <span className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
@@ -828,7 +1090,18 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                         return url.startsWith('http') ? url : `${apiClient.getConfig().baseUrl}/${url.startsWith('/') ? url.slice(1) : url}`;
                       }
 
-                      if (!activeTask?.rawTask?.description || !activeTask.rawTask.description.startsWith('[IMAGE_URL:')) return null;
+                      if (!activeTask?.rawTask?.description || !activeTask.rawTask.description.startsWith('[IMAGE_URL:')) {
+                        // Fall back to the chapter's own submitted pages (direct page submissions aren't tied to tasks)
+                        const chapterPages = activeChapter?.pages || [];
+                        const latestPage = Array.isArray(chapterPages) && chapterPages.length > 0
+                          ? chapterPages[chapterPages.length - 1]
+                          : null;
+                        if (latestPage?.assistantImageUrl || latestPage?.imageUrl) {
+                          const url = latestPage.assistantImageUrl || latestPage.imageUrl;
+                          return url.startsWith('http') ? url : `${apiClient.getConfig().baseUrl}/${url.startsWith('/') ? url.slice(1) : url}`;
+                        }
+                        return null;
+                      }
                       const match = activeTask.rawTask.description.match(/^\[IMAGE_URL:([^\]]+)\]/);
                       if (!match) return null;
                       const rawUrl = match[1];
@@ -855,15 +1128,57 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 </div>
               </div>
             </>
+          ) : mode === 'PAGES' ? (
+            /* ── PAGES: chapter page + annotation pins overlay ── */
+            <>
+              <div className="flex items-center justify-between px-4 py-2.5 bg-[#181820] border-b border-[#2d2d34] shrink-0 select-none">
+                <span className="flex items-center gap-1.5 text-[10px] font-semibold text-red-400/80 uppercase tracking-widest">
+                  <MapPin className="w-3.5 h-3.5 text-red-500" />
+                  {activePage
+                    ? `${t("Page")} ${activePage.pageNumber || 0} — ${t("click pins to review comments")}`
+                    : t("Select a page to review annotations")}
+                </span>
+              </div>
+              <div className="flex-1 flex items-center justify-center p-8 bg-[#121214] overflow-auto">
+                {pagesLoading ? (
+                  <p className="text-center text-[11px] text-slate-600 font-mono">
+                    {t("Loading chapter pages...")}
+                  </p>
+                ) : !activePage ? (
+                  <p className="text-center text-[11px] text-slate-600 font-mono">
+                    {t("No pages to display for this chapter.")}
+                  </p>
+                ) : (
+                  <div
+                    className="relative rounded-md overflow-visible border border-[#2d2d34] shadow-2xl shadow-black"
+                    style={{ width: '100%', maxWidth: '360px', aspectRatio: '3/4' }}
+                  >
+                    <AnnotationPageCanvas
+                      imageUrl={(() => {
+                        const url = activePage.assistantImageUrl || activePage.imageUrl || '';
+                        if (!url) return '';
+                        return url.startsWith('http') ? url : `${apiClient.getConfig().baseUrl}/${url.startsWith('/') ? url.slice(1) : url}`;
+                      })()}
+                      annotations={pageAnnotations}
+                      selectedAnnId={selectedAnnId}
+                      onPinClick={(id) => setSelectedAnnId(selectedAnnId === id ? null : id)}
+                    />
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
-            /* ── CREATION: upload dropzone → annotatable sketch canvas ── */
             <>
               <div className="flex items-center justify-between px-4 py-2.5 bg-[#181820] border-b border-[#2d2d34] shrink-0 select-none">
                 <span className="flex items-center gap-1.5 text-[10px] font-semibold text-red-400/80 uppercase tracking-widest">
                   <Crosshair className="w-3.5 h-3.5 text-red-500" />
                   {sketchPreview
-                    ? t("Sketch uploaded — drag to mark work zone")
-                    : t("Step 1 — Upload rough sketch / storyboard")}
+                    ? mode === 'SUBMIT'
+                      ? t("Image loaded — ready to submit")
+                      : t("Image loaded — drag to mark work zones")
+                    : mode === 'SUBMIT'
+                      ? t("Step 1 — Upload the page image")
+                      : t("Step 1 — Upload rough sketch / storyboard")}
                 </span>
                 {sketchPreview && (
                   <button
@@ -876,7 +1191,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                     }}
                     className="flex items-center gap-1 text-[9px] text-slate-600 hover:text-red-400 transition-colors cursor-pointer font-bold uppercase tracking-wide"
                   >
-                    <X className="w-3 h-3" /> {t("Remove sketch")}
+                    <X className="w-3 h-3" /> {t("Remove image")}
                   </button>
                 )}
               </div>
@@ -905,7 +1220,9 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                       </div>
                       <div className="text-center space-y-1 px-8">
                         <p className="text-sm font-semibold text-slate-400">
-                          {t("Click to upload storyboard or rough sketch")}
+                          {mode === 'SUBMIT'
+                            ? t("Click to upload the finished page")
+                            : t("Click to upload storyboard or rough sketch")}
                         </p>
                         <p className="text-[10px] text-slate-700 font-mono">.png ? .jpg ? .jpeg ? .webp ? {t('Maximum size')}: 10 MB</p>
                       </div>
@@ -921,8 +1238,24 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                       className="hidden"
                     />
                   </>
+                ) : mode === 'SUBMIT' ? (
+                  /* ── SUBMIT: plain page preview (no zone marking) ── */
+                  <div
+                    className="relative rounded-md overflow-hidden border border-[#2d2d34] shadow-2xl shadow-black"
+                    style={{ width: '100%', maxWidth: '400px', aspectRatio: '3/4' }}
+                  >
+                    <img
+                      src={sketchPreview}
+                      alt={t('Page to submit')}
+                      className="w-full h-full object-contain select-none pointer-events-none"
+                      draggable={false}
+                    />
+                    <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[8px] font-bold uppercase tracking-widest text-slate-300 bg-black/70 px-2 py-0.5 rounded-sm">
+                      {t("Ready to submit")}
+                    </span>
+                  </div>
                 ) : (
-                  /* ── Sketch loaded: full canvas with bounding-box drawing ── */
+                  /* ── CREATION: full canvas with bounding-box drawing ── */
                   <div
                     className="relative rounded-md overflow-visible border border-[#2d2d34] shadow-2xl shadow-black"
                     style={{ width: '100%', maxWidth: '400px', aspectRatio: '3/4' }}
@@ -953,7 +1286,69 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
         {/* ── COL 3 — Right Panel ── */}
         <aside className="w-1/4 min-w-[200px] flex flex-col border-l border-[#2d2d34] bg-[#1e1e24] overflow-hidden">
 
-          {mode === 'REVIEW' ? (
+          {mode === 'PAGES' ? (
+            /* ── PAGES: annotations for the active page ── */
+            <div className="flex flex-col h-full overflow-y-auto">
+              <div className="px-4 pt-4 pb-3 border-b border-[#2d2d34] shrink-0">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1">
+                  {t("Page Annotations")}
+                </p>
+                {activePage && (
+                  <h2 className="text-sm font-bold text-white leading-snug">
+                    {t("Page")} {activePage.pageNumber || 0}
+                  </h2>
+                )}
+                <p className="text-[9px] text-slate-500 mt-1">
+                  {pageAnnotations.length} {t("annotations")}
+                </p>
+              </div>
+
+              {/* Annotation list */}
+              <div className="flex-1 px-4 py-3 space-y-2">
+                {pageAnnotations.length === 0 && (
+                  <p className="text-center text-[10px] text-slate-600 font-mono py-4">
+                    {t("No annotations on this page yet.")}
+                  </p>
+                )}
+                {pageAnnotations.map((ann) => {
+                  const color = ANN_COLORS[ann.category] || ANN_COLORS.GENERAL_FEEDBACK;
+                  return (
+                    <div
+                      key={ann.id}
+                      className={`rounded-md border p-3 transition-colors ${
+                        selectedAnnId === ann.id
+                          ? 'bg-[#2a2a32] border-[#4a4a55]'
+                          : 'bg-[#121214]/40 border-[#2d2d34]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span
+                          className="shrink-0 w-2 h-2 rounded-full"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="flex-1 text-[8px] font-bold uppercase tracking-widest text-slate-500 truncate">
+                          {ann.category}
+                        </span>
+                        {ann.resolved && (
+                          <span className="shrink-0 flex items-center gap-1 text-[8px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            <Check className="w-2.5 h-2.5" />
+                            {t("Resolved")}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-snug mb-2">{ann.comment}</p>
+                      <div className="flex items-center justify-between text-[8px] text-slate-600 font-mono">
+                        <span>{ann.authorName}</span>
+                        {ann.createdAt && (
+                          <span>{new Date(ann.createdAt).toLocaleDateString()}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : mode === 'REVIEW' ? (
             /* ── REVIEW: feedback / approve panel ── */
             activeTask ? (
               <div className="flex flex-col h-full overflow-y-auto">
@@ -1063,6 +1458,102 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 <p className="text-xs font-medium text-slate-600 text-center">{t("Select a task to start reviewing")}</p>
               </div>
             )
+          ) : mode === 'SUBMIT' ? (
+            /* ── SUBMIT: page submission form ── */
+            <div className="flex flex-col h-full overflow-y-auto">
+
+              {/* Form header */}
+              <div className="px-4 pt-4 pb-3 border-b border-[#2d2d34] shrink-0">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-red-400/80 mb-1 flex items-center gap-1.5">
+                  <UploadCloud className="w-3 h-3" /> {t("Step 2 — Submit Details")}
+                </p>
+                <h2 className="text-sm font-bold text-white leading-snug">{t("Submit Page to Editor")}</h2>
+                <p className="text-[9px] text-slate-500 mt-1 leading-relaxed">
+                  {t("Upload the page on the canvas, mark the zones to annotate, then submit for review.")}
+                </p>
+              </div>
+
+              {/* Form body */}
+              <div className="flex-1 px-4 py-3 space-y-4 overflow-y-auto">
+
+                {/* Note for editor */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                    {t("Note for the Editor")}
+                  </label>
+                  <textarea
+                    value={submitNote}
+                    onChange={e => setSubmitNote(e.target.value)}
+                    placeholder={t("Describe what this page contains or anything the editor should know...")}
+                    rows={4}
+                    className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2.5 text-xs text-white placeholder:text-slate-700 focus:outline-none focus:border-slate-500 resize-none transition-colors leading-relaxed"
+                  />
+                </div>
+
+                {/* Live zone metadata */}
+                {activeCreateBox ? (
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-red-500" /> {t("Marked Zone Coordinates")}
+                    </label>
+                    <div className="bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2.5 font-mono text-[10px] text-slate-500 grid grid-cols-2 gap-x-4 gap-y-1">
+                      <div>X: <span className="text-slate-300 font-bold">{activeCreateBox.leftPct.toFixed(1)}%</span></div>
+                      <div>Y: <span className="text-slate-300 font-bold">{activeCreateBox.topPct.toFixed(1)}%</span></div>
+                      <div>W: <span className="text-slate-300 font-bold">{activeCreateBox.widthPct.toFixed(1)}%</span></div>
+                      <div>H: <span className="text-slate-300 font-bold">{activeCreateBox.heightPct.toFixed(1)}%</span></div>
+                    </div>
+                    {createBoxes.length > 1 && (
+                      <p className="text-[9px] text-slate-600 mt-1">
+                        {t("All {{count}} marked regions will be attached to this page.", { count: createBoxes.length })}
+                      </p>
+                    )}
+                  </div>
+                ) : sketchPreview ? (
+                  <div className="bg-red-500/5 border border-red-500/15 rounded-md px-3 py-2.5">
+                    <p className="text-[9px] text-red-400/70 leading-relaxed">
+                      {t("← Drag on the canvas to mark zones for the editor.")}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-[#121214]/60 border border-[#2d2d34] rounded-md px-3 py-2.5">
+                    <p className="text-[9px] text-slate-600 leading-relaxed">
+                      {t("Upload the page on the canvas to enable zone marking.")}
+                    </p>
+                  </div>
+                )}
+
+                {/* Chapter + series context */}
+                <div className="bg-[#121214]/60 border border-[#2d2d34] rounded-md px-3 py-2.5">
+                  <p className="text-[9px] text-slate-500 leading-relaxed">
+                    <span className="text-slate-300 font-bold">{t("Chapter")} {activeChapter?.chapterNumber ?? '??'}</span>
+                    {" — "}{activeSeries?.title ?? ''}
+                  </p>
+                </div>
+
+              </div>
+
+              {/* Submit button */}
+              <div className="px-4 py-4 border-t border-[#2d2d34] shrink-0 space-y-2">
+                <button
+                  onClick={handleSubmitToEditor}
+                  disabled={
+                    !sketchFile ||
+                    !!deployToast
+                  }
+                  className="w-full py-3 rounded-md bg-white hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-black transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg"
+                >
+                  <Send className="w-4 h-4" />
+                  {t("Submit to Editor")}
+                </button>
+                <button
+                  onClick={exitSubmitMode}
+                  className="w-full py-2 rounded-md border border-[#2d2d34] text-xs font-semibold text-slate-500 hover:text-white hover:border-slate-500 transition-all cursor-pointer"
+                >
+                  {t("Cancel")}
+                </button>
+              </div>
+
+            </div>
           ) : (
             /* ── CREATION: Task Assignment Form (Req 3) ── */
             <div className="flex flex-col h-full overflow-y-auto">

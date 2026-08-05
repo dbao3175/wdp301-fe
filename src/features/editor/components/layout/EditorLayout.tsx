@@ -1,28 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronRight, Home } from 'lucide-react';
-import { SidebarProvider, useSidebar } from './SidebarContext';
-import MotionScene from '../../../../components/motion/MotionScene';
-import LanguageToggle from '../../../../components/LanguageToggle';
-import { useLanguage } from '../../../../i18n/LanguageContext';
-import { apiClient } from '../../../../api/client';
-import { getStoredUser } from '../../../../api/base';
-import type { Notification } from '../../../../types';
-import { EditorNotificationPanel } from './EditorNotificationPanel';
+import React, { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ChevronRight, Home } from "lucide-react";
+import { SidebarProvider, useSidebar } from "./SidebarContext";
+import MotionScene from "../../../../components/motion/MotionScene";
+import LanguageToggle from "../../../../components/LanguageToggle";
+import { useLanguage } from "../../../../i18n/LanguageContext";
+import { apiClient } from "../../../../api/client";
+import { getStoredUser } from "../../../../api/base";
+import type { Notification } from "../../../../types";
+import { EditorNotificationPanel } from "./EditorNotificationPanel";
 
 const routeLabels: Record<string, string> = {
-  editor: 'Editor',
-  dashboard: 'Dashboard',
-  proposals: 'Proposals',
-  series: 'Series',
-  review: 'Review',
+  editor: "Editor",
+  dashboard: "Dashboard",
+  proposals: "Proposals",
+  series: "Series",
+  review: "Review",
 };
 
 export const Breadcrumb: React.FC = () => {
   const location = useLocation();
   const { t } = useLanguage();
-  const segments = location.pathname.split('/').filter(Boolean);
+  const segments = location.pathname.split("/").filter(Boolean);
 
   return (
     <nav className="flex items-center gap-1 text-xs font-mono">
@@ -33,7 +33,7 @@ export const Breadcrumb: React.FC = () => {
         <Home className="w-3 h-3" />
       </Link>
       {segments.map((seg, idx) => {
-        const path = '/' + segments.slice(0, idx + 1).join('/');
+        const path = "/" + segments.slice(0, idx + 1).join("/");
         const label = t(routeLabels[seg] ?? seg);
         const isLast = idx === segments.length - 1;
 
@@ -41,7 +41,9 @@ export const Breadcrumb: React.FC = () => {
           <React.Fragment key={path}>
             <ChevronRight className="w-3 h-3 text-neutral-600" />
             {isLast ? (
-              <span className="text-white font-bold uppercase tracking-wide">{label}</span>
+              <span className="text-white font-bold uppercase tracking-wide">
+                {label}
+              </span>
             ) : (
               <Link
                 to={path}
@@ -61,16 +63,20 @@ export const Breadcrumb: React.FC = () => {
 // EDITOR LAYOUT
 // =========================================================
 
-import { EditorSidebar } from './EditorSidebar.tsx';
-import { Bell, Menu, Search } from 'lucide-react';
+import { EditorSidebar } from "./EditorSidebar.tsx";
+import { Bell, Menu, Search, CheckCheck, X } from "lucide-react";
 
 interface EditorLayoutProps {
   children: React.ReactNode;
   onLogout?: () => void;
 }
 
-const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => void }> = ({ children, onLogout }) => {
+const EditorLayoutInner: React.FC<{
+  children: React.ReactNode;
+  onLogout?: () => void;
+}> = ({ children, onLogout }) => {
   const { collapsed, setCollapsed } = useSidebar();
+  const { t } = useLanguage();
   const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -86,7 +92,7 @@ const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => 
       const data = await apiClient.notifications.getAll(currentUser._id);
       setNotifications(data || []);
     } catch (err) {
-      console.error('Error fetching notifications:', err);
+      console.error("Error fetching notifications:", err);
     }
   };
 
@@ -97,7 +103,7 @@ const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => 
         prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)),
       );
     } catch (err) {
-      console.error('Error marking notification as read:', err);
+      console.error("Error marking notification as read:", err);
     }
   };
 
@@ -107,7 +113,7 @@ const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => 
       await apiClient.notifications.markAllRead(currentUser._id);
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     } catch (err) {
-      console.error('Error marking all notifications as read:', err);
+      console.error("Error marking all notifications as read:", err);
     }
   };
 
@@ -116,16 +122,16 @@ const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => 
     if (!n.isRead) await handleMarkRead(n._id);
     setShowNotifications(false);
 
-    if (n.targetType === 'PROPOSAL' && n.targetId) {
+    if (n.targetType === "PROPOSAL" && n.targetId) {
       navigate(`/editor/proposals/${n.targetId}`);
       return;
     }
-    if (n.targetType === 'CHAPTER' && n.targetId) {
+    if (n.targetType === "CHAPTER" && n.targetId) {
       if (n.link) navigate(n.link);
-      else navigate('/editor/dashboard');
+      else navigate("/editor/dashboard");
       return;
     }
-    if (n.targetType === 'SERIES' && n.targetId) {
+    if (n.targetType === "SERIES" && n.targetId) {
       navigate(`/editor/series/${n.targetId}`);
       return;
     }
@@ -139,81 +145,6 @@ const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => 
     const interval = setInterval(fetchNotifications, 8000);
     return () => clearInterval(interval);
   }, [currentUser]);
-  const { t } = useLanguage();
-  const queryClient = useQueryClient();
-  const userId = currentUser?._id;
-  const [notificationsOpen, setNotificationsOpen] = React.useState(false);
-  const notificationRootRef = React.useRef<HTMLDivElement>(null);
-  const notificationQueryKey = React.useMemo(() => ['editor-notifications', userId] as const, [userId]);
-
-  const {
-    data: notifications = [],
-    isLoading: notificationsLoading,
-    isError: notificationsError,
-    refetch: refetchNotifications,
-  } = useQuery<Notification[]>({
-    queryKey: notificationQueryKey,
-    queryFn: async () => {
-      const result = await apiClient.notifications.getAll(userId as string);
-      return Array.isArray(result) ? result : [];
-    },
-    enabled: Boolean(userId),
-    refetchInterval: 10_000,
-    staleTime: 5_000,
-  });
-
-  const unreadNotificationCount = notifications.filter((notification) => !notification.isRead).length;
-
-  React.useEffect(() => {
-    if (!notificationsOpen) return;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!notificationRootRef.current?.contains(event.target as Node)) {
-        setNotificationsOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setNotificationsOpen(false);
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [notificationsOpen]);
-
-  const updateNotificationCache = (updater: (items: Notification[]) => Notification[]) => {
-    queryClient.setQueryData<Notification[]>(notificationQueryKey, (current = []) => updater(current));
-  };
-
-  const handleMarkNotificationRead = async (id: string) => {
-    const selected = notifications.find((notification) => notification._id === id);
-    if (!selected || selected.isRead) return;
-
-    updateNotificationCache((items) => items.map((notification) => (
-      notification._id === id ? { ...notification, isRead: true } : notification
-    )));
-    try {
-      await apiClient.notifications.markRead(id);
-    } catch (error) {
-      console.error('Failed to mark notification as read:', error);
-      void refetchNotifications();
-    }
-  };
-
-  const handleMarkAllNotificationsRead = async () => {
-    if (!userId || unreadNotificationCount === 0) return;
-
-    updateNotificationCache((items) => items.map((notification) => ({ ...notification, isRead: true })));
-    try {
-      await apiClient.notifications.markAllRead(userId);
-    } catch (error) {
-      console.error('Failed to mark all notifications as read:', error);
-      void refetchNotifications();
-    }
-  };
 
   return (
     <div className="min-h-screen bg-manuscript-gray flex">
@@ -229,24 +160,29 @@ const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => 
         onLogout={onLogout}
         mobileOpen={mobileSidebarOpen}
         onMobileClose={() => setMobileSidebarOpen(false)}
-        onNotificationsClick={() => setNotificationsOpen(true)}
-        unreadNotificationCount={unreadNotificationCount}
       />
 
       {/* Main content — offset by sidebar width (64px collapsed, 256px expanded) */}
-      <div className={`flex-1 min-w-0 flex flex-col min-h-screen transition-all duration-300 ${collapsed ? 'md:ml-16' : 'md:ml-64'}`}>
+      <div
+        className={`flex-1 min-w-0 flex flex-col min-h-screen transition-all duration-300 ${collapsed ? "md:ml-16" : "md:ml-64"}`}
+      >
         {/* Top Bar */}
         <header className="sticky top-0 z-30 bg-ink-black border-b-2 border-neutral-700 px-3 sm:px-6 py-3 flex items-center justify-between gap-3 min-h-[64px]">
           <div className="min-w-0 flex items-center gap-3 overflow-hidden">
             <button
               type="button"
               aria-label={t("Open editor navigation")}
-              onClick={() => { setCollapsed(false); setMobileSidebarOpen(true); }}
+              onClick={() => {
+                setCollapsed(false);
+                setMobileSidebarOpen(true);
+              }}
               className="shrink-0 w-9 h-9 border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-500 flex items-center justify-center md:hidden"
             >
               <Menu className="w-4 h-4" />
             </button>
-            <div className="min-w-0 overflow-hidden"><Breadcrumb /></div>
+            <div className="min-w-0 overflow-hidden">
+              <Breadcrumb />
+            </div>
           </div>
           <div className="flex items-center gap-3">
             {/* Search */}
@@ -334,7 +270,10 @@ const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => 
               )}
             </div>
             {/* Avatar */}
-            <div className="w-8 h-8 border-2 border-[#E63946] bg-neutral-800 text-white flex items-center justify-center font-mono text-[10px] font-black" aria-label={t('Editor profile')}>
+            <div
+              className="w-8 h-8 border-2 border-[#E63946] bg-neutral-800 text-white flex items-center justify-center font-mono text-[10px] font-black"
+              aria-label={t("Editor profile")}
+            >
               ED
             </div>
           </div>
@@ -346,8 +285,9 @@ const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => 
           <div
             className="ambient-grid fixed inset-0 pointer-events-none opacity-30 z-0"
             style={{
-              backgroundImage: 'radial-gradient(#9ca3af 0.6px, transparent 0.6px)',
-              backgroundSize: '20px 20px',
+              backgroundImage:
+                "radial-gradient(#9ca3af 0.6px, transparent 0.6px)",
+              backgroundSize: "20px 20px",
             }}
           />
           <MotionScene sceneKey={location.pathname} className="relative z-10">
@@ -359,7 +299,10 @@ const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => 
   );
 };
 
-export const EditorLayout: React.FC<EditorLayoutProps> = ({ children, onLogout }) => {
+export const EditorLayout: React.FC<EditorLayoutProps> = ({
+  children,
+  onLogout,
+}) => {
   return (
     <SidebarProvider>
       <EditorLayoutInner onLogout={onLogout}>{children}</EditorLayoutInner>
