@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { User, Series, Rating, Vote, Directive, DirectiveAction } from '../types';
 import { apiClient } from '../api/client';
-import { CheckSquare, X, Gavel, Plus, Download } from 'lucide-react';
-import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
+import { CheckSquare, X, Gavel, Plus } from 'lucide-react';
 import BoardPublicationPanel from '../features/board/BoardPublicationPanel';
 import ReaderMetricsPanel from '../features/board/ReaderMetricsPanel';
+import StoryboardGallery, { StoryboardImage } from './StoryboardGallery';
 
 interface EditorialBoardProps {
   currentUser: User;
@@ -41,6 +40,8 @@ export default function EditorialBoard({
   const [selectedProposal, setSelectedProposal] = useState<any | null>(null);
   const [voterStatus, setVoterStatus] = useState<any>(null);
   const [selectedVoterIds, setSelectedVoterIds] = useState<string[]>([]);
+  const [storyboardImages, setStoryboardImages] = useState<StoryboardImage[]>([]);
+  const [storyboardLoading, setStoryboardLoading] = useState(false);
 
   const ITEMS_PER_PAGE = 5;
 
@@ -87,6 +88,7 @@ export default function EditorialBoard({
           seriesId: submission.seriesId || null,
           chairpersonId: submission.chairpersonId || null,
           tiedDecisions: submission.tiedDecisions || [],
+          votingDeadline: submission.votingDeadline || null,
         }));
       setProposalsList(pitches);
     } catch (err) {
@@ -126,12 +128,26 @@ export default function EditorialBoard({
     setModalMessage('');
     setModalVoteForm({ decision: 'ACCEPT', comment: '', schedule: 'WEEKLY' });
     setSelectedVoterIds([]);
+    setStoryboardImages([]);
     try {
       const votes = await apiClient.votes.getForSubmission(prop._id);
       setModalVotes(Array.isArray(votes) ? votes : (votes as any)?.data || []);
 
       const statusRes = await apiClient.submissions.getVotingStatus(prop._id);
       setVoterStatus(statusRes || null);
+
+      if (prop.proposalRecordId) {
+        setStoryboardLoading(true);
+        try {
+          const proposalData = await apiClient.proposals.getById(prop.proposalRecordId);
+          setStoryboardImages(proposalData?.storyboardImages || []);
+        } catch (err) {
+          console.error('Failed to load storyboard:', err);
+          setStoryboardImages([]);
+        } finally {
+          setStoryboardLoading(false);
+        }
+      }
     } catch (err) {
       console.error('Failed to open proposal details:', err);
       setModalVotes([]);
@@ -144,6 +160,7 @@ export default function EditorialBoard({
     setModalVotes([]);
     setVoterStatus(null);
     setSelectedVoterIds([]);
+    setStoryboardImages([]);
     setModalMessage('');
     setModalSubmitting(false);
   };
@@ -201,14 +218,20 @@ export default function EditorialBoard({
     }
   };
 
-  const handleAssignVoters = async () => {
-    if (!selectedProposal || selectedVoterIds.length === 0) return;
+  const handleAssignVoters = async (auto = false) => {
+    if (!selectedProposal) return;
+    if (!auto && selectedVoterIds.length === 0) return;
     try {
-      await apiClient.submissions.assignVoters(selectedProposal._id, selectedVoterIds);
+      if (auto) {
+        await apiClient.submissions.assignVotersAuto(selectedProposal._id, 4);
+        setModalMessage('🎉 Randomly assigned 4 board members as voters!');
+      } else {
+        await apiClient.submissions.assignVoters(selectedProposal._id, selectedVoterIds);
+        setModalMessage('🎉 Voters assigned successfully!');
+      }
       const statusRes = await apiClient.submissions.getVotingStatus(selectedProposal._id);
       setVoterStatus(statusRes || null);
       setSelectedVoterIds([]);
-      setModalMessage('🎉 Voters assigned successfully!');
       fetchAllProposals();
     } catch (err: any) {
       setModalMessage(`❌ ${err.message}`);
@@ -227,6 +250,8 @@ export default function EditorialBoard({
     ? uniqueModalVotes.find((vote) => getVoteVoterId(vote) === currentUser._id)
     : null;
   const isProposalTieBreak = selectedProposal?.decisionStatus === 'TIE_BREAK_REQUIRED';
+  const proposalVotingDeadline = selectedProposal?.votingDeadline || voterStatus?.votingDeadline || null;
+  const isProposalOverdue = proposalVotingDeadline && new Date(proposalVotingDeadline) < new Date();
   const proposalChairId = typeof selectedProposal?.chairpersonId === 'object'
     ? selectedProposal.chairpersonId?._id
     : selectedProposal?.chairpersonId;
@@ -352,7 +377,7 @@ export default function EditorialBoard({
                   <div className="flex-1 min-w-0">
                     <h3 className="font-syne text-sm font-black uppercase tracking-tight text-ink-black truncate">{prop.title || 'Untitled'}</h3>
                     <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
-                      Author: {prop.mangakaId ? (prop.mangakaId as any).name || 'Mangaka' : 'Mangaka'}
+                      Author: {prop.isAnonymous ? 'Anonymous' : (prop.mangakaId ? (prop.mangakaId as any).name || 'Mangaka' : 'Mangaka')}
                     </p>
                     <p className="font-sans text-[10px] text-neutral-400 mt-1 line-clamp-1">{prop.synopsis || ''}</p>
                     <div className="flex items-center gap-2 mt-2">
@@ -371,6 +396,11 @@ export default function EditorialBoard({
                     <div className="font-mono text-sm font-black text-[#E63946]">
                       {votedCount}/{totalRequired}
                     </div>
+                    {item.votingDeadline && (
+                      <div className={`font-mono text-[8px] font-bold mt-1 ${new Date(item.votingDeadline) < new Date() ? 'text-[#E63946]' : 'text-neutral-500'}`}>
+                        ⏳ {new Date(item.votingDeadline).toLocaleDateString()}
+                      </div>
+                    )}
                   </div>
                   <button onClick={() => openProposalModal(item)} className="shrink-0-0 bg-[#E63946] hover:bg-red-600 text-white font-syne text-[10px] font-extrabold uppercase py-2.5 px-5 border-2 border-ink-black shadow-[3px_3px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
                     Review & Vote
@@ -490,6 +520,11 @@ export default function EditorialBoard({
                         <span className="font-mono text-[9px] text-[#E63946] font-black">{rejectCount}N</span>
                         <span className="font-mono text-[9px] text-neutral-400 ml-1">({totalCount} total)</span>
                       </div>
+                      {d.votingDeadline && (
+                        <span className={`font-mono text-[9px] font-black uppercase ${new Date(d.votingDeadline) < new Date() ? 'text-[#E63946]' : 'text-neutral-500'}`}>
+                          ⏳ {new Date(d.votingDeadline).toLocaleDateString()}
+                        </span>
+                      )}
                     </div>
                     <button onClick={() => openDirectiveModal(d)} className="w-full bg-ink-black hover:bg-neutral-800 text-white font-syne text-[9px] font-extrabold uppercase py-2 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
                       Review & Vote
@@ -562,7 +597,7 @@ export default function EditorialBoard({
                 <div>
                   <h2 className="font-syne text-lg font-black uppercase tracking-tight text-ink-black">{selectedProposal.title}</h2>
                   <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
-                    Author: {typeof selectedProposal.mangakaId === 'object' && selectedProposal.mangakaId !== null ? (selectedProposal.mangakaId as any).name : 'Mangaka'}
+                    Author: {selectedProposal.isAnonymous ? 'Anonymous' : (typeof selectedProposal.mangakaId === 'object' && selectedProposal.mangakaId !== null ? (selectedProposal.mangakaId as any).name : 'Mangaka')}
                   </p>
                 </div>
                 <button onClick={closeModal} className="p-2 hover:bg-manuscript-gray border-2 border-ink-black cursor-pointer transition-colors">
@@ -590,6 +625,11 @@ export default function EditorialBoard({
                 </div>
 
                 <div className="bg-manuscript-gray p-4 border-2 border-ink-black">
+                  {voterStatus?.votingDeadline && (
+                    <div className="mb-3 p-2 border-2 border-dashed border-amber-500 font-mono text-[9px] font-bold uppercase">
+                      ⏳ Voting deadline: {new Date(voterStatus.votingDeadline).toLocaleString()}
+                    </div>
+                  )}
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">Author Pitch Synopsis:</span>
@@ -609,51 +649,23 @@ export default function EditorialBoard({
                           View Series
                         </a>
                       )}
-                      <button
-                        onClick={async () => {
-                          try {
-                            const proposalId = selectedProposal.proposalRecordId;
-                            const proposalData = await apiClient.proposals.getById(proposalId);
-                            const images = proposalData?.storyboardImages || [];
-                            if (images.length > 1) {
-                              const zip = new JSZip();
-                              const imgFolder = zip.folder("storyboard")!;
-                              for (let i = 0; i < images.length; i++) {
-                                const img = images[i];
-                                try {
-                                  const resp = await fetch(img.url);
-                                  const blob = await resp.blob();
-                                  const ext = img.originalName?.includes(".")
-                                    ? img.originalName.split(".").pop()
-                                    : "png";
-                                  imgFolder.file(`page_${i + 1}.${ext}`, blob);
-                                } catch (e) {
-                                  console.warn("Failed to fetch image", img.url, e);
-                                }
-                              }
-                              const blob = await zip.generateAsync({ type: "blob" });
-                              saveAs(blob, `${selectedProposal.title}_storyboard.zip`);
-                            } else if (images.length === 1) {
-                              const resp = await fetch(images[0].url);
-                              const blob = await resp.blob();
-                              const ext = images[0].originalName?.includes(".")
-                                ? images[0].originalName.split(".").pop()
-                                : "png";
-                              saveAs(blob, `${selectedProposal.title}_storyboard.${ext}`);
-                            } else {
-                              await apiClient.proposals.downloadStoryboard(proposalId);
-                            }
-                          } catch (err) {
-                            console.error('Download failed', err);
-                            alert('Failed to download storyboard');
-                          }
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#E63946] text-white text-[9px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-red-600 transition-colors shadow-[2px_2px_0px_#141414] cursor-pointer"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        Download Storyboard
-                      </button>
                     </div>
+                  </div>
+
+                  {/* Storyboard gallery — replaces the removed download button */}
+                  <div className="mt-4">
+                    {storyboardLoading ? (
+                      <div className="border-2 border-ink-black bg-manuscript-gray p-4 text-center">
+                        <p className="font-mono text-[9px] font-bold uppercase text-neutral-500">
+                          Loading storyboard...
+                        </p>
+                      </div>
+                    ) : (
+                      <StoryboardGallery
+                        images={storyboardImages}
+                        title="Storyboard"
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -714,13 +726,21 @@ export default function EditorialBoard({
                       )}
                     </div>
                   </div>
-                  <button 
-                    onClick={handleAssignVoters}
-                    disabled={selectedVoterIds.length === 0}
-                    className="w-full bg-ink-black hover:bg-neutral-800 text-white font-syne text-[10px] font-extrabold uppercase px-4 py-2 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Assign Voters ({selectedVoterIds.length} selected)
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => handleAssignVoters(true)}
+                      className="flex-1 bg-[#E63946] hover:bg-red-600 text-white font-syne text-[10px] font-extrabold uppercase px-4 py-2 border-2 border-ink-black shadow-[2px_2px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
+                    >
+                      🎲 Auto Assign (Random)
+                    </button>
+                    <button 
+                      onClick={() => handleAssignVoters(false)}
+                      disabled={selectedVoterIds.length === 0}
+                      className="flex-1 bg-ink-black hover:bg-neutral-800 text-white font-syne text-[10px] font-extrabold uppercase px-4 py-2 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Assign ({selectedVoterIds.length})
+                    </button>
+                  </div>
                 </div>
                 )}
 
@@ -751,6 +771,18 @@ export default function EditorialBoard({
                   const isAssigned = voterStatus?.voters?.some(
                     (v: any) => (v.userId?._id || v.userId) === currentUser._id
                   );
+                  if (isProposalOverdue && !isProposalTieBreak && !userVote) {
+                    return (
+                      <div className="bg-[#E63946]/10 border-4 border-[#E63946] p-5 text-center">
+                        <p className="font-mono text-xs font-black uppercase text-[#E63946] mb-1">
+                          ⏳ Voting deadline has passed
+                        </p>
+                        <p className="font-sans text-[10px] text-neutral-600 font-bold">
+                          This session is closed for voting. Results are being finalized from the votes already cast.
+                        </p>
+                      </div>
+                    );
+                  }
                   if (isProposalTieBreak && !canResolveProposalTie) {
                     return (
                       <div className="bg-[#FFF3B0]/40 border-4 border-[#FFF3B0] p-5 text-center">
@@ -859,6 +891,11 @@ export default function EditorialBoard({
               </button>
             </div>
             <div className="p-5 space-y-5">
+              {selectedDirective.votingDeadline && (
+                <div className={`p-3 border-2 border-dashed border-amber-500 font-mono text-[9px] font-bold uppercase ${new Date(selectedDirective.votingDeadline) < new Date() ? 'text-[#E63946] border-[#E63946]' : ''}`}>
+                  ⏳ Voting deadline: {new Date(selectedDirective.votingDeadline).toLocaleString()}
+                </div>
+              )}
               {/* Tally */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-status-success/10 border-2 border-status-success p-3 text-center">

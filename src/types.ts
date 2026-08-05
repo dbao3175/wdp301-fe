@@ -141,6 +141,7 @@ export interface BoardPublication {
       hasVoted?: boolean;
     }>;
     tiedDecisions?: PublicationDecision[];
+    votingDeadline?: string | null;
     reason?: string;
     createdAt?: string;
   } | null;
@@ -184,6 +185,7 @@ export interface Directive {
   newSchedule?: 'WEEKLY' | 'MONTHLY' | null;
   reason: string;
   status: DirectiveStatus;
+  votingDeadline?: string | null;
   proposedBy: string;
   proposedByName?: string;
   votes: DirectiveVote[];

@@ -1,8 +1,10 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { ChevronRight, Home } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ChevronRight, Home, Bell, Search, X, CheckCheck } from 'lucide-react';
 import { SidebarProvider, useSidebar } from './SidebarContext';
 import MotionScene from '../../../../components/motion/MotionScene';
+import { apiClient } from '../../../../api/client';
+import { getStoredUser } from '../../../../api/client';
 
 const routeLabels: Record<string, string> = {
   editor: 'Editor',
@@ -54,7 +56,6 @@ export const Breadcrumb: React.FC = () => {
 // =========================================================
 
 import { EditorSidebar } from './EditorSidebar.tsx';
-import { Bell, Search } from 'lucide-react';
 
 interface EditorLayoutProps {
   children: React.ReactNode;
@@ -64,7 +65,73 @@ interface EditorLayoutProps {
 const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => void }> = ({ children, onLogout }) => {
   const { collapsed } = useSidebar();
   const location = useLocation();
-  
+  const navigate = useNavigate();
+
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  const currentUser = getStoredUser();
+
+  const fetchNotifications = async () => {
+    if (!currentUser?._id) return;
+    try {
+      const data = await apiClient.notifications.getAll(currentUser._id);
+      setNotifications(data || []);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  };
+
+  const handleMarkRead = async (id: string) => {
+    try {
+      await apiClient.notifications.markRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)),
+      );
+    } catch (err) {
+      console.error('Error marking notification as read:', err);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    if (!currentUser?._id) return;
+    try {
+      await apiClient.notifications.markAllRead(currentUser._id);
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    } catch (err) {
+      console.error('Error marking all notifications as read:', err);
+    }
+  };
+
+  // Redirect to the relevant page when a notification is clicked.
+  const handleNotificationClick = async (n: any) => {
+    if (!n.isRead) await handleMarkRead(n._id);
+    setShowNotifications(false);
+
+    if (n.targetType === 'PROPOSAL' && n.targetId) {
+      navigate(`/editor/proposals/${n.targetId}`);
+      return;
+    }
+    if (n.targetType === 'CHAPTER' && n.targetId) {
+      if (n.link) navigate(n.link);
+      else navigate('/editor/dashboard');
+      return;
+    }
+    if (n.targetType === 'SERIES' && n.targetId) {
+      navigate(`/editor/series/${n.targetId}`);
+      return;
+    }
+    if (n.link) {
+      navigate(n.link);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 8000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
   return (
     <div className="min-h-screen bg-manuscript-gray flex">
       <EditorSidebar onLogout={onLogout} />
@@ -85,10 +152,79 @@ const EditorLayoutInner: React.FC<{ children: React.ReactNode; onLogout?: () => 
               />
             </div>
             {/* Notifications */}
-            <button className="relative w-8 h-8 flex items-center justify-center text-neutral-400 hover:text-white transition-colors border border-neutral-700 hover:border-neutral-500">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-[#E63946] border border-ink-black" />
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative w-8 h-8 flex items-center justify-center text-neutral-400 hover:text-white transition-colors border border-neutral-700 hover:border-neutral-500 cursor-pointer"
+              >
+                <Bell className="w-4 h-4" />
+                {notifications.filter((n) => !n.isRead).length > 0 && (
+                  <span className="absolute top-0.5 right-0.5 min-w-[14px] h-3.5 px-0.5 bg-[#E63946] text-white text-[8px] font-black flex items-center justify-center rounded-full border border-ink-black">
+                    {notifications.filter((n) => !n.isRead).length}
+                  </span>
+                )}
+              </button>
+
+              {showNotifications && (
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414] z-50 flex flex-col max-h-[400px]">
+                  <div className="bg-ink-black text-white p-3 border-b-2 border-ink-black flex justify-between items-center">
+                    <span className="font-syne font-black text-xs uppercase tracking-wider">
+                      NOTIFICATIONS
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {notifications.filter((n) => !n.isRead).length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleMarkAllRead}
+                          className="px-1.5 py-0.5 border border-white hover:bg-white/20 text-[9px] font-mono font-bold uppercase transition-all cursor-pointer"
+                          title="Mark all as read"
+                        >
+                          <CheckCheck className="w-3 h-3" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowNotifications(false)}
+                        className="text-white hover:text-neutral-200 cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="overflow-y-auto divide-y-2 divide-ink-black flex-1 bg-white text-ink-black max-h-[300px]">
+                    {notifications.length === 0 ? (
+                      <div className="p-6 text-center text-neutral-400 font-mono text-[10px]">
+                        No new notifications
+                      </div>
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n._id}
+                          onClick={() => handleNotificationClick(n)}
+                          className={`p-3 text-left transition-colors cursor-pointer hover:bg-neutral-50 flex gap-2 items-start ${
+                            !n.isRead
+                              ? "bg-yellow-50/70 border-l-4 border-l-[#E63946]"
+                              : "border-l-4 border-l-transparent"
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-[11px] font-extrabold text-ink-black leading-tight mb-0.5">
+                              {n.title}
+                            </h4>
+                            <p className="text-[10px] text-neutral-600 leading-snug">
+                              {n.content}
+                            </p>
+                            <span className="text-[8px] font-mono text-neutral-400 mt-1 block">
+                              {new Date(n.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             {/* Avatar */}
             <img
               src="https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi"

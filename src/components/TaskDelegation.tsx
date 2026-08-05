@@ -228,11 +228,24 @@ function MyProposalsList({
                 >
                   {STATUS_LABELS[p.status] || p.status}
                 </span>
+                {/* Anonymous board review indicator — confirms the author's
+                    identity is hidden while the Editorial Board votes. */}
+                {p.status === "SENT_TO_EDITORIAL_BOARD" && p.isAnonymous && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-indigo-300 bg-indigo-500/10 border border-indigo-500/40">
+                    <Eye className="w-3 h-3" /> Anonymous review — name hidden from board
+                  </span>
+                )}
                 <span className="text-[9px] text-slate-600 font-mono">
                   {new Date(
                     p.submittedAt || p.submittedDate,
                   ).toLocaleDateString()}
                 </span>
+                {/* Review deadline — 7 days after submission for pending proposals */}
+                {['SUBMITTED', 'UNDER_REVIEW', 'RESUBMITTED', 'SENT_TO_EDITORIAL_BOARD'].includes(p.status) && (
+                  <span className="text-[9px] font-mono text-amber-500/80">
+                    ⏳ Due: {new Date(new Date(p.submittedAt || p.submittedDate).getTime() + 7 * 24 * 3600 * 1000).toLocaleDateString()}
+                  </span>
+                )}
               </div>
             </div>
             {p.comments && p.comments.length > 0 && (
@@ -385,6 +398,25 @@ function ProposalDetailView({
           {STATUS_LABELS[proposal.status] || proposal.status}
         </span>
       </div>
+
+      {/* Anonymous review confirmation banner */}
+      {proposal.status === "SENT_TO_EDITORIAL_BOARD" && proposal.isAnonymous && (
+        <div className="flex items-start gap-3 px-3 py-3 rounded-md bg-indigo-500/10 border border-indigo-500/40">
+          <div className="w-7 h-7 rounded-md bg-indigo-500/20 flex items-center justify-center shrink-0">
+            <Eye className="w-4 h-4 text-indigo-300" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-indigo-200 uppercase tracking-wide">
+              Anonymous Editorial Board review in progress
+            </p>
+            <p className="text-[11px] text-indigo-300/80 leading-relaxed mt-0.5">
+              Your name has been hidden from the Editorial Board while they vote
+              on your series. Only the editor who forwarded it knows your
+              identity. The result will be sent to you once voting closes.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Synopsis */}
       <div className="bg-[#121214] border border-[#2d2d34] rounded-md p-4">

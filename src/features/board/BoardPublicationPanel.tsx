@@ -266,6 +266,11 @@ export default function BoardPublicationPanel({
                           {item.tally?.total || 0}/{item.tally?.required || session.requiredVoters?.length || 0} votes
                         </span>
                       )}
+                      {session?.votingDeadline && (
+                        <span className={`px-2 py-1 border border-ink-black text-[9px] font-mono font-black uppercase ${new Date(session.votingDeadline) < new Date() ? 'bg-[#E63946]/15 text-[#E63946]' : 'bg-[#FFF3B0]'}`}>
+                          ⏳ Voting deadline: {new Date(session.votingDeadline).toLocaleDateString()}
+                        </span>
+                      )}
                       {session?.newSchedule && (
                         <span className="px-2 py-1 border border-ink-black bg-[#FFF3B0] text-[9px] font-mono font-black uppercase">
                           Proposed schedule: {session.newSchedule}

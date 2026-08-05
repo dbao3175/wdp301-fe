@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { User, UserRole } from "../types";
 import { apiClient } from "../api/client";
 import {
@@ -30,6 +31,7 @@ export default function Navigation({
   onLogout,
   onConfigChange,
 }: NavigationProps) {
+  const navigate = useNavigate();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -63,6 +65,47 @@ export default function Navigation({
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     } catch (err) {
       console.error("Error marking all notifications as read:", err);
+    }
+  };
+
+  // Redirect to the relevant page when a notification is clicked.
+  const handleNotificationClick = async (n: any) => {
+    if (!n.isRead) await handleMarkRead(n._id);
+    setShowNotifications(false);
+
+    if (n.targetType === 'PROPOSAL' && n.targetId) {
+      if (currentUser?.role === 'EDITOR') {
+        navigate(`/editor/proposals/${n.targetId}`);
+      } else {
+        onChangeTab('tasks');
+      }
+      return;
+    }
+    if (n.targetType === 'CHAPTER' && n.targetId) {
+      if (currentUser?.role === 'EDITOR') {
+        if (n.link) navigate(n.link);
+        else onChangeTab('chapters');
+      } else if (currentUser?.role === 'MANGAKA') {
+        onChangeTab('workspace');
+      } else if (currentUser?.role === 'BOARD_MEMBER') {
+        onChangeTab('board');
+      }
+      return;
+    }
+    if (n.targetType === 'SERIES' && n.targetId) {
+      if (currentUser?.role === 'EDITOR') {
+        navigate(`/editor/series/${n.targetId}`);
+      } else {
+        onChangeTab('workspace');
+      }
+      return;
+    }
+    if (n.targetType === 'TASK' && n.targetId) {
+      onChangeTab('workspace');
+      return;
+    }
+    if (n.link) {
+      navigate(n.link);
     }
   };
 
@@ -172,7 +215,7 @@ export default function Navigation({
                     notifications.map((n) => (
                       <div
                         key={n._id}
-                        onClick={() => handleMarkRead(n._id)}
+                        onClick={() => handleNotificationClick(n)}
                         className={`p-3 text-left transition-colors cursor-pointer hover:bg-neutral-50 flex gap-2 items-start ${
                           !n.isRead
                             ? "bg-yellow-50/70 border-l-4 border-l-[#E63946]"
@@ -306,7 +349,7 @@ export default function Navigation({
                         notifications.map((n) => (
                           <div
                             key={n._id}
-                            onClick={() => handleMarkRead(n._id)}
+                            onClick={() => handleNotificationClick(n)}
                             className={`p-3 text-left transition-colors cursor-pointer hover:bg-neutral-50 flex gap-2 items-start ${
                               !n.isRead
                                 ? "bg-yellow-50/70 border-l-4 border-l-[#E63946]"

@@ -94,10 +94,11 @@ export default function AssistantApp({
   };
 
   const handleNotificationClick = (n: AssistantNotification) => {
-    if (n.taskId) {
+    const targetId = (n as any).targetId || n.taskId;
+    if (targetId) {
       const task =
-        tasksList.find((t) => t._id === n.taskId) ??
-        ({ ...tasksList[0], _id: n.taskId, title: n.message } as AssistantTask);
+        tasksList.find((t) => t._id === targetId) ??
+        ({ ...tasksList[0], _id: targetId, title: n.message } as AssistantTask);
       handleOpenWorkspace(task);
     } else if (n.type === 'payment') {
       onChangeTab('assistant-income');

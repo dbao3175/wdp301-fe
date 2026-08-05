@@ -767,6 +767,17 @@ export const apiClient = {
       );
       return res.data;
     },
+    assignVotersAuto: async (
+      submissionId: string,
+      count: number = 4,
+    ): Promise<any> => {
+      const res = await makeFetchRequest(
+        `/api/submissions/${submissionId}/voters`,
+        "POST",
+        { autoAssign: true, count },
+      );
+      return res.data;
+    },
     getVotingStatus: async (submissionId: string): Promise<any> => {
       const res = await makeFetchRequest(
         `/api/submissions/${submissionId}/voters`,

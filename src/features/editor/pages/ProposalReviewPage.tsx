@@ -13,7 +13,6 @@ import {
   ChevronLeft,
   Send,
   Clock,
-  Download,
 } from "lucide-react";
 import { apiClient } from "../../../api/client.ts";
 import type {
@@ -28,6 +27,7 @@ import {
 } from "../components/common/States.tsx";
 import { Modal, ConfirmDialog } from "../components/common/Modal.tsx";
 import { User } from "@/src/types.ts";
+import StoryboardGallery from "../../../components/StoryboardGallery.tsx";
 
 // =========================================================
 // STATUS FLOW DISPLAY
@@ -172,6 +172,7 @@ export const ProposalReviewPage: React.FC = () => {
       description: p.synopsis || "",
       samplePages: [],
     },
+    storyboardImages: p.storyboardImages || [],
     characterDesigns: p.characterDesigns || [],
     comments: p.comments || [],
     assignedEditorId: p.assignedEditorId || "",
@@ -428,6 +429,14 @@ export const ProposalReviewPage: React.FC = () => {
                 </p>
                 <SamplePageViewer pages={proposal.storyDraft.samplePages} />
               </div>
+              {proposal.storyboardImages.length > 0 && (
+                <div>
+                  <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-3">
+                    Storyboard ({proposal.storyboardImages.length})
+                  </p>
+                  <StoryboardGallery images={proposal.storyboardImages} />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -500,52 +509,6 @@ export const ProposalReviewPage: React.FC = () => {
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Approve & Submit to Board
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    const proposalData = await apiClient.proposals.getById(id!);
-                    const images = proposalData?.storyboardImages || [];
-                    if (images.length > 1) {
-                      const JSZip = (await import('jszip')).default;
-                      const { saveAs } = await import('file-saver');
-                      const zip = new JSZip();
-                      const imgFolder = zip.folder("storyboard")!;
-                      for (let i = 0; i < images.length; i++) {
-                        const img = images[i];
-                        try {
-                          const resp = await fetch(img.url);
-                          const blob = await resp.blob();
-                          const ext = img.originalName?.includes(".")
-                            ? img.originalName.split(".").pop()
-                            : "png";
-                          imgFolder.file(`page_${i + 1}.${ext}`, blob);
-                        } catch (e) {
-                          console.warn("Failed to fetch image", img.url, e);
-                        }
-                      }
-                      const blob = await zip.generateAsync({ type: "blob" });
-                      saveAs(blob, `${proposal.title}_storyboard.zip`);
-                    } else if (images.length === 1) {
-                      const { saveAs } = await import('file-saver');
-                      const resp = await fetch(images[0].url);
-                      const blob = await resp.blob();
-                      const ext = images[0].originalName?.includes(".")
-                        ? images[0].originalName.split(".").pop()
-                        : "png";
-                      saveAs(blob, `${proposal.title}_storyboard.${ext}`);
-                    } else {
-                      await apiClient.proposals.downloadStoryboard(id!);
-                    }
-                  } catch (err) {
-                    console.error('Download failed', err);
-                    alert('Failed to download storyboard');
-                  }
-                }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-ink-black text-white border-2 border-ink-black text-xs font-mono font-extrabold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-800 transition-colors cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Download Storyboard
               </button>
               {!canTakeAction && (
                 <p className="text-[9px] font-mono text-neutral-400 text-center uppercase">
