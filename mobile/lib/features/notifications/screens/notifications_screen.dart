@@ -67,6 +67,11 @@ class _NotificationCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final isVi = l10n.isVi;
+    final displayTitle = localizeNotificationTitle(item.title, isVi: isVi);
+    final displayContent = localizeNotificationContent(item.content, isVi: isVi);
+
     final color = item.type == 'ERROR'
         ? AppColors.red
         : item.type == 'WARNING'
@@ -95,7 +100,7 @@ class _NotificationCard extends ConsumerWidget {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(
-              child: Text(item.title,
+              child: Text(displayTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -111,7 +116,7 @@ class _NotificationCard extends ConsumerWidget {
                       color: AppColors.red, shape: BoxShape.circle)),
           ]),
           const SizedBox(height: 5),
-          Text(item.content,
+          Text(displayContent,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

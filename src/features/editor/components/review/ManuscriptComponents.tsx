@@ -15,6 +15,7 @@ import {
   Highlighter,
 } from 'lucide-react';
 import type { ManuscriptPage, Annotation, AnnotationCategory } from '../../types/index.ts';
+import { useLanguage } from '../../../../i18n/LanguageContext';
 
 // =========================================================
 // ANNOTATION CATEGORY CONFIG
@@ -105,6 +106,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   onAddAnnotation,
   isAddingAnnotation,
 }) => {
+  const { t } = useLanguage();
   const [draft, setDraft] = useState<NewAnnotationDraft | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -173,7 +175,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             <p className="font-mono text-[9px] font-extrabold uppercase text-ink-black mb-2">
-              New Annotation
+              {t("New Annotation")}
             </p>
             <select
               value={draft.category}
@@ -182,12 +184,12 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
             >
               {(Object.keys(CATEGORY_LABELS) as AnnotationCategory[]).map((cat) => (
                 <option key={cat} value={cat}>
-                  {CATEGORY_LABELS[cat]}
+                  {t(CATEGORY_LABELS[cat])}
                 </option>
               ))}
             </select>
             <textarea
-              placeholder="Describe the issue..."
+              placeholder={t("Describe the issue...")}
               value={draft.comment}
               onChange={(e) => setDraft({ ...draft, comment: e.target.value })}
               rows={3}
@@ -199,7 +201,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
                 onClick={handleSubmitDraft}
                 className="flex-1 bg-ink-black text-white text-[10px] font-mono font-extrabold uppercase py-1.5 border-2 border-ink-black hover:bg-neutral-800 transition-colors cursor-pointer flex items-center justify-center gap-1"
               >
-                <Send className="w-3 h-3" /> Save
+                <Send className="w-3 h-3" /> {t("Save")}
               </button>
               <button
                 onClick={() => setDraft(null)}
@@ -236,6 +238,7 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({
   currentPageNumber,
   onJumpToPage,
 }) => {
+  const { t } = useLanguage();
   const allAnnotations = pages.flatMap((p) =>
     p.annotations.map((a) => ({ ...a, pageNumber: p.pageNumber })),
   );
@@ -247,11 +250,11 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({
       <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black">
         <div className="flex items-center justify-between">
           <h3 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-            Comments
+            {t("Comments")}
           </h3>
           {unresolvedCount > 0 && (
             <span className="bg-[#E63946] text-white text-[9px] font-mono font-bold px-1.5 py-0.5 border border-red-400">
-              {unresolvedCount} open
+              {unresolvedCount} {t("open")}
             </span>
           )}
         </div>
@@ -262,7 +265,7 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({
         {allAnnotations.length === 0 ? (
           <div className="p-4 text-center">
             <MessageSquarePlus className="w-8 h-8 text-neutral-300 mx-auto mb-2" />
-            <p className="font-mono text-[10px] text-neutral-400 uppercase">No annotations yet</p>
+            <p className="font-mono text-[10px] text-neutral-400 uppercase">{t("No annotations yet")}</p>
           </div>
         ) : (
           <div className="divide-y divide-neutral-100">
@@ -291,7 +294,7 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1 mb-0.5">
                         <span className="font-mono text-[8px] font-extrabold uppercase text-neutral-500">
-                          {CATEGORY_LABELS[ann.category]}
+                          {t(CATEGORY_LABELS[ann.category])}
                         </span>
                         <span className="font-mono text-[8px] text-neutral-400">
                           · P.{ann.pageNumber}
@@ -306,7 +309,7 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({
                         </span>
                         {ann.resolved ? (
                           <span className="text-emerald-500 flex items-center gap-0.5 text-[9px] font-mono">
-                            <CheckCircle2 className="w-3 h-3" /> resolved
+                            <CheckCircle2 className="w-3 h-3" /> {t("resolved")}
                           </span>
                         ) : (
                           <button
@@ -316,7 +319,7 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({
                             }}
                             className="text-[9px] font-mono text-neutral-400 hover:text-emerald-600 transition-colors cursor-pointer uppercase"
                           >
-                            Resolve
+                            {t("Resolve")}
                           </button>
                         )}
                       </div>
@@ -349,6 +352,7 @@ export const ManuscriptViewer: React.FC<ManuscriptViewerProps> = ({
   onSelectAnnotation,
   onAddAnnotation,
 }) => {
+  const { t } = useLanguage();
   const [currentPage, setCurrentPage] = useState(0);
   const [zoom, setZoom] = useState(100);
   const [isAddingAnnotation, setIsAddingAnnotation] = useState(false);
@@ -389,7 +393,7 @@ export const ManuscriptViewer: React.FC<ManuscriptViewerProps> = ({
           {/* Annotation mode toggle */}
           <button
             onClick={() => setIsAddingAnnotation((v) => !v)}
-            title="Add Annotation Pin"
+            title={t("Add Annotation Pin")}
             className={`w-7 h-7 flex items-center justify-center transition-colors border cursor-pointer ${
               isAddingAnnotation
                 ? 'bg-[#E63946] text-white border-red-400'
@@ -439,7 +443,7 @@ export const ManuscriptViewer: React.FC<ManuscriptViewerProps> = ({
         <div className="px-4 py-2 bg-[#E63946] flex items-center gap-2 flex-shrink-0">
           <Pin className="w-3.5 h-3.5 text-white" />
           <span className="font-mono text-[10px] text-white font-extrabold uppercase tracking-widest">
-            Click on the page to add annotation — click the pin button again to exit
+            {t("Click on the page to add annotation — click the pin button again to exit")}
           </span>
         </div>
       )}
@@ -457,6 +461,7 @@ interface ReviewActionBarProps {
   onApprove: () => void;
   loading?: boolean;
   chapterStatus: string;
+  canReview?: boolean;
 }
 
 export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({
@@ -465,7 +470,9 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({
   onApprove,
   loading,
   chapterStatus,
+  canReview = true,
 }) => {
+  const { t } = useLanguage();
   const isApproved = chapterStatus === 'SENT_TO_EDITORIAL' || chapterStatus === 'APPROVED';
 
   return (
@@ -475,24 +482,24 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({
         disabled={loading}
         className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 text-white border border-neutral-600 text-xs font-mono font-extrabold uppercase transition-colors cursor-pointer disabled:opacity-50"
       >
-        Save Review
+        {t("Save Review")}
       </button>
       <div className="flex-1" />
       <button
         onClick={onRequestRevision}
-        disabled={loading || isApproved}
+        disabled={loading || isApproved || !canReview}
         className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white border-2 border-orange-700 text-xs font-mono font-extrabold uppercase shadow-[2px_2px_0px_#141414] transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
       >
         <AlertCircle className="w-3.5 h-3.5" />
-        Request Revision
+        {t("Request Revision")}
       </button>
       <button
         onClick={onApprove}
-        disabled={loading || isApproved}
+        disabled={loading || isApproved || !canReview}
         className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white border-2 border-emerald-700 text-xs font-mono font-extrabold uppercase shadow-[2px_2px_0px_#141414] transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
       >
         <CheckCircle2 className="w-3.5 h-3.5" />
-        {isApproved ? 'Approved ✓' : 'Approve & Submit'}
+        {isApproved ? t("Approved") : !canReview ? t("Awaiting Mangaka Review") : t("Approve & Submit")}
       </button>
     </div>
   );

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useLanguage } from '../../../../i18n/LanguageContext';
 
 interface ModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export const Modal: React.FC<ModalProps> = ({
   size = 'md',
   actions,
 }) => {
+  const { t } = useLanguage();
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -55,7 +57,7 @@ export const Modal: React.FC<ModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b-2 border-ink-black bg-ink-black">
           <h2 className="font-syne font-extrabold text-white text-sm uppercase tracking-widest">
-            {title}
+            {t(title)}
           </h2>
           <button
             onClick={onClose}
@@ -93,6 +95,7 @@ interface ConfirmDialogProps {
   cancelLabel?: string;
   variant?: 'danger' | 'warning' | 'default';
   loading?: boolean;
+  children?: React.ReactNode;
 }
 
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
@@ -105,7 +108,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   cancelLabel = 'Cancel',
   variant = 'default',
   loading = false,
+  children,
 }) => {
+  const { t } = useLanguage();
   const confirmBtnStyle =
     variant === 'danger'
       ? 'bg-red-600 hover:bg-red-700 border-red-700'
@@ -116,20 +121,21 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
       <p className="text-sm font-sans text-neutral-700 leading-relaxed">{message}</p>
+      {children}
       <div className="mt-5 flex items-center justify-end gap-2">
         <button
           onClick={onClose}
           disabled={loading}
           className="px-4 py-2 border-2 border-ink-black bg-white text-ink-black text-xs font-mono font-extrabold uppercase hover:bg-neutral-50 transition-colors cursor-pointer shadow-[2px_2px_0px_#141414] disabled:opacity-50"
         >
-          {cancelLabel}
+          {t(cancelLabel)}
         </button>
         <button
           onClick={onConfirm}
           disabled={loading}
           className={`px-4 py-2 border-2 ${confirmBtnStyle} text-white text-xs font-mono font-extrabold uppercase transition-colors cursor-pointer shadow-[2px_2px_0px_#141414] disabled:opacity-50`}
         >
-          {loading ? 'Processing...' : confirmLabel}
+          {loading ? t('Processing...') : t(confirmLabel)}
         </button>
       </div>
     </Modal>

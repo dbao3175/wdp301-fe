@@ -253,6 +253,8 @@ class StudioNotification {
     required this.content,
     required this.type,
     required this.isRead,
+    this.recipientId = '',
+    this.recipientName = '',
     this.createdAt,
   });
 
@@ -261,6 +263,8 @@ class StudioNotification {
   final String content;
   final String type;
   final bool isRead;
+  final String recipientId;
+  final String recipientName;
   final DateTime? createdAt;
 
   factory StudioNotification.fromJson(Json json) => StudioNotification(
@@ -269,6 +273,8 @@ class StudioNotification {
         content: textOf(json['content'] ?? json['message']),
         type: textOf(json['type'], 'INFO'),
         isRead: json['isRead'] == true,
+        recipientId: idOf(json['userId']),
+        recipientName: ownerName(json['userId'], ''),
         createdAt: dateOf(json['createdAt']),
       );
 }
@@ -281,6 +287,7 @@ class SeriesProposal {
     required this.synopsis,
     required this.status,
     required this.authorName,
+    this.storyboardImages = const [],
     this.createdAt,
   });
 
@@ -290,19 +297,29 @@ class SeriesProposal {
   final String synopsis;
   final String status;
   final String authorName;
+  final List<String> storyboardImages;
   final DateTime? createdAt;
 
-  factory SeriesProposal.fromJson(Json json) => SeriesProposal(
-        id: idOf(json['_id'] ?? json['id']),
-        title: textOf(json['title'], 'Untitled proposal'),
-        genre: textOf(json['genre'], 'General'),
-        synopsis: textOf(json['synopsis']),
-        status: textOf(json['status'], 'SUBMITTED'),
-        authorName: ownerName(
-            json['mangakaId'] ?? json['authorId'] ?? json['createdBy'],
-            'Mangaka'),
-        createdAt: dateOf(json['createdAt'] ?? json['submittedAt']),
-      );
+  factory SeriesProposal.fromJson(Json json) {
+    final images = jsonListOf(json['storyboardImages'])
+        .map((item) => textOf(item['url']))
+        .where((url) => url.isNotEmpty)
+        .toList(growable: true);
+    final legacyUrl = textOf(json['storyboardUrl']);
+    if (images.isEmpty && legacyUrl.isNotEmpty) images.add(legacyUrl);
+    return SeriesProposal(
+      id: idOf(json['_id'] ?? json['id']),
+      title: textOf(json['title'], 'Untitled proposal'),
+      genre: textOf(json['genre'], 'General'),
+      synopsis: textOf(json['synopsis']),
+      status: textOf(json['status'], 'SUBMITTED'),
+      authorName: ownerName(
+          json['mangakaId'] ?? json['authorId'] ?? json['createdBy'],
+          'Mangaka'),
+      storyboardImages: List.unmodifiable(images),
+      createdAt: dateOf(json['createdAt'] ?? json['submittedAt']),
+    );
+  }
 }
 
 class BoardVote {
@@ -333,6 +350,7 @@ class BoardSubmission {
     required this.status,
     required this.synopsis,
     required this.votes,
+    this.proposalId = '',
     this.requiredVotes = 0,
     this.createdAt,
   });
@@ -343,6 +361,7 @@ class BoardSubmission {
   final String status;
   final String synopsis;
   final List<BoardVote> votes;
+  final String proposalId;
   final int requiredVotes;
   final DateTime? createdAt;
 
@@ -368,6 +387,7 @@ class BoardSubmission {
       votes: jsonListOf(json['votes'])
           .map(BoardVote.fromJson)
           .toList(growable: false),
+      proposalId: idOf(json['proposalId'] ?? json['proposal']),
       requiredVotes: requiredVoters is List
           ? requiredVoters.length
           : intOf(json['requiredVotes']),

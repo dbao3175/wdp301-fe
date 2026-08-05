@@ -5,6 +5,7 @@ import { CheckSquare, X, Gavel, Plus } from 'lucide-react';
 import BoardPublicationPanel from '../features/board/BoardPublicationPanel';
 import ReaderMetricsPanel from '../features/board/ReaderMetricsPanel';
 import StoryboardGallery, { StoryboardImage } from './StoryboardGallery';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface EditorialBoardProps {
   currentUser: User;
@@ -33,6 +34,7 @@ export default function EditorialBoard({
   ratings,
   onRefreshAll
 }: EditorialBoardProps) {
+  const { t } = useLanguage();
   // Real backend proposal lists
   const [proposalsList, setProposalsList] = useState<any[]>([]);
   const [boardMembers, setBoardMembers] = useState<User[]>([]);
@@ -168,7 +170,7 @@ export default function EditorialBoard({
   const handleModalVoteSubmit = async () => {
     if (!selectedProposal) return;
     if (!modalVoteForm.comment.trim()) {
-      setModalMessage('❌ Comment is required for editorial voting.');
+      setModalMessage(`❌ ${t('Comment is required for editorial voting.')}`);
       return;
     }
     setModalSubmitting(true);
@@ -199,8 +201,7 @@ export default function EditorialBoard({
           scheduleParam,
         );
       }
-    
-      setModalMessage('🎉 Vote recorded successfully!');
+      setModalMessage(`🎉 ${t('Vote recorded successfully!')}`);
       
       const votes = await apiClient.votes.getForSubmission(selectedProposal._id);
       setModalVotes(Array.isArray(votes) ? votes : (votes as any)?.data || []);
@@ -212,7 +213,7 @@ export default function EditorialBoard({
       onRefreshAll();
       closeModal();
     } catch (err: any) {
-      setModalMessage(`❌ ${err.message}`);
+      setModalMessage(`❌ ${t(err.message)}`);
     } finally {
       setModalSubmitting(false);
     }
@@ -234,7 +235,7 @@ export default function EditorialBoard({
       setSelectedVoterIds([]);
       fetchAllProposals();
     } catch (err: any) {
-      setModalMessage(`❌ ${err.message}`);
+      setModalMessage(`❌ ${t(err.message)}`);
     }
   };
 
@@ -267,15 +268,15 @@ export default function EditorialBoard({
       const data = await apiClient.directives.getAll();
       setSubmissionsList(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      setDirectiveError(err.message || 'Failed to load board directives.');
+      setDirectiveError(t(err.message || 'Failed to load board directives.'));
     } finally {
       setLoadingDirectives(false);
     }
   };
 
   const handleCreateDirective = async () => {
-    if (!dirForm.seriesId) { setDirMsg('❌ Select a series.'); return; }
-    if (!dirForm.reason.trim()) { setDirMsg('❌ Reason is required.'); return; }
+    if (!dirForm.seriesId) { setDirMsg(`❌ ${t('Select a series.')}`); return; }
+    if (!dirForm.reason.trim()) { setDirMsg(`❌ ${t('Reason is required.')}`); return; }
     try {
       await apiClient.directives.create(
         dirForm.seriesId,
@@ -283,20 +284,20 @@ export default function EditorialBoard({
         dirForm.reason.trim(),
         dirForm.actionType === 'CHANGE_FORMAT' ? dirForm.newSchedule : undefined,
       );
-      setDirMsg('✅ Post-decision submission created!');
+      setDirMsg(`✅ ${t('Post-decision submission created!')}`);
       setDirForm({ seriesId: '', actionType: 'CANCEL', newSchedule: 'MONTHLY', reason: '' });
       setShowDirectiveForm(false);
       onRefreshAll();
       setTimeout(fetchSubmissions, 300);
       setTimeout(() => setDirMsg(''), 5000);
     } catch (err: any) {
-      setDirMsg(`❌ ${err.message}`);
+      setDirMsg(`❌ ${t(err.message)}`);
     }
   };
 
   const handleSubmissionVoteSubmit = async () => {
     if (!selectedDirective) return;
-    if (!dirVoteForm.comment.trim()) { setDirVoteMsg('❌ Comment required.'); return; }
+    if (!dirVoteForm.comment.trim()) { setDirVoteMsg(`❌ ${t('Comment required.')}`); return; }
     setDirVoteSubmitting(true);
     try {
       const isTieBreak = selectedDirective.status === 'TIE_BREAK_REQUIRED';
@@ -304,12 +305,12 @@ export default function EditorialBoard({
         ? apiClient.directives.tieBreak
         : apiClient.directives.vote;
       await submit(selectedDirective._id, dirVoteForm.decision, dirVoteForm.comment.trim());
-      setDirVoteMsg('✅ Vote recorded!');
+      setDirVoteMsg(`✅ ${t('Vote recorded!')}`);
       onRefreshAll();
       setTimeout(fetchSubmissions, 300);
       closeDirectiveModal();
     } catch (err: any) {
-      setDirVoteMsg(`❌ ${err.message}`);
+      setDirVoteMsg(`❌ ${t(err.message)}`);
     } finally {
       setDirVoteSubmitting(false);
     }
@@ -343,10 +344,10 @@ export default function EditorialBoard({
     <div className="space-y-6">
       <header className="mb-8 pb-5 border-b-4 border-ink-black flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="font-syne text-3xl font-black text-ink-black uppercase italic tracking-tight">Editorial Board</h1>
+          <h1 className="font-syne text-3xl font-black text-ink-black uppercase italic tracking-tight">{t("Editorial Board")}</h1>
           <p className="font-sans text-xs text-neutral-600 font-bold uppercase tracking-wider mt-1.5 flex items-center gap-2">
             <span className="inline-block w-2.5 h-2.5 bg-[#E63946]"></span>
-            Majority vote required to approve proposals. Vote tally & serialization decisions panel.
+            {t("Majority vote required to approve proposals. Vote tally & serialization decisions panel.")}
           </p>
         </div>
       </header>
@@ -355,10 +356,10 @@ export default function EditorialBoard({
         <section className="xl:col-span-8 flex flex-col gap-6">
           <h2 className="font-syne text-xl font-black uppercase text-ink-black pb-4 border-b-4 border-ink-black flex items-center gap-3 select-none">
             <CheckSquare className="text-[#E63946] w-6 h-6 animate-pulse" />
-            Pending Series Voting
+            {t("Pending Series Voting")}
             {pendingPitches.length > 0 && (
               <span className="ml-auto text-[10px] font-mono font-black text-neutral-500">
-                {pendingPitches.length} PROPOSAL{pendingPitches.length > 1 ? 'S' : ''} AWAITING BOARD DECISION
+                {t("{{count}} proposals awaiting board decision", { count: pendingPitches.length })}
               </span>
             )}
           </h2>
@@ -372,10 +373,10 @@ export default function EditorialBoard({
               return (
                 <div key={item._id} className="bg-white border-4 border-ink-black border-t-0 first:border-t-4 p-5 flex items-center gap-5 hover:bg-manuscript-gray transition-colors">
                   <div className="w-16 h-20 bg-neutral-200 border-2 border-ink-black shrink-0-0 overflow-hidden">
-                    <div className="w-full h-full flex items-center justify-center text-neutral-400 text-[9px] font-mono font-bold">NO COVER</div>
+                    <div className="w-full h-full flex items-center justify-center text-neutral-400 text-[9px] font-mono font-bold">{t("No Cover")}</div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-syne text-sm font-black uppercase tracking-tight text-ink-black truncate">{prop.title || 'Untitled'}</h3>
+                    <h3 className="font-syne text-sm font-black uppercase tracking-tight text-ink-black truncate">{prop.title || t("Untitled")}</h3>
                     <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
                       Author: {prop.isAnonymous ? 'Anonymous' : (prop.mangakaId ? (prop.mangakaId as any).name || 'Mangaka' : 'Mangaka')}
                     </p>
@@ -386,13 +387,13 @@ export default function EditorialBoard({
                       </span>
                       {item.decisionStatus === 'TIE_BREAK_REQUIRED' && (
                         <span className="px-2 py-0.5 text-[8px] font-mono font-black uppercase bg-[#E63946] text-white border border-ink-black">
-                          Tie-break required
+                          {t('Tie-break required')}
                         </span>
                       )}
                     </div>
                   </div>
                   <div className="shrink-0-0 text-center px-4 py-2 border-2 border-ink-black bg-manuscript-gray min-w-[100px]">
-                    <div className="font-mono text-xs font-black text-ink-black">Voters Status</div>
+                    <div className="font-mono text-xs font-black text-ink-black">{t("Voters Status")}</div>
                     <div className="font-mono text-sm font-black text-[#E63946]">
                       {votedCount}/{totalRequired}
                     </div>
@@ -403,14 +404,14 @@ export default function EditorialBoard({
                     )}
                   </div>
                   <button onClick={() => openProposalModal(item)} className="shrink-0-0 bg-[#E63946] hover:bg-red-600 text-white font-syne text-[10px] font-extrabold uppercase py-2.5 px-5 border-2 border-ink-black shadow-[3px_3px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
-                    Review & Vote
+                    {t("Review & Vote")}
                   </button>
                 </div>
               );
             })}
             {pendingPitches.length === 0 && (
               <div className="bg-white border-4 border-dashed border-ink-black rounded-none p-12 text-center text-xs font-mono font-bold text-neutral-500 uppercase select-none">
-                🌸 Perfect! All series proposals have been reviewed and voted on. No waiting items.
+                🌸 {t("Perfect! All series proposals have been reviewed and voted on. No waiting items.")}
               </div>
             )}
           </div>
@@ -418,7 +419,7 @@ export default function EditorialBoard({
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 pt-4">
               <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="bg-white border-2 border-ink-black px-3 py-1.5 font-mono text-[10px] font-bold uppercase hover:bg-manuscript-gray disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors">
-                ← Prev
+                ← {t("Previous")}
               </button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                 <button key={page} onClick={() => setCurrentPage(page)} className={`w-9 h-9 border-2 border-ink-black font-mono text-xs font-black transition-colors cursor-pointer ${page === currentPage ? 'bg-ink-black text-white shadow-[2px_2px_0px_#E63946]' : 'bg-white text-ink-black hover:bg-manuscript-gray'}`}>
@@ -426,7 +427,7 @@ export default function EditorialBoard({
                 </button>
               ))}
               <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="bg-white border-2 border-ink-black px-3 py-1.5 font-mono text-[10px] font-bold uppercase hover:bg-manuscript-gray disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors">
-                Next →
+                {t("Next")} →
               </button>
             </div>
           )}
@@ -450,10 +451,10 @@ export default function EditorialBoard({
           <section className="bg-white border-4 border-ink-black rounded-none p-6 shadow-[4px_4px_0px_#141414]">
             <h2 className="font-syne text-md font-black uppercase text-ink-black border-b-2 border-ink-black pb-3 mb-4 flex items-center gap-2 select-none">
               <Gavel className="text-[#E63946] w-5 h-5" />
-              Board Directive Proposals
+              {t("Board Directive Proposals")}
             </h2>
             <p className="font-sans text-[10px] text-neutral-500 font-bold uppercase tracking-wider mb-4">
-              Propose to continue, cancel, or change a series format. Majority vote required.
+              {t("Propose to continue, cancel, or change a series format. Majority vote required.")}
             </p>
 
             {dirMsg && (
@@ -466,7 +467,7 @@ export default function EditorialBoard({
             <div className="space-y-3 mb-4">
               {loadingDirectives && (
                 <div className="bg-manuscript-gray border-2 border-neutral-300 p-4 text-center text-xs font-mono font-bold text-neutral-500 uppercase">
-                  Loading directives...
+                  {t("Loading directives...")}
                 </div>
               )}
               {directiveError && (
@@ -474,7 +475,7 @@ export default function EditorialBoard({
               )}
               {!loadingDirectives && submissionsList.length === 0 && (
                 <div className="bg-manuscript-gray border-2 border-dashed border-neutral-300 p-4 text-center text-xs font-mono font-bold text-neutral-400 uppercase">
-                  No active post-decision directives
+                  {t("No active post-decision directives")}
                 </div>
               )}
               {submissionsList.map(d => {
@@ -488,13 +489,13 @@ export default function EditorialBoard({
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex-1 min-w-0">
                         {d.actionType === 'CONTINUE' && (
-                          <span className="inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 bg-status-success/15 text-green-800 border border-status-success">CONTINUE SERIES</span>
+                          <span className="inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 bg-status-success/15 text-green-800 border border-status-success">{t("Continue Series")}</span>
                         )}
                         <span className={`inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 ${d.actionType === 'CONTINUE' ? 'hidden' : d.actionType === 'CANCEL' ? 'bg-[#E63946] text-white' : 'bg-[#FFF3B0] text-ink-black border border-ink-black'}`}>
-                          {d.actionType === 'CANCEL' ? 'CANCEL SERIES' : `CHANGE → ${d.newSchedule || 'MONTHLY'}`}
+                          {d.actionType === 'CANCEL' ? t('Cancel Series') : `${t('Change')} → ${t(d.newSchedule || 'MONTHLY')}`}
                         </span>
                         <span className="inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 border border-ink-black bg-white">
-                          {d.status.replaceAll('_', ' ')}
+                          {t(d.status)}
                         </span>
                         <span className="font-syne text-xs font-black text-ink-black truncate">{d.seriesTitle || targetSeriesId}</span>
                       </div>
@@ -508,17 +509,17 @@ export default function EditorialBoard({
                           <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                           </svg>
-                          Series
+                          {t("Series")}
                         </a>
                       )}
                     </div>
                     <p className="font-sans text-[10px] text-neutral-500 line-clamp-2 mb-2">{d.reason}</p>
                     <div className="flex items-center gap-3 mb-2">
                       <div className="flex items-center gap-1">
-                        <span className="font-mono text-[9px] text-status-success font-black">{acceptCount}Y</span>
+                        <span className="font-mono text-[9px] text-status-success font-black">{acceptCount} {t('Yes short')}</span>
                         <span className="font-mono text-[9px] text-neutral-400">/</span>
-                        <span className="font-mono text-[9px] text-[#E63946] font-black">{rejectCount}N</span>
-                        <span className="font-mono text-[9px] text-neutral-400 ml-1">({totalCount} total)</span>
+                        <span className="font-mono text-[9px] text-[#E63946] font-black">{rejectCount} {t('No short')}</span>
+                        <span className="font-mono text-[9px] text-neutral-400 ml-1">({totalCount} {t('total')})</span>
                       </div>
                       {d.votingDeadline && (
                         <span className={`font-mono text-[9px] font-black uppercase ${new Date(d.votingDeadline) < new Date() ? 'text-[#E63946]' : 'text-neutral-500'}`}>
@@ -527,7 +528,7 @@ export default function EditorialBoard({
                       )}
                     </div>
                     <button onClick={() => openDirectiveModal(d)} className="w-full bg-ink-black hover:bg-neutral-800 text-white font-syne text-[9px] font-extrabold uppercase py-2 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
-                      Review & Vote
+                      {t("Review & Vote")}
                     </button>
                   </div>
                 );
@@ -538,48 +539,48 @@ export default function EditorialBoard({
             {!showDirectiveForm ? (
               <button onClick={() => { setShowDirectiveForm(true); setDirMsg(''); }} className="w-full flex items-center justify-center gap-2 bg-[#E63946] border-2 border-ink-black hover:bg-red-600 text-white font-syne text-xs uppercase font-extrabold py-3 rounded-none shadow-[2px_2px_0px_#141414] transition-colors cursor-pointer">
                 <Plus className="w-4 h-4" />
-                Propose New Directive
+                {t("Propose New Directive")}
               </button>
             ) : (
               <div className="border-4 border-ink-black p-4 space-y-3 bg-manuscript-gray">
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">New Directive Proposal</h3>
+                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">{t("New Directive Proposal")}</h3>
                   <button onClick={() => setShowDirectiveForm(false)} className="p-1 hover:bg-white border border-ink-black cursor-pointer">
                     <X className="w-3 h-3" />
                   </button>
                 </div>
                 <div>
-                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">Select Series</label>
+                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">{t("Select Series")}</label>
                   <select value={dirForm.seriesId} onChange={(e) => setDirForm({ ...dirForm, seriesId: e.target.value })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none cursor-pointer">
-                    <option value="">Choose active series...</option>
+                    <option value="">{t("Choose active series...")}</option>
                     {activeSeries.map(s => (
-                      <option key={s._id} value={s._id}>{s.title} ({s.status}{s.pubSchedule ? ` / ${s.pubSchedule}` : ''})</option>
+                      <option key={s._id} value={s._id}>{s.title} ({t(s.status)}{s.pubSchedule ? ` / ${t(s.pubSchedule)}` : ''})</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">Action Type</label>
+                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">{t("Action Type")}</label>
                   <select value={dirForm.actionType} onChange={(e) => setDirForm({ ...dirForm, actionType: e.target.value as DirectiveAction })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none cursor-pointer">
-                    <option value="CANCEL">Cancel Series (low ranking)</option>
-                    <option value="CONTINUE">Continue Series</option>
-                    <option value="CHANGE_FORMAT">Change Publication Format</option>
+                    <option value="CANCEL">{t("Cancel Series (low ranking)")}</option>
+                    <option value="CONTINUE">{t("Continue Series")}</option>
+                    <option value="CHANGE_FORMAT">{t("Change Publication Format")}</option>
                   </select>
                 </div>
                 {dirForm.actionType === 'CHANGE_FORMAT' && (
                   <div>
-                    <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">New Schedule</label>
+                    <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">{t("New Schedule")}</label>
                     <select value={dirForm.newSchedule} onChange={(e) => setDirForm({ ...dirForm, newSchedule: e.target.value as 'WEEKLY' | 'MONTHLY' })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none cursor-pointer">
-                      <option value="WEEKLY">WEEKLY</option>
-                      <option value="MONTHLY">MONTHLY</option>
+                      <option value="WEEKLY">{t("Weekly")}</option>
+                      <option value="MONTHLY">{t("Monthly")}</option>
                     </select>
                   </div>
                 )}
                 <div>
-                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">Justification (Required)</label>
-                  <textarea rows={3} value={dirForm.reason} onChange={(e) => setDirForm({ ...dirForm, reason: e.target.value })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none resize-none" placeholder="Explain why this directive is needed (e.g. low reader ranking data)..."></textarea>
+                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">{t("Justification (Required)")}</label>
+                  <textarea rows={3} value={dirForm.reason} onChange={(e) => setDirForm({ ...dirForm, reason: e.target.value })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none resize-none" placeholder={t("Explain why this directive is needed (e.g. low reader ranking data)...")}></textarea>
                 </div>
                 <button onClick={handleCreateDirective} className="w-full bg-ink-black hover:bg-neutral-800 text-white font-syne text-xs uppercase font-extrabold py-3 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
-                  Submit Proposal
+                  {t("Submit Proposal")}
                 </button>
               </div>
             )}
@@ -608,19 +609,19 @@ export default function EditorialBoard({
                 <div className="grid grid-cols-4 gap-3">
                   <div className="bg-status-success/10 border-2 border-status-success p-3 text-center">
                     <div className="font-mono text-2xl font-black text-status-success">{acceptVoteCount}</div>
-                    <div className="font-mono text-[9px] font-bold text-status-success uppercase">Accept</div>
+                    <div className="font-mono text-[9px] font-bold text-status-success uppercase">{t('Accept')}</div>
                   </div>
                   <div className="bg-[#E63946]/10 border-2 border-[#E63946] p-3 text-center">
                     <div className="font-mono text-2xl font-black text-[#E63946]">{rejectVoteCount}</div>
-                    <div className="font-mono text-[9px] font-bold text-[#E63946] uppercase">Reject</div>
+                    <div className="font-mono text-[9px] font-bold text-[#E63946] uppercase">{t('Reject')}</div>
                   </div>
                   <div className="bg-[#FFF3B0]/60 border-2 border-[#B7791F] p-3 text-center">
                     <div className="font-mono text-2xl font-black text-[#B7791F]">{modalAwaitingCount}</div>
-                    <div className="font-mono text-[9px] font-bold text-[#B7791F] uppercase">Awaiting</div>
+                    <div className="font-mono text-[9px] font-bold text-[#B7791F] uppercase">{t('Awaiting')}</div>
                   </div>
                   <div className="bg-manuscript-gray border-2 border-ink-black p-3 text-center">
                     <div className="font-mono text-2xl font-black text-ink-black">{modalRequiredCount ? `${totalCast}/${modalRequiredCount}` : totalCast}</div>
-                    <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">Cast</div>
+                    <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">{t('Cast')}</div>
                   </div>
                 </div>
 
@@ -632,7 +633,7 @@ export default function EditorialBoard({
                   )}
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">Author Pitch Synopsis:</span>
+                      <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">{t('Author Pitch Synopsis:')}</span>
                       <p className="font-sans text-xs leading-relaxed font-bold text-ink-black">{selectedProposal.synopsis}</p>
                     </div>
                     <div className="shrink-0 flex flex-col gap-2">
@@ -646,7 +647,7 @@ export default function EditorialBoard({
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                           </svg>
-                          View Series
+                          {t('View Series')}
                         </a>
                       )}
                     </div>
@@ -672,12 +673,12 @@ export default function EditorialBoard({
                 {/* Voter Assignment Section */}
                 {!isProposalTieBreak && (
                 <div className="bg-manuscript-gray p-4 border-2 border-ink-black space-y-3">
-                  <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1">Assign Required Voters:</span>
+                  <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1">{t('Assign Required Voters:')}</span>
                   
                   {/* Current voters list */}
                   {voterStatus && voterStatus.voters && voterStatus.voters.length > 0 && (
                     <div className="space-y-1 mb-3">
-                      <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase">Assigned Board Members:</p>
+                      <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase">{t('Assigned Board Members:')}</p>
                       <div className="flex flex-wrap gap-1.5">
                         {voterStatus.voters.map((v: any) => {
                           const voterId = v.userId?._id || v.userId;
@@ -690,7 +691,7 @@ export default function EditorialBoard({
                               : 'bg-[#FFF3B0]/60 border-[#B7791F] text-[#B7791F]';
                           return (
                             <span key={voterId} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono font-black uppercase border ${chipClass}`}>
-                              {v.userId?.name || 'Unknown'} - {decision || 'WAITING'}
+                              {v.userId?.name || t('Unknown')} - {t(decision || 'WAITING')}
                             </span>
                           );
                         })}
@@ -700,7 +701,7 @@ export default function EditorialBoard({
 
                   {/* Checkbox list of available board members to add */}
                   <div className="space-y-1">
-                    <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase">Available Board Members:</p>
+                    <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase">{t('Available Board Members:')}</p>
                     <div className="border-2 border-ink-black p-2 bg-white max-h-28 overflow-y-auto">
                       {boardMembers
                         .filter(m => !voterStatus?.voters?.some((v: any) => (v.userId?._id || v.userId) === m._id))
@@ -722,7 +723,7 @@ export default function EditorialBoard({
                           </label>
                         ))}
                       {boardMembers.filter(m => !voterStatus?.voters?.some((v: any) => (v.userId?._id || v.userId) === m._id)).length === 0 && (
-                        <p className="font-mono text-[9px] text-neutral-400 text-center py-2">All board members already assigned.</p>
+                        <p className="font-mono text-[9px] text-neutral-400 text-center py-2">{t('All board members already assigned.')}</p>
                       )}
                     </div>
                   </div>
@@ -746,13 +747,13 @@ export default function EditorialBoard({
 
                 {uniqueModalVotes.length > 0 && (
                   <div>
-                    <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black mb-2">Board Member Votes</h3>
+                    <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black mb-2">{t('Board Member Votes')}</h3>
                     <div className="space-y-2">
                       {uniqueModalVotes.map(vote => (
                         <div key={vote._id} className={`p-3 border-2 ${vote.decision === 'ACCEPT' ? 'border-status-success bg-status-success/5' : 'border-[#E63946] bg-[#E63946]/5'}`}>
                           <div className="flex items-center gap-2 mb-1">
                             <span className={`px-2 py-0.5 text-[8px] font-mono font-black uppercase ${vote.decision === 'ACCEPT' ? 'bg-status-success text-white' : 'bg-[#E63946] text-white'}`}>
-                              {vote.decision}
+                              {t(vote.decision)}
                             </span>
                             {vote.schedule && (
                               <span className="px-2 py-0.5 text-[8px] font-mono font-black uppercase bg-[#FFF3B0] text-ink-black border border-ink-black">
@@ -786,9 +787,9 @@ export default function EditorialBoard({
                   if (isProposalTieBreak && !canResolveProposalTie) {
                     return (
                       <div className="bg-[#FFF3B0]/40 border-4 border-[#FFF3B0] p-5 text-center">
-                        <p className="font-mono text-xs font-black uppercase text-ink-black mb-1">Tie-break pending</p>
+                        <p className="font-mono text-xs font-black uppercase text-ink-black mb-1">{t('Tie-break pending')}</p>
                         <p className="font-sans text-[10px] text-neutral-600 font-bold">
-                          Only the assigned chairperson can choose between the tied decisions.
+                          {t('Only the assigned chairperson can choose between the tied decisions.')}
                         </p>
                       </div>
                     );
@@ -796,9 +797,9 @@ export default function EditorialBoard({
                   if (!isProposalTieBreak && !isAssigned && !userVote) {
                     return (
                       <div className="bg-neutral-100 border-4 border-dashed border-neutral-400 p-5 text-center">
-                        <p className="font-mono text-xs font-black uppercase text-neutral-500 mb-1">Currently not Assigned</p>
+                        <p className="font-mono text-xs font-black uppercase text-neutral-500 mb-1">{t('Currently not Assigned')}</p>
                         <p className="font-sans text-[10px] text-neutral-400 font-bold">
-                          You are not assigned as a voter for this submission. Assign yourself or wait for assignment.
+                          {t('You are not assigned as a voter for this submission. Assign yourself or wait for assignment.')}
                         </p>
                       </div>
                     );
@@ -807,7 +808,7 @@ export default function EditorialBoard({
                     return (
                       <div className={`p-4 border-4 ${userVote.decision === 'ACCEPT' ? 'border-status-success bg-status-success/10' : 'border-[#E63946] bg-[#E63946]/10'}`}>
                         <p className="font-mono text-xs font-black uppercase mb-1">
-                          ✅ You voted: {userVote.decision}
+                          ✅ {t('You voted')}: {t(userVote.decision)}
                           {userVote.schedule && ` (${userVote.schedule})`}
                         </p>
                         <p className="font-sans text-[10px] text-neutral-600 font-bold">{userVote.comment}</p>
@@ -817,7 +818,7 @@ export default function EditorialBoard({
                   return (
                     <div className="border-4 border-ink-black p-5 space-y-4">
                       <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">
-                        {isProposalTieBreak ? 'Chairperson Tie-break' : 'Cast Your Vote'}
+                        {isProposalTieBreak ? t('Chairperson Tie-break') : t('Cast Your Vote')}
                       </h3>
                       {modalMessage && (
                         <div className={`p-3 border-2 text-xs font-mono font-bold uppercase ${modalMessage.startsWith('🎉') ? 'bg-status-success/15 text-status-success border-status-success' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
@@ -834,25 +835,25 @@ export default function EditorialBoard({
                               checked={modalVoteForm.decision === option}
                               onChange={() => setModalVoteForm({ ...modalVoteForm, decision: option })}
                             />
-                            {option === 'ACCEPT' ? 'Accept Serialization' : 'Reject / Revise pitch'}
+                            {option === 'ACCEPT' ? t('Accept Serialization') : t('Reject / Revise pitch')}
                           </label>
                         ))}
                       </div>
                       {!isProposalTieBreak && modalVoteForm.decision === 'ACCEPT' && (
                         <div className="animate-fadeIn">
-                          <label className="block text-[10px] font-mono text-neutral-500 uppercase mb-1 font-bold">Preferred Schedule</label>
+                          <label className="block text-[10px] font-mono text-neutral-500 uppercase mb-1 font-bold">{t('Preferred Schedule')}</label>
                           <select className="bg-white border-2 border-ink-black rounded-none p-2 text-xs w-full focus:outline-none cursor-pointer font-bold" value={modalVoteForm.schedule} onChange={(e) => setModalVoteForm({ ...modalVoteForm, schedule: e.target.value as any })}>
-                            <option value="WEEKLY">WEEKLY</option>
-                            <option value="MONTHLY">MONTHLY</option>
+                            <option value="WEEKLY">{t("Weekly")}</option>
+                            <option value="MONTHLY">{t("Monthly")}</option>
                           </select>
                         </div>
                       )}
                       <div>
-                        <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">Editorial Feedback (Required)</label>
-                        <textarea rows={3} className="w-full bg-manuscript-gray border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder="Provide detailed feedback on the proposal..." value={modalVoteForm.comment} onChange={(e) => setModalVoteForm({ ...modalVoteForm, comment: e.target.value })}></textarea>
+                        <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">{t('Editorial Feedback (Required)')}</label>
+                        <textarea rows={3} className="w-full bg-manuscript-gray border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder={t('Provide detailed feedback on the proposal...')} value={modalVoteForm.comment} onChange={(e) => setModalVoteForm({ ...modalVoteForm, comment: e.target.value })}></textarea>
                       </div>
                       <button onClick={handleModalVoteSubmit} disabled={modalSubmitting} className="w-full bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs font-extrabold uppercase py-3 border-2 border-ink-black shadow-[4px_4px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer disabled:opacity-50">
-                        {modalSubmitting ? 'Submitting...' : isProposalTieBreak ? 'Resolve Tie' : 'Submit Vote'}
+                        {modalSubmitting ? t('Submitting...') : isProposalTieBreak ? t('Resolve Tie') : t('Submit Vote')}
                       </button>
                     </div>
                   );
@@ -872,18 +873,18 @@ export default function EditorialBoard({
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   {selectedDirective.actionType === 'CONTINUE' && (
-                    <span className="px-2 py-0.5 text-[9px] font-mono font-black uppercase bg-status-success/15 text-green-800 border border-status-success">CONTINUE SERIES</span>
+                    <span className="px-2 py-0.5 text-[9px] font-mono font-black uppercase bg-status-success/15 text-green-800 border border-status-success">{t("Continue Series")}</span>
                   )}
                   <span className={`px-2 py-0.5 text-[9px] font-mono font-black uppercase ${selectedDirective.actionType === 'CONTINUE' ? 'hidden' : selectedDirective.actionType === 'CANCEL' ? 'bg-[#E63946] text-white' : 'bg-[#FFF3B0] text-ink-black border border-ink-black'}`}>
-                    {selectedDirective.actionType === 'CANCEL' ? 'CANCEL SERIES' : `CHANGE → ${selectedDirective.newSchedule || 'MONTHLY'}`}
+                    {selectedDirective.actionType === 'CANCEL' ? t('Cancel Series') : `${t('Change')} → ${t(selectedDirective.newSchedule || 'MONTHLY')}`}
                   </span>
                   <span className="px-2 py-0.5 text-[9px] font-mono font-black uppercase border border-ink-black bg-white">
-                    {selectedDirective.status.replaceAll('_', ' ')}
+                    {t(selectedDirective.status)}
                   </span>
                 </div>
                 <h2 className="font-syne text-lg font-black uppercase tracking-tight text-ink-black">{selectedDirective.seriesTitle || selectedDirective.seriesId}</h2>
                 <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
-                  Proposed by: {selectedDirective.proposedByName || selectedDirective.proposedBy}
+                  {t('Proposed by')}: {selectedDirective.proposedByName || selectedDirective.proposedBy}
                 </p>
               </div>
               <button onClick={closeDirectiveModal} className="p-2 hover:bg-manuscript-gray border-2 border-ink-black cursor-pointer transition-colors">
@@ -900,34 +901,34 @@ export default function EditorialBoard({
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-status-success/10 border-2 border-status-success p-3 text-center">
                   <div className="font-mono text-2xl font-black text-status-success">{(selectedDirective.votes || []).filter(v => v.decision === 'ACCEPT').length}</div>
-                  <div className="font-mono text-[9px] font-bold text-status-success uppercase">Accept</div>
+                  <div className="font-mono text-[9px] font-bold text-status-success uppercase">{t('Accept')}</div>
                 </div>
                 <div className="bg-[#E63946]/10 border-2 border-[#E63946] p-3 text-center">
                   <div className="font-mono text-2xl font-black text-[#E63946]">{(selectedDirective.votes || []).filter(v => v.decision === 'REJECT').length}</div>
-                  <div className="font-mono text-[9px] font-bold text-[#E63946] uppercase">Reject</div>
+                  <div className="font-mono text-[9px] font-bold text-[#E63946] uppercase">{t('Reject')}</div>
                 </div>
                 <div className="bg-manuscript-gray border-2 border-ink-black p-3 text-center">
                   <div className="font-mono text-2xl font-black text-ink-black">{(selectedDirective.votes || []).length}</div>
-                  <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">Total Cast</div>
+                  <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">{t('Total Cast')}</div>
                 </div>
               </div>
 
               {/* Reason */}
               <div className="bg-manuscript-gray p-4 border-2 border-ink-black">
-                <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">Justification:</span>
+                <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">{t('Justification:')}</span>
                 <p className="font-sans text-xs leading-relaxed font-bold text-ink-black">{selectedDirective.reason}</p>
               </div>
 
               {/* Existing votes */}
               {(selectedDirective.votes || []).length > 0 && (
                 <div>
-                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black mb-2">Board Votes</h3>
+                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black mb-2">{t('Board Votes')}</h3>
                   <div className="space-y-2">
                     {(selectedDirective.votes || []).map(vote => (
                       <div key={vote._id} className={`p-3 border-2 ${vote.decision === 'ACCEPT' ? 'border-status-success bg-status-success/5' : 'border-[#E63946] bg-[#E63946]/5'}`}>
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`px-2 py-0.5 text-[8px] font-mono font-black uppercase ${vote.decision === 'ACCEPT' ? 'bg-status-success text-white' : 'bg-[#E63946] text-white'}`}>
-                            {vote.decision}
+                            {t(vote.decision)}
                           </span>
                           {vote.voterName && <span className="font-sans text-[9px] text-neutral-500 font-bold">{vote.voterName}</span>}
                         </div>
@@ -941,7 +942,7 @@ export default function EditorialBoard({
               {/* Cast vote form */}
               {(selectedDirective.status === 'PENDING' && !currentDirectiveVote) || canResolveDirectiveTie ? (
                 <div className="border-4 border-ink-black p-5 space-y-4">
-                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">{canResolveDirectiveTie ? 'Chairperson Tie-break' : 'Cast Your Vote'}</h3>
+                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">{canResolveDirectiveTie ? t('Chairperson Tie-break') : t('Cast Your Vote')}</h3>
                   {dirVoteMsg && (
                     <div className={`p-3 border-2 text-xs font-mono font-bold uppercase ${dirVoteMsg.startsWith('✅') ? 'bg-status-success/15 text-status-success border-status-success' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
                       {dirVoteMsg}
@@ -950,19 +951,19 @@ export default function EditorialBoard({
                   <div className="space-y-2">
                     <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-manuscript-gray text-xs font-bold font-sans uppercase">
                       <input type="radio" name="dir_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={dirVoteForm.decision === 'ACCEPT'} onChange={() => setDirVoteForm({ ...dirVoteForm, decision: 'ACCEPT' })} />
-                      Approve Directive
+                      {t('Approve Directive')}
                     </label>
                     <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-manuscript-gray text-xs font-bold font-sans uppercase">
                       <input type="radio" name="dir_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={dirVoteForm.decision === 'REJECT'} onChange={() => setDirVoteForm({ ...dirVoteForm, decision: 'REJECT' })} />
-                      Reject Directive
+                      {t('Reject Directive')}
                     </label>
                   </div>
                   <div>
-                    <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">Board Feedback (Required)</label>
-                    <textarea rows={3} className="w-full bg-manuscript-gray border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder="Explain your vote..." value={dirVoteForm.comment} onChange={(e) => setDirVoteForm({ ...dirVoteForm, comment: e.target.value })}></textarea>
+                    <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">{t('Board Feedback (Required)')}</label>
+                    <textarea rows={3} className="w-full bg-manuscript-gray border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder={t('Explain your vote...')} value={dirVoteForm.comment} onChange={(e) => setDirVoteForm({ ...dirVoteForm, comment: e.target.value })}></textarea>
                   </div>
                   <button onClick={handleSubmissionVoteSubmit} disabled={dirVoteSubmitting} className="w-full bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs font-extrabold uppercase py-3 border-2 border-ink-black shadow-[4px_4px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer disabled:opacity-50">
-                    {dirVoteSubmitting ? 'Submitting...' : canResolveDirectiveTie ? 'Resolve Tie' : 'Submit Vote'}
+                    {dirVoteSubmitting ? t('Submitting...') : canResolveDirectiveTie ? t('Resolve Tie') : t('Submit Vote')}
                   </button>
                 </div>
               ) : (
@@ -970,13 +971,13 @@ export default function EditorialBoard({
                   {currentDirectiveVote ? (
                     <div>
                       <p className="font-mono text-xs font-black uppercase mb-1">
-                        ✅ You voted: {currentDirectiveVote.decision}
+                        ✅ {t('You voted')}: {t(currentDirectiveVote.decision)}
                       </p>
                       <p className="font-sans text-[10px] text-neutral-600 font-bold">{currentDirectiveVote.comment}</p>
                     </div>
                   ) : (
                     <p className="font-mono text-xs font-black uppercase text-neutral-400">
-                      {selectedDirective.status === 'APPROVED' ? '✅ Directive APPROVED' : selectedDirective.status === 'REJECTED' ? '❌ Directive REJECTED' : 'Voting closed'}
+                      {selectedDirective.status === 'APPROVED' ? `✅ ${t('Directive approved')}` : selectedDirective.status === 'REJECTED' ? `❌ ${t('Directive rejected')}` : t('Voting closed')}
                     </p>
                   )}
                 </div>

@@ -10,3 +10,8 @@ final adminUsersProvider = FutureProvider.autoDispose<List<StudioUser>>((ref) {
 final adminAuditProvider = FutureProvider.autoDispose<List<Json>>((ref) {
   return ref.watch(studioServiceProvider).getAuditLogs();
 });
+
+final adminNotificationsProvider =
+    FutureProvider.autoDispose<List<StudioNotification>>((ref) {
+  return ref.watch(studioServiceProvider).getAdminNotifications();
+});

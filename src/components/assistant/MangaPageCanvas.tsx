@@ -5,6 +5,16 @@
 import React from 'react';
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { apiClient } from '../../api/client';
+import { useLanguage } from '../../i18n/LanguageContext';
+
+interface WorkRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  type: string;
+  comment?: string;
+}
 
 interface MangaPageCanvasProps {
   zoom: number;
@@ -13,13 +23,8 @@ interface MangaPageCanvasProps {
   onZoomReset: () => void;
   episodeLabel?: string;
   imageUrl?: string;
-  region?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    type: string;
-  } | null;
+  region?: WorkRegion | null;
+  regions?: WorkRegion[];
 }
 
 export default function MangaPageCanvas({
@@ -27,10 +32,12 @@ export default function MangaPageCanvas({
   onZoomIn,
   onZoomOut,
   onZoomReset,
-  episodeLabel = 'Page 04 · Ep. 12',
+  episodeLabel,
   imageUrl,
   region,
+  regions,
 }: MangaPageCanvasProps) {
+  const { t } = useLanguage();
   // If the imageUrl is a relative uploads path, point it to the backend port
   const cleanPath = imageUrl && imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
   const fullImageUrl = imageUrl 
@@ -39,18 +46,19 @@ export default function MangaPageCanvas({
         : `${apiClient.getConfig().baseUrl}/${cleanPath}`)
     : undefined;
 
+  const workRegions = regions?.length ? regions : region ? [region] : [];
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Canvas toolbar */}
       <div className="flex items-center justify-between px-4 py-2 bg-[#181820] border-b border-[#2d2d34] shrink-0">
         <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
-          Manga Canvas
+          {t("Manga Canvas")}
         </span>
         <div className="flex items-center gap-1">
           <button
             onClick={onZoomOut}
             className="p-1.5 rounded-md hover:bg-[#2d2d34] text-slate-500 hover:text-white transition-colors cursor-pointer"
-            title="Zoom out"
+            title={t("Zoom out")}
           >
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
@@ -60,14 +68,14 @@ export default function MangaPageCanvas({
           <button
             onClick={onZoomIn}
             className="p-1.5 rounded-md hover:bg-[#2d2d34] text-slate-500 hover:text-white transition-colors cursor-pointer"
-            title="Zoom in"
+            title={t("Zoom in")}
           >
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={onZoomReset}
             className="p-1.5 rounded-md hover:bg-[#2d2d34] text-slate-500 hover:text-white transition-colors cursor-pointer ml-1"
-            title="Reset zoom"
+            title={t("Reset zoom")}
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
@@ -88,28 +96,29 @@ export default function MangaPageCanvas({
               <div className="absolute inset-0 bg-[#181820] flex items-center justify-center">
                 <img
                   src={fullImageUrl}
-                  alt="Manga page"
+                  alt={t("Manga page")}
                   draggable={false}
                   className="w-full h-full object-contain pointer-events-none"
                 />
                 
-                {region && (
+                {workRegions.map((workRegion, index) => (
                   <div
+                    key={`${workRegion.x}-${workRegion.y}-${index}`}
                     className="absolute border-2 border-dashed border-red-500 bg-red-500/10 pointer-events-none"
                     style={{
-                      left: `${region.x}%`,
-                      top: `${region.y}%`,
-                      width: `${region.width}%`,
-                      height: `${region.height}%`
+                      left: `${workRegion.x}%`,
+                      top: `${workRegion.y}%`,
+                      width: `${workRegion.width}%`,
+                      height: `${workRegion.height}%`
                     }}
                   >
                     <div className="absolute -top-5 left-0 bg-[#121214] border border-[#2d2d34] px-1 py-0.5 rounded-sm whitespace-nowrap">
                       <span className="text-[8px] font-bold text-red-400 uppercase tracking-wide">
-                        Task Zone ({region.type})
+                        {t("Zone")} {index + 1} ({t(workRegion.type)})
                       </span>
                     </div>
                   </div>
-                )}
+                ))}
               </div>
             ) : (
               /* Mock manga page grid */
@@ -135,7 +144,7 @@ export default function MangaPageCanvas({
                         ))}
                       </svg>
                       <span className="relative text-[7px] text-slate-700 font-bold uppercase tracking-wider">
-                        Panel 1
+                        {t("Panel")} 1
                       </span>
                     </div>
                     <div className="col-span-2 bg-[#121214] flex items-center justify-center">
@@ -150,12 +159,12 @@ export default function MangaPageCanvas({
                         <div className="w-12 h-20 rounded-sm bg-white" />
                       </div>
                       <span className="relative text-[7px] text-slate-700 font-bold uppercase tracking-wider">
-                        Panel 2
+                        {t("Panel")} 2
                       </span>
                     </div>
                     <div className="bg-[#121214] relative p-2 flex items-end justify-end">
                       <span className="text-[7px] text-slate-700 font-bold uppercase tracking-wider">
-                        Panel 3
+                        {t("Panel")} 3
                       </span>
                     </div>
                   </div>
@@ -178,13 +187,13 @@ export default function MangaPageCanvas({
                       ))}
                     </svg>
                     <span className="relative text-[7px] text-slate-700 font-bold uppercase tracking-wider">
-                      {episodeLabel}
+                      {episodeLabel || `${t('Page')} 04 ? ${t('Chapter')} 12`}
                     </span>
                   </div>
                 </div>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <span className="text-3xl font-black opacity-[0.025] select-none rotate-[-18deg] uppercase tracking-widest text-white">
-                    WORKSPACE
+                    {t("Workspace")}
                   </span>
                 </div>
               </div>

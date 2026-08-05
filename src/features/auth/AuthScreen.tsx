@@ -3,6 +3,8 @@ import { User, UserRole } from "../../types";
 import { apiClient } from "../../api/client";
 import LoginBackground from "../../components/LoginBackground";
 import MotionScene from "../../components/motion/MotionScene";
+import LanguageToggle from "../../components/LanguageToggle";
+import { useLanguage } from "../../i18n/LanguageContext";
 import { Key, Radio, CloudLightning, ArrowLeft } from "lucide-react";
 
 interface AuthScreenProps {
@@ -16,6 +18,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   onLoginSuccess,
   onBackToLanding,
 }) => {
+  const { t } = useLanguage();
   const [authName, setAuthName] = useState("");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -29,16 +32,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
   const handleSendCode = async () => {
     if (!authEmail) {
-      setAuthStatusMsg("❌ Email is required to send code.");
+      setAuthStatusMsg(`❌ ${t("Email is required to send code.")}`);
       return;
     }
     setSendingCode(true);
     setAuthStatusMsg("");
     try {
       await apiClient.auth.sendVerificationCode(authEmail);
-      setAuthStatusMsg("🎉 Verification code sent! Please check your email.");
+      setAuthStatusMsg(`🎉 ${t("Verification code sent! Please check your email.")}`);
     } catch (err: any) {
-      setAuthStatusMsg(`❌ ${err.message}`);
+      setAuthStatusMsg(`❌ ${t(err.message)}`);
     } finally {
       setSendingCode(false);
     }
@@ -51,11 +54,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     try {
       if (isRegisterMode) {
         if (!authName) {
-          setAuthStatusMsg("❌ Full name is required.");
+          setAuthStatusMsg(`❌ ${t("Full name is required.")}`);
           return;
         }
         if (!authVerificationCode) {
-          setAuthStatusMsg("❌ Verification code is required.");
+          setAuthStatusMsg(`❌ ${t("Verification code is required.")}`);
           return;
         }
         const res = await apiClient.auth.register(
@@ -71,7 +74,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         onLoginSuccess(res.data, res.data.role);
       }
     } catch (err: any) {
-      setAuthStatusMsg(`❌ ${err.message}`);
+      setAuthStatusMsg(`❌ ${t(err.message)}`);
     }
   };
 
@@ -87,12 +90,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         }}
       />
       <LoginBackground />
+      <LanguageToggle className="absolute top-6 right-6 z-20" />
       <button 
         onClick={onBackToLanding}
         className="absolute top-6 left-6 z-20 flex items-center gap-2 bg-white px-4 py-2 font-mono text-xs font-bold uppercase border-2 border-ink-black shadow-[4px_4px_0px_#141414] hover:bg-[#141414] hover:text-white transition-all cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
-        Back to Home
+        {t("Back to Home")}
       </button>
 
       <MotionScene sceneKey={isRegisterMode ? "register" : "login"} className="w-full max-w-md relative z-10">
@@ -108,7 +112,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </span>
             </h1>
             <p className="font-sans text-[11px] text-neutral-500 font-extrabold uppercase tracking-widest mt-2">
-              Creation &amp; Publication Workflow Admin
+              {t("Creation & Publication Workflow Admin")}
             </p>
           </div>
 
@@ -127,14 +131,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1"
                   htmlFor="fullName"
                 >
-                  Full Name / Studio Group
+                  {t("Full Name / Studio Group")}
                 </label>
                 <input
                   id="fullName"
                   type="text"
                   required
                   className="w-full bg-manuscript-gray border-2 border-ink-black hover:border-[#E63946] focus:border-[#E63946] focus:bg-white focus:outline-none rounded-none px-4 py-3 font-sans text-xs text-ink-black font-bold transition-all"
-                  placeholder="e.g. Studio Kaze, Yumi Art..."
+                  placeholder={t("e.g. Studio Kaze, Yumi Art...")}
                   value={authName}
                   onChange={(e) => setAuthName(e.target.value)}
                 />
@@ -146,7 +150,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1"
                 htmlFor="emailAddr"
               >
-                Registered Email Address
+                {t("Registered Email Address")}
               </label>
               <div className="flex gap-2">
                 <input
@@ -165,7 +169,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                     disabled={sendingCode}
                     className="bg-ink-black hover:bg-neutral-800 text-white font-syne text-[10px] font-extrabold uppercase px-4 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 cursor-pointer shrink-0"
                   >
-                    {sendingCode ? "Sending..." : "Send Code"}
+                    {sendingCode ? t("Sending...") : t("Send Code")}
                   </button>
                 )}
               </div>
@@ -177,14 +181,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1"
                   htmlFor="verificationCode"
                 >
-                  Verification Code
+                  {t("Verification Code")}
                 </label>
                 <input
                   id="verificationCode"
                   type="text"
                   required
                   className="w-full bg-manuscript-gray border-2 border-ink-black hover:border-[#E63946] focus:border-[#E63946] focus:bg-white focus:outline-none rounded-none px-4 py-3 font-sans text-xs text-ink-black font-bold transition-all font-mono"
-                  placeholder="Enter 6-digit code"
+                  placeholder={t("Enter 6-digit code")}
                   value={authVerificationCode}
                   onChange={(e) => setAuthVerificationCode(e.target.value)}
                 />
@@ -196,7 +200,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1"
                 htmlFor="password"
               >
-                Password
+                {t("Password")}
               </label>
               <input
                 id="password"
@@ -212,7 +216,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             {isRegisterMode && (
               <div>
                 <label className="block text-[10px] font-mono text-ink-black font-extrabold uppercase mb-1">
-                  MangaFlow Access Role
+                  {t("MangaFlow Access Role")}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {(
@@ -234,7 +238,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                           : "bg-manuscript-gray text-neutral-600 border-ink-black hover:bg-neutral-100"
                       }`}
                     >
-                      {role === "BOARD_MEMBER" ? "BOARD MEMBER" : role}
+                      {t(role === 'BOARD_MEMBER' ? 'BOARD MEMBER' : role)}
                     </button>
                   ))}
                 </div>
@@ -246,7 +250,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               className="w-full bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs uppercase font-extrabold tracking-wider py-4 border-2 border-ink-black rounded-none shadow-[4px_4px_0px_#141414] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Key className="w-4 h-4" />
-              {isRegisterMode ? "Register Account ➔" : "Sign In ➔"}
+              {isRegisterMode ? `${t("Register Account")} ➔` : `${t("Sign In")} ➔`}
             </button>
           </form>
 
@@ -256,8 +260,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               className="text-neutral-600 font-extrabold hover:text-[#E63946] hover:underline cursor-pointer"
             >
               {isRegisterMode
-                ? "Already have an account? Sign In"
-                : "Don't have an account? Register Profile"}
+                ? t("Already have an account? Sign In")
+                : t("Don't have an account? Register Profile")}
             </button>
           </div>
 
@@ -265,12 +269,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           <div className="mt-8 pt-4 border-t border-dashed border-neutral-300 text-center select-none">
             {config.useLiveBackend ? (
               <span className="text-[9px] font-mono text-[#2ECC71] font-bold inline-flex items-center gap-1">
-                <CloudLightning className="w-3" /> Live Node.js MongoDB
-                Connected
+                <CloudLightning className="w-3" /> {t("Live Node.js MongoDB Connected")}
               </span>
             ) : (
               <span className="text-[9px] font-mono text-neutral-500 font-bold inline-flex items-center gap-1">
-                <Radio className="w-3" /> Fallback Client-Side Storage Active
+                <Radio className="w-3" /> {t("Fallback Client-Side Storage Active")}
               </span>
             )}
           </div>

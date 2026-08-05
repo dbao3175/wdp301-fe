@@ -28,6 +28,8 @@ class StudioDashboardScreen extends ConsumerWidget {
               : '${session.user.name} • ${l10n.roleLabel(session.user.role.apiValue)}',
           icon: Icons.dashboard_customize_rounded,
         ),
+        const SizedBox(height: 14),
+        const WebWorkspaceBanner(),
         const SizedBox(height: 18),
         overview.when(
           data: (data) => _DashboardBody(data: data),
@@ -57,6 +59,9 @@ class _DashboardBody extends StatelessWidget {
         .where((task) =>
             task.dueAt != null &&
             task.dueAt!.difference(DateTime.now()).inDays <= 3)
+        .length;
+    final pendingProposals = data.series
+        .where((s) => ['PENDING', 'SUBMITTED', 'REVIEW'].contains(s.status.toUpperCase()))
         .length;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -91,6 +96,13 @@ class _DashboardBody extends StatelessWidget {
                 icon: Icons.timer_outlined,
                 color: AppColors.amber)),
       ]),
+      const SizedBox(height: 22),
+      RoleStatusSummaryCard(
+        seriesCount: data.series.length,
+        openTasksCount: openTasks.length,
+        pendingProposalsCount: pendingProposals,
+        pendingVotesCount: 0,
+      ),
       const SizedBox(height: 22),
       SectionHeader(title: l10n.todayFocus, subtitle: l10n.recentActivity),
       const SizedBox(height: 10),

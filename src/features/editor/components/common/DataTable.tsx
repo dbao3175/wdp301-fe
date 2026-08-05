@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, X, ChevronDown } from 'lucide-react';
+import { useLanguage } from '../../../../i18n/LanguageContext';
 
 // =========================================================
 // SEARCH INPUT
@@ -18,6 +19,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
   placeholder = 'Search...',
   className = '',
 }) => {
+  const { t } = useLanguage();
   return (
     <div className={`relative flex items-center ${className}`}>
       <Search className="absolute left-3 w-3.5 h-3.5 text-neutral-500 pointer-events-none" />
@@ -25,7 +27,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
+        placeholder={t(placeholder)}
         className="w-full pl-9 pr-8 py-2 bg-white border-2 border-ink-black text-xs font-sans text-ink-black placeholder-neutral-400 outline-none focus:border-[#E63946] shadow-[2px_2px_0px_#141414] transition-shadow"
       />
       {value && (
@@ -64,6 +66,7 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
   label = 'Filter',
   className = '',
 }) => {
+  const { t } = useLanguage();
   const selected = options.find((o) => o.value === value);
 
   return (
@@ -75,7 +78,7 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
-            {opt.label}
+            {t(opt.label)}
           </option>
         ))}
       </select>
@@ -112,12 +115,13 @@ export function DataTable<T>({
   loading,
   emptyMessage = 'No data found',
 }: DataTableProps<T>) {
+  const { t } = useLanguage();
   if (loading) {
     return (
       <div className="border-2 border-ink-black shadow-[4px_4px_0px_#141414] bg-white">
         <div className="p-8 text-center">
           <div className="w-8 h-8 border-4 border-ink-black border-t-transparent animate-spin mx-auto" />
-          <p className="font-mono text-xs text-neutral-500 mt-3 uppercase tracking-widest">Loading...</p>
+          <p className="font-mono text-xs text-neutral-500 mt-3 uppercase tracking-widest">{t('Loading...')}</p>
         </div>
       </div>
     );
@@ -134,7 +138,7 @@ export function DataTable<T>({
                   key={col.key}
                   className={`px-4 py-3 text-left text-[9px] font-mono font-extrabold text-white uppercase tracking-widest border-r border-neutral-700 last:border-r-0 ${col.width ?? ''}`}
                 >
-                  {col.header}
+                  {t(col.header)}
                 </th>
               ))}
             </tr>
@@ -146,7 +150,7 @@ export function DataTable<T>({
                   colSpan={columns.length}
                   className="px-4 py-12 text-center font-mono text-xs text-neutral-400 uppercase tracking-widest"
                 >
-                  {emptyMessage}
+                  {t(emptyMessage)}
                 </td>
               </tr>
             ) : (
@@ -191,6 +195,7 @@ export const Pagination: React.FC<PaginationProps> = ({
   totalPages,
   onPageChange,
 }) => {
+  const { t } = useLanguage();
   if (totalPages <= 1) return null;
 
   return (
@@ -200,7 +205,7 @@ export const Pagination: React.FC<PaginationProps> = ({
         onClick={() => onPageChange(currentPage - 1)}
         className="px-3 py-1.5 border-2 border-ink-black text-xs font-mono font-bold shadow-[2px_2px_0px_#141414] disabled:opacity-40 hover:bg-ink-black hover:text-white transition-colors cursor-pointer"
       >
-        ← Prev
+        ← {t('Prev')}
       </button>
       {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
         <button
@@ -220,10 +225,10 @@ export const Pagination: React.FC<PaginationProps> = ({
         onClick={() => onPageChange(currentPage + 1)}
         className="px-3 py-1.5 border-2 border-ink-black text-xs font-mono font-bold shadow-[2px_2px_0px_#141414] disabled:opacity-40 hover:bg-ink-black hover:text-white transition-colors cursor-pointer"
       >
-        Next →
+        {t('Next')} →
       </button>
       <span className="font-mono text-[10px] text-neutral-400 ml-2">
-        Page {currentPage} / {totalPages}
+        {t('Page')} {currentPage} / {totalPages}
       </span>
     </div>
   );

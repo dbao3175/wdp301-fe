@@ -194,7 +194,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-manuscript-gray font-sans selection:bg-action-blue selection:text-white">
+    <div className="min-h-screen bg-manuscript-gray font-sans selection:bg-action-blue selection:text-white" style={{ overflowX: "clip" }}>
       {/* Universal Grid backdrop decoration dots */}
       <div
         className="ambient-grid fixed top-0 left-0 w-full h-full pointer-events-none z-[-1] opacity-40"

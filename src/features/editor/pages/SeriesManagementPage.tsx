@@ -17,6 +17,8 @@ import { SearchInput, FilterDropdown } from '../components/common/DataTable.tsx'
 import { LoadingState, ErrorState, StatusBadge } from '../components/common/States.tsx';
 import { SeriesCard, RankingBadge, VoteCounter, ProgressTimeline } from '../components/series/SeriesComponents.tsx';
 import { StatsCard } from '../components/common/StatsCard.tsx';
+import { useLanguage } from '../../../i18n/LanguageContext';
+import { resolveSeriesCover, useSeriesCoverFallback } from '../utils/seriesCover';
 
 const STATUS_OPTIONS = [
   { value: 'ALL', label: 'All Statuses' },
@@ -40,7 +42,9 @@ const SORT_OPTIONS = [
 // SERIES LIST ROW (for list view)
 // =========================================================
 
-const SeriesListRow: React.FC<{ series: Series }> = ({ series }) => (
+const SeriesListRow: React.FC<{ series: Series }> = ({ series }) => {
+  const { t } = useLanguage();
+  return (
   <Link
     to={`/editor/series/${series.id}`}
     className="flex items-center gap-4 p-4 bg-white border-2 border-ink-black shadow-[2px_2px_0px_#141414] hover:shadow-[4px_4px_0px_#141414] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all"
@@ -48,6 +52,7 @@ const SeriesListRow: React.FC<{ series: Series }> = ({ series }) => (
     <img
       src={series.coverUrl}
       alt={series.title}
+      onError={(event) => useSeriesCoverFallback(event.currentTarget, series.title)}
       className="w-12 h-16 object-cover border border-neutral-200 shrink-0"
     />
     <div className="flex-1 min-w-0">
@@ -64,16 +69,18 @@ const SeriesListRow: React.FC<{ series: Series }> = ({ series }) => (
     <div className="flex flex-col items-end gap-2 shrink-0">
       <RankingBadge rank={series.currentRanking} previous={series.previousRanking} size="sm" />
       <VoteCounter votes={series.totalVotes} />
-      <span className="font-mono text-[9px] text-neutral-400">{series.publishedChapters}/{series.totalChapters} chapters</span>
+      <span className="font-mono text-[9px] text-neutral-400">{series.publishedChapters}/{series.totalChapters} {t('chapters')}</span>
     </div>
   </Link>
-);
+  );
+};
 
 // =========================================================
 // SERIES MANAGEMENT PAGE
 // =========================================================
 
 export const SeriesManagementPage: React.FC = () => {
+  const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('ALL');
   const [sortBy, setSortBy] = useState('default');
@@ -82,6 +89,9 @@ export const SeriesManagementPage: React.FC = () => {
   const { data: series, isLoading, error, refetch } = useQuery({
     queryKey: ['editor-my-series'],
     queryFn: () => apiClient.editor.getMySeries(),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     select: (rawData: any[]) => {
       let result = rawData || [];
       if (status !== 'ALL') {
@@ -92,7 +102,7 @@ export const SeriesManagementPage: React.FC = () => {
         result = result.filter(
           (s: any) =>
             (s.title || '').toLowerCase().includes(q) ||
-            (s.mangaka?.name || s.mangakaId?.name || '').toLowerCase().includes(q) ||
+            (s.originalAuthor || s.mangaka?.name || s.mangakaId?.name || '').toLowerCase().includes(q) ||
             (s.genre || '').toLowerCase().includes(q),
         );
       }
@@ -109,10 +119,10 @@ export const SeriesManagementPage: React.FC = () => {
         synopsis: s.synopsis || '',
         genre: s.genre || '',
         tags: s.tags || [],
-        coverUrl: s.imageUrl || s.coverImage || `https://placehold.co/400x560/171717/E63946?text=${encodeURIComponent(s.title || 'No Cover')}`,
+        coverUrl: resolveSeriesCover(s.title || '', s.imageUrl || s.coverImage),
         mangaka: {
           id: s.mangakaId?._id || s.mangaka?.id || '',
-          name: typeof s.mangakaId === 'object' && s.mangakaId ? s.mangakaId.name : s.mangaka?.name || 'Unknown',
+          name: s.originalAuthor || (typeof s.mangakaId === 'object' && s.mangakaId ? s.mangakaId.name : s.mangaka?.name) || 'Unknown',
           avatar: s.mangaka?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default',
           email: s.mangaka?.email || '',
           totalSeries: s.mangaka?.totalSeries || 0,
@@ -162,10 +172,10 @@ export const SeriesManagementPage: React.FC = () => {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="font-syne font-extrabold text-2xl text-ink-black tracking-tight">
-            Series Management
+            {t('Series Management')}
           </h1>
           <p className="font-mono text-xs text-neutral-500 mt-0.5 uppercase tracking-widest">
-            Assigned Series — Production Monitor
+            {t('Assigned Series — Production Monitor')}
           </p>
         </div>
         <button
@@ -173,7 +183,7 @@ export const SeriesManagementPage: React.FC = () => {
           className="flex items-center gap-1.5 px-3 py-2 bg-white border-2 border-ink-black text-xs font-mono font-bold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-50 transition-colors cursor-pointer"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          Refresh
+          {t('Refresh')}
         </button>
       </div>
 
@@ -207,7 +217,7 @@ export const SeriesManagementPage: React.FC = () => {
         <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
           <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black flex items-center gap-2">
             <Award className="w-4 h-4 text-yellow-400" />
-            <h3 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">Top Ranked</h3>
+            <h3 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">{t('Top Ranked')}</h3>
           </div>
           <div className="divide-y divide-neutral-100">
             {topRanked.map((s, i) => (
@@ -215,7 +225,7 @@ export const SeriesManagementPage: React.FC = () => {
                 <span className={`w-6 h-6 flex items-center justify-center text-[10px] font-syne font-extrabold border-2 border-ink-black ${i === 0 ? 'bg-yellow-400' : i === 1 ? 'bg-neutral-300' : 'bg-amber-600 text-white'}`}>
                   {s.currentRanking}
                 </span>
-                <img src={s.coverUrl} alt={s.title} className="w-7 h-9 object-cover border border-neutral-200 shrink-0" />
+                <img src={s.coverUrl} alt={s.title} onError={(event) => useSeriesCoverFallback(event.currentTarget, s.title)} className="w-7 h-9 object-cover border border-neutral-200 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="font-sans font-bold text-xs text-ink-black truncate">{s.title}</p>
                   <VoteCounter votes={s.totalVotes} label="" />
@@ -229,12 +239,12 @@ export const SeriesManagementPage: React.FC = () => {
         <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
           <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black flex items-center gap-2">
             <Heart className="w-4 h-4 text-[#E63946]" />
-            <h3 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">Most Voted</h3>
+            <h3 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">{t('Most Voted')}</h3>
           </div>
           <div className="divide-y divide-neutral-100">
             {mostVoted.map((s) => (
               <Link key={s.id} to={`/editor/series/${s.id}`} className="flex items-center gap-3 p-3 hover:bg-neutral-50 transition-colors">
-                <img src={s.coverUrl} alt={s.title} className="w-7 h-9 object-cover border border-neutral-200 shrink-0" />
+                <img src={s.coverUrl} alt={s.title} onError={(event) => useSeriesCoverFallback(event.currentTarget, s.title)} className="w-7 h-9 object-cover border border-neutral-200 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="font-sans font-bold text-xs text-ink-black truncate">{s.title}</p>
                   <VoteCounter votes={s.totalVotes} />
@@ -249,14 +259,14 @@ export const SeriesManagementPage: React.FC = () => {
         <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
           <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black flex items-center gap-2">
             <Zap className="w-4 h-4 text-emerald-400" />
-            <h3 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">Fastest Growing</h3>
+            <h3 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">{t('Fastest Growing')}</h3>
           </div>
           <div className="divide-y divide-neutral-100">
             {fastestGrowing.map((s) => {
               const growth = s.previousRanking - s.currentRanking;
               return (
                 <Link key={s.id} to={`/editor/series/${s.id}`} className="flex items-center gap-3 p-3 hover:bg-neutral-50 transition-colors">
-                  <img src={s.coverUrl} alt={s.title} className="w-7 h-9 object-cover border border-neutral-200 shrink-0" />
+                  <img src={s.coverUrl} alt={s.title} onError={(event) => useSeriesCoverFallback(event.currentTarget, s.title)} className="w-7 h-9 object-cover border border-neutral-200 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="font-sans font-bold text-xs text-ink-black truncate">{s.title}</p>
                     <RankingBadge rank={s.currentRanking} previous={s.previousRanking} size="sm" />
@@ -276,7 +286,7 @@ export const SeriesManagementPage: React.FC = () => {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Search series..."
+          placeholder={t('Search series...')}
           className="flex-1 min-w-48"
         />
         <FilterDropdown
@@ -313,7 +323,7 @@ export const SeriesManagementPage: React.FC = () => {
       ) : !series || series.length === 0 ? (
         <div className="py-20 text-center border-2 border-dashed border-neutral-300 bg-neutral-50">
           <Library className="w-12 h-12 text-neutral-300 mx-auto mb-3" />
-          <p className="font-syne font-extrabold text-sm text-neutral-500 uppercase tracking-widest">No series found</p>
+          <p className="font-syne font-extrabold text-sm text-neutral-500 uppercase tracking-widest">{t('No series found')}</p>
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
