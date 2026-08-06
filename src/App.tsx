@@ -76,6 +76,9 @@ export default function App() {
   // Configuration settings check
   const config = apiClient.getConfig();
 
+  // Pending proposal to open in the tasks tab (set by a proposal notification click)
+  const [openProposalId, setOpenProposalId] = useState<string | null>(null);
+
   // Load and refresh core DB models from unified client
   const refreshAllModelCaches = async () => {
     try {
@@ -200,6 +203,12 @@ export default function App() {
     setActiveTab("workspace");
   };
 
+  // Open a specific proposal detail view from a proposal notification click.
+  const handleOpenProposal = (proposalId: string) => {
+    setOpenProposalId(proposalId);
+    setActiveTab("tasks");
+  };
+
   // Logout session
   const handleLogout = () => {
     apiClient.auth.logout();
@@ -270,6 +279,7 @@ export default function App() {
             onLogout={handleLogout}
             onConfigChange={refreshAllModelCaches}
             onOpenChapter={handleOpenChapter}
+            onOpenProposal={handleOpenProposal}
           />
 
           {/* Core Content canvas viewports */}
@@ -314,6 +324,8 @@ export default function App() {
                     onRefreshAll={refreshAllModelCaches}
                     onSelectSeries={setActiveSeries}
                     onSelectChapter={setActiveChapter}
+                    openProposalId={openProposalId}
+                    onOpenProposalHandled={() => setOpenProposalId(null)}
                   />
                 )}
 

@@ -857,12 +857,18 @@ export const apiClient = {
       title: string,
       content: string,
       type: "INFO" | "WARNING" | "ERROR",
+      targetType?: string,
+      targetId?: string,
+      link?: string,
     ): Promise<any> => {
       const res = await makeFetchRequest("/api/notifications", "POST", {
         userId,
         title,
         content,
         type,
+        targetType,
+        targetId,
+        link,
       });
       return res.data;
     },

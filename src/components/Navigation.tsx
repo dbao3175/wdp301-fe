@@ -25,6 +25,7 @@ interface NavigationProps {
   onLogout: () => void;
   onConfigChange?: () => void;
   onOpenChapter?: (chapterId: string) => void;
+  onOpenProposal?: (proposalId: string) => void;
 }
 
 export default function Navigation({
@@ -34,6 +35,7 @@ export default function Navigation({
   onLogout,
   onConfigChange,
   onOpenChapter,
+  onOpenProposal,
 }: NavigationProps) {
   const navigate = useNavigate();
   const { language, t } = useLanguage();
@@ -81,6 +83,8 @@ export default function Navigation({
     if (n.targetType === 'PROPOSAL' && n.targetId) {
       if (currentUser?.role === 'EDITOR') {
         navigate(`/editor/proposals/${n.targetId}`);
+      } else if (currentUser?.role === 'MANGAKA' && onOpenProposal) {
+        onOpenProposal(n.targetId);
       } else {
         onChangeTab('tasks');
       }

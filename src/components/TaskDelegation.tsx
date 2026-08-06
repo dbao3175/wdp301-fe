@@ -55,6 +55,8 @@ interface TaskDelegationProps {
   onRefreshAll: () => void;
   onSelectSeries: (series: Series) => void;
   onSelectChapter: (chapter: Chapter) => void;
+  openProposalId?: string | null;
+  onOpenProposalHandled?: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1399,6 +1401,8 @@ export default function TaskDelegation({
   onRefreshAll,
   onSelectSeries,
   onSelectChapter,
+  openProposalId,
+  onOpenProposalHandled,
 }: TaskDelegationProps) {
   // Toast status
   const [toast, setToast] = useState<{
@@ -1426,6 +1430,29 @@ export default function TaskDelegation({
   const isMangaka = currentUser.role === "MANGAKA";
   const isEditor =
     currentUser.role === "EDITOR" || currentUser.role === "BOARD_MEMBER";
+
+  // Open the specific proposal detail view when arriving from a notification
+  // click (the notification carries the proposal's _id in targetId).
+  useEffect(() => {
+    if (!openProposalId) return;
+    let cancelled = false;
+    apiClient.proposals
+      .getById(openProposalId)
+      .then((proposal) => {
+        if (cancelled) return;
+        if (proposal && proposal._id) {
+          setSelectedProposal(proposal);
+          setMangakaTab("detail");
+        }
+        onOpenProposalHandled?.();
+      })
+      .catch(() => {
+        if (!cancelled) onOpenProposalHandled?.();
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [openProposalId]);
 
   const fetchProposals = async () => {
     if (!isEditor) return;
@@ -1495,6 +1522,9 @@ export default function TaskDelegation({
         "Đề xuất Series mới đã được chuyển tiếp lên Board!",
         `Biên tập viên ${currentUser.name} đã chuyển tiếp đề xuất Series "${selectedProposalEditor.title}" của bạn lên Hội đồng để bỏ phiếu. Nhận xét: ${comment}`,
         "INFO",
+        "PROPOSAL",
+        selectedProposalEditor._id,
+        `/editor/proposals/${selectedProposalEditor._id}`,
       );
 
       showToast(
