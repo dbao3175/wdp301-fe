@@ -16,6 +16,12 @@ import {
   ChapterStatus,
   Notification,
   AuditLog,
+  Volume,
+  VolumeStatus,
+  ChapterFeedback,
+  FeedbackStatus,
+  ChapterAssignment,
+  AssignmentStatus,
 } from "../types";
 
 import {
@@ -305,42 +311,113 @@ export const apiClient = {
       );
     },
 
-    downloadStoryboard: async (id: string): Promise<void> => {
-      const config = getClientConfig();
-      const url = `${config.baseUrl}/api/series/proposal/${id}/storyboard`;
-      const headers: HeadersInit = {};
-      const token = getStoredToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
+  },
 
-      const response = await fetch(url, { headers });
-      if (!response.ok) {
-        throw new Error("Failed to download storyboard");
-      }
-
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      
-      const contentDisposition = response.headers.get("Content-Disposition");
-      let filename = "storyboard";
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
-        if (filenameMatch) {
-          filename = filenameMatch[1];
-        }
-      }
-      
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
+  volumes: {
+    getAll: async (seriesId?: string): Promise<Volume[]> => {
+      const res = await makeFetchRequest(
+        `/api/volumes${seriesId ? `?seriesId=${seriesId}` : ''}`,
+        'GET',
+      );
+      return res.data || [];
+    },
+    getById: async (id: string): Promise<Volume> => {
+      const res = await makeFetchRequest(`/api/volumes/${id}`, 'GET');
+      return res.data;
+    },
+    create: async (payload: {
+      seriesId: string;
+      volumeNumber: number;
+      title?: string;
+      dueAt?: string;
+    }): Promise<Volume> => {
+      const res = await makeFetchRequest('/api/volumes', 'POST', payload);
+      return res.data;
+    },
+    update: async (
+      id: string,
+      payload: Partial<Pick<Volume, 'volumeNumber' | 'title' | 'dueAt'>> & { status?: VolumeStatus },
+    ): Promise<Volume> => {
+      const res = await makeFetchRequest(`/api/volumes/${id}`, 'PUT', payload);
+      return res.data;
     },
   },
 
+  feedback: {
+    getForChapter: async (chapterId: string): Promise<ChapterFeedback[]> => {
+      const res = await makeFetchRequest(`/api/feedback/chapter/${chapterId}`, 'GET');
+      return res.data || [];
+    },
+    create: async (chapterId: string, message: string): Promise<ChapterFeedback> => {
+      const res = await makeFetchRequest('/api/feedback', 'POST', { chapterId, message });
+      return res.data;
+    },
+    update: async (
+      id: string,
+      payload: { status?: FeedbackStatus; message?: string },
+    ): Promise<ChapterFeedback> => {
+      const res = await makeFetchRequest(`/api/feedback/${id}`, 'PUT', payload);
+      return res.data;
+    },
+    assign: async (
+      chapterId: string,
+      assistantId: string,
+      title?: string,
+      description?: string,
+    ): Promise<{ assignment: ChapterAssignment; feedback: ChapterFeedback }> => {
+      const res = await makeFetchRequest(`/api/chapters/${chapterId}/feedback/assign`, 'PUT', {
+        assistantId,
+        title,
+        description,
+      });
+      return res.data;
+    },
+    approve: async (
+      chapterId: string,
+      approved: boolean,
+      note?: string,
+    ): Promise<ChapterFeedback> => {
+      const res = await makeFetchRequest(`/api/chapters/${chapterId}/feedback/approve`, 'PUT', {
+        approved,
+        note,
+      });
+      return res.data;
+    },
+  },
+
+  assignments: {
+    getAll: async (seriesId?: string, chapterId?: string): Promise<ChapterAssignment[]> => {
+      const params = new URLSearchParams();
+      if (seriesId) params.set('seriesId', seriesId);
+      if (chapterId) params.set('chapterId', chapterId);
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      const res = await makeFetchRequest(`/api/assignments${suffix}`, 'GET');
+      return res.data || [];
+    },
+    getMy: async (): Promise<ChapterAssignment[]> => {
+      const res = await makeFetchRequest('/api/assignments/my', 'GET');
+      return res.data || [];
+    },
+    create: async (payload: {
+      seriesId: string;
+      chapterId: string;
+      assistantId: string;
+      feedbackId?: string;
+      title?: string;
+      description?: string;
+    }): Promise<ChapterAssignment> => {
+      const res = await makeFetchRequest('/api/assignments', 'POST', payload);
+      return res.data;
+    },
+    updateStatus: async (
+      id: string,
+      status: AssignmentStatus,
+      note?: string,
+    ): Promise<ChapterAssignment> => {
+      const res = await makeFetchRequest(`/api/assignments/${id}/status`, 'PUT', { status, note });
+      return res.data;
+    },
+  },
   // CHAPTERS INDEXING
   chapters: {
     getAll: async (seriesId?: string): Promise<Chapter[]> => {
@@ -361,9 +438,11 @@ export const apiClient = {
       chapterNumber: number,
       deadline: string,
       title?: string,
+      volumeId?: string,
     ): Promise<Chapter> => {
       const payload: any = { seriesId, chapterNumber, deadline };
       if (title) payload.title = title;
+      if (volumeId) payload.volumeId = volumeId;
       const res = await makeFetchRequest("/api/chapters", "POST", payload);
       return res.data;
     },
@@ -375,6 +454,7 @@ export const apiClient = {
         title?: string;
         deadline?: string;
         status?: ChapterStatus;
+        volumeId?: string | null;
       },
     ): Promise<Chapter> => {
       const res = await makeFetchRequest(
@@ -811,7 +891,7 @@ export const apiClient = {
     },
     assignVotersAuto: async (
       submissionId: string,
-      count: number = 4,
+      count: number = 3,
     ): Promise<any> => {
       const res = await makeFetchRequest(
         `/api/submissions/${submissionId}/voters`,
@@ -935,6 +1015,40 @@ export const apiClient = {
         "GET",
       );
       return res.data || [];
+    },
+  },
+
+  defenseReports: {
+    getAll: async (): Promise<any[]> => {
+      const res = await makeFetchRequest("/api/defense-reports", "GET");
+      return res.data || [];
+    },
+    create: async (payload: {
+      seriesId: string;
+      title: string;
+      defenseArguments: string;
+      improvementPlan?: string;
+      readerGrowth?: string;
+    }): Promise<any> => {
+      const res = await makeFetchRequest("/api/defense-reports", "POST", payload);
+      return res.data;
+    },
+    update: async (id: string, payload: {
+      title?: string;
+      defenseArguments?: string;
+      improvementPlan?: string;
+      readerGrowth?: string;
+    }): Promise<any> => {
+      const res = await makeFetchRequest(`/api/defense-reports/${id}`, "PUT", payload);
+      return res.data;
+    },
+    submit: async (id: string): Promise<any> => {
+      const res = await makeFetchRequest(`/api/defense-reports/${id}/submit`, "POST", {});
+      return res.data;
+    },
+    review: async (id: string, decision: "CONTINUE" | "CANCEL", reviewNote: string): Promise<any> => {
+      const res = await makeFetchRequest(`/api/defense-reports/${id}/review`, "POST", { decision, reviewNote });
+      return res.data;
     },
   },
 

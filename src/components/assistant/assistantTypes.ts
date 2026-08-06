@@ -13,6 +13,8 @@ export type UrgencyLevel = 'critical' | 'warning' | 'normal';
 
 export interface AssistantTask {
   _id: string;
+  source?: 'TASK' | 'ASSIGNMENT';
+  feedbackId?: string;
   title: string;
   type: string;
   status: AssistantTaskStatus;
@@ -79,6 +81,9 @@ export interface AssistantNotification {
   actorAvatar: string;
   message: string;
   taskId?: string;
+  targetId?: string;
+  targetType?: string;
+  link?: string;
   createdAt: string;
   read: boolean;
 }

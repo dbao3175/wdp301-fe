@@ -4,7 +4,6 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronRight, Home } from "lucide-react";
 import { SidebarProvider, useSidebar } from "./SidebarContext";
 import MotionScene from "../../../../components/motion/MotionScene";
-import LanguageToggle from "../../../../components/LanguageToggle";
 import { useLanguage } from "../../../../i18n/LanguageContext";
 import { apiClient } from "../../../../api/client";
 import { getStoredUser } from "../../../../api/base";
@@ -194,7 +193,6 @@ const EditorLayoutInner: React.FC<{
                 className="bg-transparent text-xs font-mono text-white placeholder-neutral-500 outline-none w-36"
               />
             </div>
-            <LanguageToggle tone="dark" compact />
             {/* Notifications */}
             <div className="relative">
               <button

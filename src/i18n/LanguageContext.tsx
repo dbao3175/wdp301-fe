@@ -1,8 +1,7 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext } from 'react';
 
 export type AppLanguage = 'vi' | 'en';
 
-const LANGUAGE_KEY = 'mangaflow_language';
 
 const vi: Record<string, string> = {
   'Vietnamese': 'Tiếng Việt',
@@ -981,6 +980,44 @@ const vi: Record<string, string> = {
   "Revision sent to {{assistant}}.": "Đã gửi yêu cầu chỉnh sửa cho {{assistant}}.",
   "Please select a valid image file.": "Vui lòng chọn tệp ảnh hợp lệ.",
   "The source image must not exceed 10 MB.": "Ảnh nguồn không được vượt quá 10 MB.",
+  'Add Volume': 'Thêm tập',
+  'Create New Volume': 'Tạo tập mới',
+  'Volume number': 'Số tập',
+  'Volume title (optional)': 'Tên tập (không bắt buộc)',
+  'Save Volume': 'Lưu tập',
+  'Volume': 'Tập',
+  'No volume': 'Chưa thuộc tập',
+  'Volume created successfully.': 'Đã tạo tập thành công.',
+  'Invalid volume number': 'Số tập không hợp lệ',
+  'Failed to load volumes': 'Không thể tải danh sách tập',
+  'Failed to create volume': 'Không thể tạo tập',
+  'Editor feedback': 'Phản hồi từ biên tập viên',
+  'Latest feedback': 'Phản hồi mới nhất',
+  'Assign assistant': 'Giao cho trợ lý',
+  'Assigned member': 'Trợ lý được giao',
+  'Feedback revision': 'Chỉnh sửa theo phản hồi',
+  'Assistant revision preview': 'Xem trước bản sửa của trợ lý',
+  'Approve revision and return to editor': 'Duyệt bản sửa và gửi lại biên tập viên',
+  'Feedback history': 'Lịch sử phản hồi',
+  'Feedback assigned to assistant successfully.': 'Đã giao phản hồi cho trợ lý.',
+  'Revision approved and returned to editor.': 'Đã duyệt bản sửa và gửi lại biên tập viên.',
+  'Production deadlines': 'Hạn sản xuất',
+  'No chapter deadline is available.': 'Chưa có hạn xử lý chapter.',
+  'Blind-review judges': 'Giám khảo hội đồng kín',
+  'The system randomly assigns exactly 3 active judges. Board members cannot choose or replace judges from this screen.': 'Hệ thống phân công ngẫu nhiên đúng 3 giám khảo đang hoạt động. Thành viên hội đồng không thể tự chọn hoặc thay giám khảo tại màn hình này.',
+  'The system randomly assigned 3 blind-review judges.': 'Hệ thống đã phân công ngẫu nhiên 3 giám khảo hội đồng kín.',
+  'Judge': 'Giám khảo',
+  'PASS': 'ĐẠT',
+  'FAIL': 'KHÔNG ĐẠT',
+  'Blind-review result': 'Kết quả hội đồng kín',
+  'Waiting for all 3 judges': 'Đang chờ đủ 3 giám khảo',
+  'Average score': 'Điểm trung bình',
+  'Score': 'Điểm',
+  'Blind-review score (0-100)': 'Điểm hội đồng kín (0-100)',
+  '70 or higher is PASS; below 70 is FAIL.': 'Từ 70 điểm là ĐẠT; dưới 70 điểm là KHÔNG ĐẠT.',
+  'Score must be between 0 and 100.': 'Điểm phải nằm trong khoảng từ 0 đến 100.',
+  'Scores from 70 pass; scores below 70 fail.': 'Từ 70 điểm phải chọn ĐẠT; dưới 70 điểm phải chọn KHÔNG ĐẠT.',
+  'Anonymous': 'Ẩn danh',
 };
 const notificationStatusVi: Record<string, string> = {
   ACTIVE: 'ĐANG HOẠT ĐỘNG',
@@ -1058,40 +1095,22 @@ export function localizeNotificationText(text: string, language: AppLanguage): s
 
 interface LanguageContextValue {
   language: AppLanguage;
-  setLanguage: (language: AppLanguage) => void;
-  toggleLanguage: () => void;
   t: (key: string, variables?: Record<string, string | number>) => string;
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<AppLanguage>(() => {
-    const stored = localStorage.getItem(LANGUAGE_KEY);
-    return stored === 'en' ? 'en' : 'vi';
-  });
-
-  const setLanguage = (next: AppLanguage) => {
-    localStorage.setItem(LANGUAGE_KEY, next);
-    setLanguageState(next);
-  };
-
-  useEffect(() => {
-    document.documentElement.lang = language;
-  }, [language]);
-
-  const value = useMemo<LanguageContextValue>(() => ({
-    language,
-    setLanguage,
-    toggleLanguage: () => setLanguage(language === 'vi' ? 'en' : 'vi'),
+  const value: LanguageContextValue = {
+    language: 'en',
     t: (key, variables) => {
-      let translated = language === 'vi' ? (vi[key] || key) : key;
+      let text = key;
       Object.entries(variables || {}).forEach(([name, replacement]) => {
-        translated = translated.replaceAll(`{{${name}}}`, String(replacement));
+        text = text.replaceAll(`{{${name}}}`, String(replacement));
       });
-      return translated;
+      return text;
     },
-  }), [language]);
+  };
 
   return (
     <LanguageContext.Provider value={value}>
@@ -1099,7 +1118,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     </LanguageContext.Provider>
   );
 }
-
 export function useLanguage() {
   const context = useContext(LanguageContext);
   if (!context) {

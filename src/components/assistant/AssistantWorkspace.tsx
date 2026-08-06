@@ -98,6 +98,9 @@ function AssistantWorkspaceContent({ task, onRefresh }: { task: AssistantTask; o
   }, [task._id]);
 
   const isWorkLocked = ['SUBMITTED', 'MANGAKA_APPROVED', 'APPROVED'].includes(task.status);
+  const supportResources = (task.pages || []).flatMap((page: any) =>
+    Array.isArray(page?.resources) ? page.resources : [],
+  );
 
   const handleFileUpload = async (file: File) => {
     if (isWorkLocked) return;
@@ -116,11 +119,15 @@ function AssistantWorkspaceContent({ task, onRefresh }: { task: AssistantTask; o
       const url = res.fileUrl || res.data?.fileUrl || '';
       const firstPage = task.pages?.[0];
       const pageId = typeof firstPage === 'string' ? firstPage : firstPage?._id;
-      if (!url || !pageId) {
+      if (!url || (!pageId && task.source !== 'ASSIGNMENT')) {
         throw new Error('This task has no valid page to receive the uploaded result');
       }
 
-      await apiClient.assistant.uploadPageResult(pageId, url, `Result for ${task.title}`);
+      if (task.source === 'ASSIGNMENT') {
+        await apiClient.assignments.updateStatus(task._id, 'IN_PROGRESS');
+      } else {
+        await apiClient.assistant.uploadPageResult(pageId, url, `Result for ${task.title}`);
+      }
       setUploadedImageUrl(url);
       setShowOriginal(false);
       setSubmitToast(t('Uploaded: {{file}}', { file: file.name }));
@@ -142,7 +149,15 @@ function AssistantWorkspaceContent({ task, onRefresh }: { task: AssistantTask; o
       return;
     }
     try {
-      await apiClient.tasks.submit(task._id, resultUrl);
+      if (task.source === 'ASSIGNMENT') {
+        await apiClient.assignments.updateStatus(
+          task._id,
+          'SUBMITTED',
+          `[RESULT_URL:${resultUrl}] Assistant completed the requested revision.`,
+        );
+      } else {
+        await apiClient.tasks.submit(task._id, resultUrl);
+      }
       setSubmitToast(t('Task "{{task}}" submitted for review', { task: task.title }));
       setTimeout(() => setSubmitToast(null), 2500);
       onRefresh?.();
@@ -228,6 +243,34 @@ function AssistantWorkspaceContent({ task, onRefresh }: { task: AssistantTask; o
                   : task.description}
               </p>
             </div>
+            {supportResources.length > 0 && (
+              <div>
+                <p className="mb-2 text-[9px] font-bold uppercase tracking-widest text-slate-600">
+                  {t("Support resources")}
+                </p>
+                <div className="space-y-2">
+                  {supportResources.map((resource: any, index: number) => {
+                    const rawUrl = String(resource?.url || '');
+                    const href = rawUrl.startsWith('http')
+                      ? rawUrl
+                      : apiClient.getConfig().baseUrl + '/' + rawUrl.replace(/^\//, '');
+                    return (
+                      <a
+                        key={resource?._id || rawUrl || index}
+                        href={href}
+                        download
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-2 rounded border border-[#3a3a44] bg-[#121214] px-2.5 py-2 text-[10px] font-bold text-slate-300 hover:border-red-500/60 hover:text-white"
+                      >
+                        <Download className="h-3.5 w-3.5 text-red-400" />
+                        <span className="min-w-0 flex-1 truncate">{resource?.name || t("Resource") + ' ' + (index + 1)}</span>
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {task.status === 'REVISING' && task.reviewNote && (
               <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">

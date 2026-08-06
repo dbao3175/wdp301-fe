@@ -8,6 +8,7 @@ import { ManuscriptReviewPage } from './pages/ManuscriptReviewPage.tsx';
 import { ChapterReviewListPage } from './pages/ChapterReviewListPage.tsx';
 import { SeriesManagementPage } from './pages/SeriesManagementPage.tsx';
 import { SeriesDetailPage } from './pages/SeriesDetailPage.tsx';
+import { DefenseReportsPage } from './pages/DefenseReportsPage.tsx';
 
 interface EditorAppProps {
   onLogout?: () => void;
@@ -24,6 +25,7 @@ export const EditorApp: React.FC<EditorAppProps> = ({ onLogout }) => {
         <Route path="review/:seriesId" element={<ManuscriptReviewPage />} />
         <Route path="series" element={<SeriesManagementPage />} />
         <Route path="series/:id" element={<SeriesDetailPage />} />
+        <Route path="defense-reports" element={<DefenseReportsPage />} />
         <Route path="*" element={<Navigate to="/editor/dashboard" replace />} />
       </Routes>
     </EditorLayout>

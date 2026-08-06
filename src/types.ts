@@ -38,15 +38,70 @@ export type ChapterStatus = 'IN_PROGRESS' | 'SUBMITTED' | 'UNDER_REVIEW' | 'REVI
 
 export interface Chapter {
   _id: string;
-  seriesId: string;
+  seriesId: string | Pick<Series, '_id' | 'title'>;
   series?: string; // MongoDB ref option
+  volumeId?: string | Pick<Volume, '_id' | 'volumeNumber' | 'title'> | null;
   chapterNumber: number;
   title?: string;
   status: ChapterStatus;
   deadline: string;
+  dueAt?: string;
   pages?: any[];
 }
 
+export type VolumeStatus =
+  | 'IN_PROGRESS'
+  | 'SUBMITTED'
+  | 'UNDER_REVIEW'
+  | 'REVISION_REQUESTED'
+  | 'APPROVED'
+  | 'COMPLETED'
+  | 'PUBLISHED'
+  | 'ARCHIVED';
+
+export interface Volume {
+  _id: string;
+  seriesId: string | Pick<Series, '_id' | 'title'>;
+  volumeNumber: number;
+  title?: string;
+  status: VolumeStatus;
+  dueAt?: string;
+  publishedAt?: string | null;
+  totalChapters?: number;
+}
+
+export type FeedbackStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'APPROVED';
+
+export interface ChapterFeedback {
+  _id: string;
+  chapterId: string;
+  seriesId: string;
+  editorId: string | Pick<User, '_id' | 'name' | 'email'>;
+  message: string;
+  status: FeedbackStatus;
+  version: number;
+  assignmentId?: string | Pick<ChapterAssignment, '_id' | 'title' | 'status' | 'assistantId'> | null;
+  revisionHistory?: Array<{ assignmentId?: string; note?: string; updatedAt?: string }>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type AssignmentStatus = 'ASSIGNED' | 'IN_PROGRESS' | 'SUBMITTED' | 'COMPLETED';
+
+export interface ChapterAssignment {
+  _id: string;
+  seriesId: string | Pick<Series, '_id' | 'title'>;
+  chapterId: string | Pick<Chapter, '_id' | 'chapterNumber' | 'title'>;
+  assistantId: string | Pick<User, '_id' | 'name' | 'email'>;
+  assignedBy: string | Pick<User, '_id' | 'name' | 'email'>;
+  feedbackId?: string | ChapterFeedback | null;
+  title?: string;
+  description?: string;
+  status: AssignmentStatus;
+  submittedAt?: string;
+  completedAt?: string;
+  createdAt?: string;
+}
 export type TaskStatus = 
   | 'PENDING' 
   | 'IN_PROGRESS' 

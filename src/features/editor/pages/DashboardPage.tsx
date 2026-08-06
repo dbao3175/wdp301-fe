@@ -30,6 +30,7 @@ export const DashboardPage: React.FC = () => {
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
+    refetchInterval: 10000,
   });
 
   const { data: mySeries } = useQuery({
@@ -38,6 +39,7 @@ export const DashboardPage: React.FC = () => {
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
+    refetchInterval: 10000,
   });
 
   // Fetch pending proposals

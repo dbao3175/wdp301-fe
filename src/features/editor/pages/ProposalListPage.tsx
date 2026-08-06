@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Eye, Download, Search, Filter, SortAsc, SortDesc, RefreshCw } from 'lucide-react';
+import { Eye, Search, Filter, SortAsc, SortDesc, RefreshCw } from 'lucide-react';
 import { apiClient } from '../../../api/client.ts';
 import type { Proposal, ProposalStatus } from '../types/index.ts';
 import { SearchInput, FilterDropdown, DataTable } from '../components/common/DataTable.tsx';
@@ -9,14 +9,6 @@ import type { Column } from '../components/common/DataTable.tsx';
 import { LoadingState, ErrorState, StatusBadge } from '../components/common/States.tsx';
 import { useLanguage } from '../../../i18n/LanguageContext';
 
-const handleDownloadClick = async (id: string, errorMessage: string) => {
-  try {
-    await apiClient.proposals.downloadStoryboard(id);
-  } catch (err) {
-    console.error(err);
-    alert(errorMessage);
-  }
-};
 
 // =========================================================
 // STATUS CONFIG HELPERS
@@ -191,13 +183,6 @@ export const ProposalListPage: React.FC = () => {
             <Eye className="w-3 h-3" />
             {t('Review')}
           </Link>
-          <button
-            onClick={() => handleDownloadClick(row.id, t('Something went wrong downloading the file'))}
-            className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#E63946] text-white text-[9px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-red-600 transition-colors shadow-[2px_2px_0px_#141414] cursor-pointer"
-          >
-            <Download className="w-3 h-3" />
-            {t('Download')}
-          </button>
         </div>
       ),
     },

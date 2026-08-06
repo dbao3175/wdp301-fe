@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, UserRole } from "../types";
 import { apiClient } from "../api/client";
-import LanguageToggle from "./LanguageToggle";
 import { localizeNotificationText, useLanguage } from "../i18n/LanguageContext";
 import {
   Compass,
@@ -180,7 +179,6 @@ export default function Navigation({
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <LanguageToggle tone="red" compact />
           {/* Mobile Bell Button */}
           <div className="relative">
             <button
@@ -285,7 +283,6 @@ export default function Navigation({
                 Studio OS
               </span>
             </div>
-            <LanguageToggle tone="red" compact className="ml-auto" />
           </div>
 
           {currentUser && (

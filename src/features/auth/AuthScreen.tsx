@@ -3,7 +3,6 @@ import { User, UserRole } from "../../types";
 import { apiClient } from "../../api/client";
 import LoginBackground from "../../components/LoginBackground";
 import MotionScene from "../../components/motion/MotionScene";
-import LanguageToggle from "../../components/LanguageToggle";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { Key, Radio, CloudLightning, ArrowLeft } from "lucide-react";
 
@@ -90,7 +89,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         }}
       />
       <LoginBackground />
-      <LanguageToggle className="absolute top-6 right-6 z-20" />
       <button 
         onClick={onBackToLanding}
         className="absolute top-6 left-6 z-20 flex items-center gap-2 bg-white px-4 py-2 font-mono text-xs font-bold uppercase border-2 border-ink-black shadow-[4px_4px_0px_#141414] hover:bg-[#141414] hover:text-white transition-all cursor-pointer"

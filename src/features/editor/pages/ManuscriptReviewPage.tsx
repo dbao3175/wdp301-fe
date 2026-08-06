@@ -268,6 +268,11 @@ export const ManuscriptReviewPage: React.FC = () => {
     enabled: !!seriesId && !!selectedChapterId,
   });
 
+  const { data: chapterFeedback = [] } = useQuery({
+    queryKey: ['chapter-feedback', selectedChapterId],
+    queryFn: () => apiClient.feedback.getForChapter(selectedChapterId!),
+    enabled: !!selectedChapterId,
+  });
   // Auto-select first chapter when available
   React.useEffect(() => {
     if (series && !selectedChapterId) {
@@ -306,27 +311,22 @@ export const ManuscriptReviewPage: React.FC = () => {
     mutationFn: async () => {
       const note = revisionNotes.trim();
       if (!note) throw new Error('Revision notes are required.');
-
-      const tasksToRevise = reviewTasks.filter(
-        (task: any) => task.status === 'MANGAKA_APPROVED',
-      );
-      for (const task of tasksToRevise) {
-        await apiClient.tasks.review(task._id, 'REVISION_REQUESTED', note);
-      }
-
-      await apiClient.chapters.update(selectedChapterId!, { status: 'REVISION_REQUESTED' });
+      await apiClient.feedback.create(selectedChapterId!, note);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chapter', selectedChapterId] });
       queryClient.invalidateQueries({ queryKey: ['chapters', seriesId] });
-      queryClient.invalidateQueries({ queryKey: ['production-tasks', seriesId, selectedChapterId] });
+      queryClient.invalidateQueries({ queryKey: ['chapter-feedback', selectedChapterId] });
       setRevisionNotes('');
       setShowRevisionDialog(false);
     },
   });
-
   const approveMutation = useMutation({
     mutationFn: async () => {
+      if (chapterFeedback.length > 0) {
+        await apiClient.feedback.approve(selectedChapterId!, true, 'Approved by Tantou Editor');
+      }
+
       const tasksToApprove = reviewTasks.filter(
         (task: any) => task.status === 'MANGAKA_APPROVED',
       );
@@ -339,11 +339,11 @@ export const ManuscriptReviewPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chapter', selectedChapterId] });
       queryClient.invalidateQueries({ queryKey: ['chapters', seriesId] });
+      queryClient.invalidateQueries({ queryKey: ['chapter-feedback', selectedChapterId] });
       queryClient.invalidateQueries({ queryKey: ['production-tasks', seriesId, selectedChapterId] });
       setShowApproveDialog(false);
     },
   });
-
   const handleSave = () => {
     setSavedNotification(true);
     setTimeout(() => setSavedNotification(false), 2500);
@@ -455,7 +455,19 @@ export const ManuscriptReviewPage: React.FC = () => {
                   {reviewError instanceof Error ? t(reviewError.message) : t("Unable to complete review.")}
                 </div>
               )}
-              <ReviewActionBar
+              {chapterFeedback.length > 0 && (
+                <div className="max-h-28 overflow-y-auto border-t-2 border-ink-black bg-amber-50 px-4 py-2">
+                  <p className="mb-1 font-mono text-[9px] font-black uppercase text-amber-800">{t('Feedback history')}</p>
+                  <div className="space-y-1">
+                    {chapterFeedback.map((feedback: any) => (
+                      <div key={feedback._id} className="flex items-start justify-between gap-3 text-[10px]">
+                        <p className="text-pretty font-sans font-bold text-neutral-700"><span className="text-amber-800">v{feedback.version}</span> · {feedback.message}</p>
+                        <span className="shrink-0 border border-amber-700 px-1.5 py-0.5 font-mono text-[8px] font-bold text-amber-800">{t(feedback.status)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}              <ReviewActionBar
                 onSave={handleSave}
                 onRequestRevision={() => setShowRevisionDialog(true)}
                 onApprove={() => setShowApproveDialog(true)}
@@ -489,7 +501,7 @@ export const ManuscriptReviewPage: React.FC = () => {
         }}
         onConfirm={() => revisionMutation.mutate()}
         title={t("Request Revision")}
-        message={t("Return the Mangaka-approved production tasks to the Assistant with one clear correction request.")}
+        message={t("Send a clear correction request to the Mangaka. The Mangaka will assign an Assistant and return a new revision for review.")}
         confirmLabel={t("Request Revision")}
         cancelLabel={t("Cancel")}
         variant="warning"

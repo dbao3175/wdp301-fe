@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { User, Series, Chapter, Task, Rating, UserRole } from "./types";
 import { apiClient, getStoredUser, setStoredUserSession } from "./api/client";
 import WorkspaceCanvas from "./components/WorkspaceCanvas";

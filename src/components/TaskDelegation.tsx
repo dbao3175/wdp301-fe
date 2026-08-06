@@ -1121,39 +1121,9 @@ function EditorView({
   const [editorComment, setEditorComment] = useState("");
   const [actionDone, setActionDone] = useState<"forwarded" | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isZipping, setIsZipping] = useState(false);
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
 
   const images = (proposal as any).storyboardImages || [];
-
-  const handleDownloadZip = async () => {
-    if (!(proposal as any)._id || images.length === 0) return;
-    setIsZipping(true);
-    try {
-      const zip = new JSZip();
-      const imgFolder = zip.folder("storyboard")!;
-      for (let i = 0; i < images.length; i++) {
-        const img = images[i];
-        try {
-          const resp = await fetch(img.url);
-          const blob = await resp.blob();
-          const ext = img.originalName?.includes(".")
-            ? img.originalName.split(".").pop()
-            : "png";
-          imgFolder.file(`page_${i + 1}.${ext}`, blob);
-        } catch (e) {
-          console.warn("Failed to fetch image", img.url, e);
-        }
-      }
-      const blob = await zip.generateAsync({ type: "blob" });
-      saveAs(blob, `${proposal.title}_storyboard.zip`);
-    } catch (err) {
-      console.error("ZIP error:", err);
-      alert("Failed to create ZIP download");
-    } finally {
-      setIsZipping(false);
-    }
-  };
 
   const handleForward = async () => {
     if (!editorComment.trim()) return;
@@ -1284,27 +1254,6 @@ function EditorView({
               ))}
             </div>
 
-            {/* Download ZIP button */}
-            {images.length > 1 && (
-              <button
-                onClick={handleDownloadZip}
-                disabled={isZipping}
-                className="w-full py-2 rounded-md bg-white hover:bg-slate-200 text-black font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
-              >
-                <Download className="w-3.5 h-3.5" />
-                {isZipping ? "Zipping..." : "Download All as ZIP"}
-              </button>
-            )}
-            {images.length === 1 && (
-              <button
-                onClick={handleDownloadZip}
-                disabled={isZipping}
-                className="w-full py-2 rounded-md bg-white hover:bg-slate-200 text-black font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
-              >
-                <Download className="w-3.5 h-3.5" />
-                {isZipping ? "Zipping..." : "Download as ZIP"}
-              </button>
-            )}
           </div>
         ) : (
           /* No images attached */

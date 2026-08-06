@@ -7,7 +7,6 @@ import {
   Check, Menu, X, Star, Zap
 } from "lucide-react";
 import { motion, AnimatePresence, useScroll, useTransform, useSpring, useMotionValue } from "motion/react";
-import LanguageToggle from "../../components/LanguageToggle";
 import { useLanguage } from "../../i18n/LanguageContext";
 
 interface LandingPageProps {
@@ -59,7 +58,7 @@ const SpotlightCard = ({ children, className = "" }: { children: React.ReactNode
 // Main Page Component
 // ----------------------------------------------------------------------
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth }) => {
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -148,7 +147,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth }) =>
 
             {/* Auth Actions Desktop */}
             <div className="hidden md:flex items-center gap-3">
-              <LanguageToggle />
               <button 
                 onClick={() => onNavigateToAuth("login")}
                 className="cursor-interact px-4 py-2 bg-white border-2 border-ink-black font-syne text-xs font-bold shadow-[2px_2px_0px_#141414] hover:shadow-[4px_4px_0px_#E63946] hover:-translate-y-0.5 transition-all uppercase tracking-wider"
@@ -166,7 +164,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth }) =>
 
             {/* Mobile Menu Toggle */}
             <div className="md:hidden flex items-center gap-2">
-              <LanguageToggle compact />
             <button 
               className="md:hidden p-2 border-2 border-ink-black bg-white cursor-pointer hover:bg-neutral-100 transition-colors"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -238,7 +235,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth }) =>
                 </motion.div>
               </ScrollReveal>
               <h2 className="font-syne text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.1] tracking-tight flex flex-wrap gap-x-3 gap-y-2">
-                {(language === "vi" ? ["Nơi", "một", "ý", "tưởng", "manga", "trở", "thành", "một"] : ["Where", "a", "manga", "idea", "becomes", "a"]).map((word, i) => (
+                {["Where", "a", "manga", "idea", "becomes", "a"].map((word, i) => (
                   <motion.span
                     key={i}
                     initial={{ opacity: 0, y: 30, filter: "blur(12px)", rotateX: 90 }}
@@ -269,7 +266,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth }) =>
                   animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                   transition={{ duration: 0.8, delay: 1.0, type: "spring" }}
                 >
-                  {language === "vi" ? "được xuất bản." : "published series."}
+                  published series.
                 </motion.span>
               </h2>
               <ScrollReveal delay={0.6}>
@@ -387,7 +384,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth }) =>
             <div className="max-w-7xl mx-auto relative z-10">
               <ScrollReveal>
                 <h3 className="font-syne text-4xl md:text-6xl font-black mb-20 text-center max-w-4xl mx-auto leading-tight">
-                  {language === "vi" ? <>Một Studio. Một Workflow.<br/><span className="text-[#E63946] italic font-serif">Mọi vai trò</span> cùng phối hợp.</> : <>One Studio. One Workflow.<br/><span className="text-[#E63946] italic font-serif">Every role</span> works together.</>}
+                  One Studio. One Workflow.<br/><span className="text-[#E63946] italic font-serif">Every role</span> works together.
                 </h3>
               </ScrollReveal>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -413,7 +410,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth }) =>
           <section id="workflow" className="py-32 px-4 md:px-8 max-w-7xl mx-auto">
             <ScrollReveal>
               <div className="text-center mb-24">
-                <h3 className="font-syne text-5xl lg:text-6xl font-black mb-6 tracking-tight">{language === "vi" ? <>Từ bản thảo đầu tiên<br/>đến quyết định xuất bản</> : <>From the first draft<br/>to the publication decision</>}</h3>
+                <h3 className="font-syne text-5xl lg:text-6xl font-black mb-6 tracking-tight">From the first draft<br/>to the publication decision</h3>
                 <p className="font-sans text-xl text-neutral-600 max-w-2xl mx-auto font-medium border-l-4 border-[#E63946] pl-4">
                   {t("Every step, role and status is automated and tracked in the same Studio.")}
                 </p>

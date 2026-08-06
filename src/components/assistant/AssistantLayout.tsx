@@ -20,7 +20,6 @@ import { AssistantNotification } from './assistantTypes';
 import NotificationDropdown from './NotificationDropdown';
 import { apiClient } from '../../api/client';
 import MotionScene from '../motion/MotionScene';
-import LanguageToggle from '../LanguageToggle';
 import { localizeNotificationText, useLanguage } from '../../i18n/LanguageContext';
 
 interface AssistantLayoutProps {
@@ -85,6 +84,9 @@ export default function AssistantLayout({
                 : 'https://api.dicebear.com/7.x/avataaars/svg?seed=Editor',
               message: `${localizeNotificationText(n.title, language)}: ${localizeNotificationText(n.content, language)}`,
               taskId: n.taskId || undefined,
+              targetId: n.targetId || undefined,
+              targetType: n.targetType || undefined,
+              link: n.link || undefined,
               createdAt: n.createdAt,
               read: n.isRead
             };
@@ -233,9 +235,6 @@ export default function AssistantLayout({
               className="w-full pl-9 pr-4 py-2 bg-[#121214] border border-[#2d2d34] rounded-md text-[11px] text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-red-500/50 font-mono"
             />
           </div>
-
-          <LanguageToggle tone="dark" compact />
-
           <NotificationDropdown
             notifications={notifications}
             isOpen={notifOpen}

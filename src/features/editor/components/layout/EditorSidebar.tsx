@@ -46,6 +46,11 @@ const navItems: NavItem[] = [
     label: 'Series',
     icon: <Library className="w-4 h-4" />,
   },
+  {
+    path: '/editor/defense-reports',
+    label: 'Defense Reports',
+    icon: <FileText className="w-4 h-4" />,
+  },
 ];
 
 interface EditorSidebarProps {
