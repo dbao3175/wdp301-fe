@@ -7,14 +7,19 @@ String textOf(dynamic value, [String fallback = '']) {
 }
 
 String idOf(dynamic value) {
-  if (value is Json) return textOf(value['_id'] ?? value['id']);
+  if (value is Map) return textOf(value['_id'] ?? value['id']);
   return textOf(value);
 }
 
-Json jsonOf(dynamic value) => value is Json ? value : <String, dynamic>{};
+Json jsonOf(dynamic value) => value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
 
 List<Json> jsonListOf(dynamic value) {
-  if (value is List) return value.whereType<Json>().toList(growable: false);
+  if (value is List) {
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+  }
   return const [];
 }
 

@@ -68,13 +68,13 @@ class ApiClient {
   }
 
   dynamic _unwrap(dynamic body) {
-    if (body is Json && body.containsKey('data')) return body['data'];
+    if (body is Map && body.containsKey('data')) return body['data'];
     return body;
   }
 
   Json _mapPayload(dynamic body) {
     final data = _unwrap(body);
-    if (data is Json) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
     if (data == null) return <String, dynamic>{};
     throw DioException(
       requestOptions: RequestOptions(path: ''),
@@ -82,3 +82,4 @@ class ApiClient {
     );
   }
 }
+

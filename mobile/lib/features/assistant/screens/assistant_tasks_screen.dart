@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/app_utils.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/app_models.dart';
-import '../../../services/studio_services.dart';
 import '../../../widgets/studio_components.dart';
-import '../../studio_dashboard/providers/studio_dashboard_provider.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../providers/assistant_provider.dart';
 
 class AssistantTasksScreen extends ConsumerStatefulWidget {
@@ -78,12 +78,24 @@ class _AssistantTaskCard extends ConsumerWidget {
 
   final StudioTask task;
 
-  bool get _canSubmit => !['SUBMITTED', 'APPROVED', 'COMPLETED']
-      .contains(task.status.toUpperCase());
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
+    final session = ref.watch(authControllerProvider).valueOrNull;
+    final token = session?.token;
+
+    final desc = task.description;
+    String cleanDesc = desc;
+    String? embeddedImageUrl;
+
+    final match = RegExp(r'^\[IMAGE_URL:([^\]]+)\]').firstMatch(desc);
+    if (match != null) {
+      final imgPath = match.group(1)!;
+      embeddedImageUrl = imgPath.startsWith('http')
+          ? imgPath
+          : '${AppConstants.apiBaseUrl}/${imgPath.startsWith('/') ? imgPath.substring(1) : imgPath}';
+      cleanDesc = desc.replaceFirst(RegExp(r'^\[IMAGE_URL:[^\]]+\]\s*'), '');
+    }
+
     return StudioCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -109,9 +121,52 @@ class _AssistantTaskCard extends ConsumerWidget {
               ])),
           StatusPill(status: task.status),
         ]),
-        if (task.description.isNotEmpty) ...[
+        if (cleanDesc.isNotEmpty) ...[
           const SizedBox(height: 12),
-          Text(task.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+          Text(cleanDesc, style: const TextStyle(height: 1.4)),
+        ],
+        if (embeddedImageUrl != null) ...[
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.line, width: 1.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Image.network(
+                embeddedImageUrl,
+                headers: token != null ? {'Authorization': 'Bearer $token'} : null,
+                width: double.infinity,
+                height: 180,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  height: 100,
+                  color: AppColors.surfaceHigh,
+                  alignment: Alignment.center,
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.broken_image_outlined, color: AppColors.muted, size: 32),
+                      SizedBox(height: 4),
+                      Text('Không thể tải hình ảnh minh họa', style: TextStyle(color: AppColors.muted, fontSize: 11)),
+                    ],
+                  ),
+                ),
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    height: 180,
+                    color: AppColors.surfaceHigh,
+                    alignment: Alignment.center,
+                    child: const Center(
+                      child: CircularProgressIndicator(color: AppColors.red),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
         ],
         const SizedBox(height: 14),
         ClipRRect(
@@ -131,32 +186,8 @@ class _AssistantTaskCard extends ConsumerWidget {
                   color: AppColors.muted,
                   fontSize: 12,
                   fontWeight: FontWeight.w700)),
-          const Spacer(),
-          if (_canSubmit)
-            FilledButton.icon(
-                onPressed: () => _submit(context, ref),
-                icon: const Icon(Icons.send_rounded),
-                label: Text(l10n.submitTask)),
         ]),
       ]),
     );
-  }
-
-  Future<void> _submit(BuildContext context, WidgetRef ref) async {
-    final l10n = AppLocalizations.of(context);
-    try {
-      await ref.read(studioServiceProvider).submitTask(task.id);
-      ref.invalidate(assistantTasksProvider);
-      ref.invalidate(studioOverviewProvider);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(l10n.taskSubmitted)));
-      }
-    } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(readableApiError(error))));
-      }
-    }
   }
 }

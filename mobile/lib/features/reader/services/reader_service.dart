@@ -15,8 +15,7 @@ class ReaderService {
 
   Future<List<ReaderSeries>> getCatalogue() async {
     final data = await _api.getList('/api/reader/series');
-    return data
-        .whereType<Json>()
+    return jsonListOf(data)
         .map(ReaderSeries.fromJson)
         .toList(growable: false);
   }

@@ -65,8 +65,7 @@ class StudioService {
   Future<List<StudioSeries>> getSeries({String? status}) async {
     final list = await _api.getList('/api/series',
         query: status == null ? null : {'status': status});
-    return list
-        .whereType<Json>()
+    return jsonListOf(list)
         .map(StudioSeries.fromJson)
         .toList(growable: false);
   }
@@ -74,8 +73,7 @@ class StudioService {
   Future<List<StudioChapter>> getChapters({String? seriesId}) async {
     final list = await _api.getList('/api/chapters',
         query: seriesId == null ? null : {'seriesId': seriesId});
-    return list
-        .whereType<Json>()
+    return jsonListOf(list)
         .map(StudioChapter.fromJson)
         .toList(growable: false);
   }
@@ -84,8 +82,7 @@ class StudioService {
     final path =
         role == StudioRole.assistant ? '/api/assistant/my-tasks' : '/api/tasks';
     final list = await _api.getList(path);
-    return list
-        .whereType<Json>()
+    return jsonListOf(list)
         .map(StudioTask.fromJson)
         .toList(growable: false);
   }
@@ -97,8 +94,7 @@ class StudioService {
   Future<List<SeriesProposal>> getProposals({String? status}) async {
     final list = await _api.getList('/api/series/proposal',
         query: status == null ? null : {'status': status});
-    return list
-        .whereType<Json>()
+    return jsonListOf(list)
         .map(SeriesProposal.fromJson)
         .toList(growable: false);
   }
@@ -126,16 +122,14 @@ class StudioService {
 
   Future<List<BoardSubmission>> getBoardSubmissions() async {
     final list = await _api.getList('/api/submissions/all');
-    return list
-        .whereType<Json>()
+    return jsonListOf(list)
         .map(BoardSubmission.fromJson)
         .toList(growable: false);
   }
 
   Future<List<BoardVote>> getVotesForSubmission(String submissionId) async {
     final list = await _api.getList('/api/votes/submission/$submissionId');
-    return list
-        .whereType<Json>()
+    return jsonListOf(list)
         .map(BoardVote.fromJson)
         .toList(growable: false);
   }
@@ -163,8 +157,7 @@ class StudioService {
 
   Future<List<BoardPublication>> getPublications() async {
     final list = await _api.getList('/api/board/publications');
-    return list
-        .whereType<Json>()
+    return jsonListOf(list)
         .map(BoardPublication.fromJson)
         .toList(growable: false);
   }
@@ -192,8 +185,7 @@ class StudioService {
 
   Future<List<Directive>> getDirectives() async {
     final list = await _api.getList('/api/directives');
-    return list
-        .whereType<Json>()
+    return jsonListOf(list)
         .map(Directive.fromJson)
         .toList(growable: false);
   }
@@ -209,8 +201,7 @@ class StudioService {
   Future<List<RankingEntry>> getRankings({String? type}) async {
     final list = await _api.getList('/api/rankings',
         query: type == null ? null : {'type': type});
-    return list
-        .whereType<Json>()
+    return jsonListOf(list)
         .map(RankingEntry.fromJson)
         .toList(growable: false);
   }
@@ -222,16 +213,14 @@ class StudioService {
 
   Future<List<StudioSeries>> getEditorSeries() async {
     final list = await _api.getList('/api/editor/my-series');
-    return list
-        .whereType<Json>()
+    return jsonListOf(list)
         .map(StudioSeries.fromJson)
         .toList(growable: false);
   }
 
   Future<List<StudioNotification>> getNotifications(String userId) async {
     final list = await _api.getList('/api/notifications/$userId');
-    return list
-        .whereType<Json>()
+    return jsonListOf(list)
         .map(StudioNotification.fromJson)
         .toList(growable: false);
   }
@@ -247,8 +236,7 @@ class StudioService {
   Future<List<StudioUser>> getUsers({String? role}) async {
     final list = await _api.getList('/api/users',
         query: role == null ? null : {'role': role});
-    return list
-        .whereType<Json>()
+    return jsonListOf(list)
         .map(StudioUser.fromJson)
         .toList(growable: false);
   }
@@ -273,8 +261,7 @@ class StudioService {
 
   Future<List<StudioNotification>> getAdminNotifications() async {
     final list = await _api.getList('/api/notifications');
-    return list
-        .whereType<Json>()
+    return jsonListOf(list)
         .map(StudioNotification.fromJson)
         .toList(growable: false);
   }
@@ -299,7 +286,7 @@ class StudioService {
 
   Future<List<Json>> getAuditLogs() async {
     final list = await _api.getList('/api/audit-logs');
-    return list.whereType<Json>().toList(growable: false);
+    return jsonListOf(list);
   }
 
   Future<Json> getAssistantIncomeOverview() async {
@@ -307,7 +294,7 @@ class StudioService {
     final analytics = await _api.getList('/api/assistant/income/analytics');
     return {
       ...summary,
-      'analytics': analytics.whereType<Json>().toList(growable: false),
+      'analytics': jsonListOf(analytics),
     };
   }
 
