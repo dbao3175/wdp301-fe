@@ -18,6 +18,7 @@ import type { Annotation, Chapter } from '../types/index.ts';
 import { LoadingState, ErrorState, StatusBadge } from '../components/common/States.tsx';
 import { ManuscriptViewer, CommentSidebar, ReviewActionBar } from '../components/review/ManuscriptComponents.tsx';
 import { ConfirmDialog } from '../components/common/Modal.tsx';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 // =========================================================
 // CHAPTER SELECTOR
@@ -50,7 +51,7 @@ const mapPages = (pages: any[] = []) =>
           authorName: annotation.annotatorId?.name || 'Editor',
           authorAvatar: '',
           createdAt: annotation.createdAt || '',
-          resolved: false,
+          resolved: !!annotation.resolved,
         };
       }),
     };
@@ -63,6 +64,7 @@ interface ChapterSelectorProps {
 }
 
 const ChapterSelector: React.FC<ChapterSelectorProps> = ({ chapters, selectedId, onSelect }) => {
+  const { language, t } = useLanguage();
   const pendingChapters = chapters.filter(
     (c) => c.status === 'SUBMITTED' || c.status === 'UNDER_REVIEW',
   );
@@ -75,14 +77,14 @@ const ChapterSelector: React.FC<ChapterSelectorProps> = ({ chapters, selectedId,
       <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black flex items-center gap-2">
         <List className="w-4 h-4 text-white" />
         <h3 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-          Chapters
+          {t("Chapter")}
         </h3>
       </div>
       <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
         {pendingChapters.length > 0 && (
           <div>
             <p className="px-3 py-2 font-mono text-[8px] font-extrabold uppercase text-amber-600 bg-amber-50 border-b border-amber-200">
-              Pending Review
+              {t("Pending Review")}
             </p>
             {pendingChapters.map((ch) => (
               <button
@@ -93,12 +95,12 @@ const ChapterSelector: React.FC<ChapterSelectorProps> = ({ chapters, selectedId,
                 }`}
               >
                 <p className="font-sans font-bold text-xs text-ink-black">
-                  Ch.{ch.chapterNumber}: {ch.title}
+                  {t('Chapter')} {ch.chapterNumber}: {ch.title}
                 </p>
                 <div className="flex items-center gap-1 mt-0.5">
-                  <StatusBadge label="Under Review" variant="under_review" />
+                  <StatusBadge label={t("Under Review")} variant="under_review" />
                   <span className="font-mono text-[8px] text-neutral-400">
-                    {ch.totalPages}p · {new Date(ch.submittedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {ch.totalPages}p · {new Date(ch.submittedDate).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { month: 'short', day: 'numeric' })}
                   </span>
                 </div>
               </button>
@@ -108,7 +110,7 @@ const ChapterSelector: React.FC<ChapterSelectorProps> = ({ chapters, selectedId,
         {otherChapters.length > 0 && (
           <div>
             <p className="px-3 py-2 font-mono text-[8px] font-extrabold uppercase text-neutral-500 bg-neutral-50 border-b border-neutral-200">
-              Other Chapters
+              {t("Other Chapters")}
             </p>
             {otherChapters.map((ch) => (
               <button
@@ -119,11 +121,11 @@ const ChapterSelector: React.FC<ChapterSelectorProps> = ({ chapters, selectedId,
                 }`}
               >
                 <p className="font-sans font-bold text-xs text-ink-black">
-                  Ch.{ch.chapterNumber}: {ch.title}
+                  {t('Chapter')} {ch.chapterNumber}: {ch.title}
                 </p>
                 <div className="flex items-center gap-1 mt-0.5">
                   <StatusBadge
-                    label={ch.status.replace('_', ' ')}
+                    label={t(ch.status.replace('_', ' '))}
                     variant={ch.status === 'PUBLISHED' ? 'published' : ch.status === 'APPROVED' ? 'approved' : 'default'}
                   />
                 </div>
@@ -133,7 +135,7 @@ const ChapterSelector: React.FC<ChapterSelectorProps> = ({ chapters, selectedId,
         )}
         {chapters.length === 0 && (
           <div className="p-4 text-center">
-            <p className="font-mono text-[10px] text-neutral-400 uppercase">No chapters submitted</p>
+            <p className="font-mono text-[10px] text-neutral-400 uppercase">{t("No chapters submitted")}</p>
           </div>
         )}
       </div>
@@ -146,6 +148,7 @@ const ChapterSelector: React.FC<ChapterSelectorProps> = ({ chapters, selectedId,
 // =========================================================
 
 export const ManuscriptReviewPage: React.FC = () => {
+  const { t } = useLanguage();
   const { seriesId } = useParams<{ seriesId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -164,12 +167,16 @@ export const ManuscriptReviewPage: React.FC = () => {
       apiClient.editor.getMySeries().then((data: any[]) => {
         const found = data.find((s: any) => s._id === seriesId || s.id === seriesId);
         if (!found) return null;
+        const seriesIdOf = (ch: any) =>
+          typeof ch.seriesId === 'object' && ch.seriesId !== null
+            ? ch.seriesId._id || seriesId
+            : ch.seriesId || seriesId;
         return {
           id: found._id,
           title: found.title || '',
           chapters: (found.chapters || []).map((ch: any) => ({
             id: ch._id || ch.id,
-            seriesId: ch.seriesId || seriesId,
+            seriesId: seriesIdOf(ch),
             chapterNumber: ch.chapterNumber || 0,
             title: ch.title || '',
             status: ch.status || 'DRAFT',
@@ -191,10 +198,14 @@ export const ManuscriptReviewPage: React.FC = () => {
   const { data: chapters, isLoading: chaptersLoading } = useQuery<Chapter[]>({
     queryKey: ['chapters', seriesId],
     queryFn: () =>
-      apiClient.chapters.getAll(seriesId).then((data: any[]) =>
-        (data || []).map((ch: any) => ({
+      apiClient.chapters.getAll(seriesId).then((data: any[]) => {
+        const seriesIdOf = (ch: any) =>
+          typeof ch.seriesId === 'object' && ch.seriesId !== null
+            ? ch.seriesId._id || seriesId
+            : ch.seriesId || seriesId;
+        return (data || []).map((ch: any) => ({
           id: ch._id || ch.id,
-          seriesId: ch.seriesId || seriesId,
+          seriesId: seriesIdOf(ch),
           chapterNumber: ch.chapterNumber || 0,
           title: ch.title || '',
           status: ch.status || 'DRAFT',
@@ -206,8 +217,8 @@ export const ManuscriptReviewPage: React.FC = () => {
           reviewNotes: ch.reviewNotes || '',
           deadline: ch.deadline || '',
           mangakaName: ch.mangakaName || '',
-        })),
-      ),
+        }));
+      }),
     enabled: !!seriesId,
   });
 
@@ -230,7 +241,10 @@ export const ManuscriptReviewPage: React.FC = () => {
         if (!found) return null;
         return {
           id: found._id || found.id,
-          seriesId: found.seriesId || seriesId,
+          seriesId:
+            typeof found.seriesId === 'object' && found.seriesId !== null
+              ? found.seriesId._id || seriesId
+              : found.seriesId || seriesId,
           chapterNumber: found.chapterNumber || 0,
           title: found.title || '',
           status: found.status || 'DRAFT',
@@ -247,6 +261,18 @@ export const ManuscriptReviewPage: React.FC = () => {
     enabled: !!selectedChapterId,
   });
 
+  const { data: reviewTasks = [] } = useQuery({
+    queryKey: ['production-tasks', seriesId, selectedChapterId],
+    queryFn: () =>
+      apiClient.tasks.getAll(undefined, seriesId, selectedChapterId ?? undefined),
+    enabled: !!seriesId && !!selectedChapterId,
+  });
+
+  const { data: chapterFeedback = [] } = useQuery({
+    queryKey: ['chapter-feedback', selectedChapterId],
+    queryFn: () => apiClient.feedback.getForChapter(selectedChapterId!),
+    enabled: !!selectedChapterId,
+  });
   // Auto-select first chapter when available
   React.useEffect(() => {
     if (series && !selectedChapterId) {
@@ -273,8 +299,8 @@ export const ManuscriptReviewPage: React.FC = () => {
   });
 
   const resolveAnnotationMutation = useMutation({
-    mutationFn: ({ chapterId, annotationId }: { chapterId: string; annotationId: string }) =>
-      apiClient.annotations.getForPage(annotationId), // placeholder - backend may have its own resolve endpoint
+    mutationFn: ({ annotationId }: { chapterId: string; annotationId: string }) =>
+      apiClient.annotations.resolve(annotationId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chapter', selectedChapterId] });
       queryClient.invalidateQueries({ queryKey: ['series', seriesId] });
@@ -282,48 +308,51 @@ export const ManuscriptReviewPage: React.FC = () => {
   });
 
   const revisionMutation = useMutation({
-    mutationFn: () =>
-      apiClient.chapters.update(selectedChapterId!, { status: 'REVISION_REQUESTED' as any }),
+    mutationFn: async () => {
+      const note = revisionNotes.trim();
+      if (!note) throw new Error('Revision notes are required.');
+      await apiClient.feedback.create(selectedChapterId!, note);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chapter', selectedChapterId] });
       queryClient.invalidateQueries({ queryKey: ['chapters', seriesId] });
+      queryClient.invalidateQueries({ queryKey: ['chapter-feedback', selectedChapterId] });
+      setRevisionNotes('');
       setShowRevisionDialog(false);
     },
   });
-
   const approveMutation = useMutation({
     mutationFn: async () => {
-      const tasks = await apiClient.tasks.getAll();
-      const tasksToApprove = tasks.filter((task: any) => {
-        const chapterId = typeof task.chapterId === 'object'
-          ? task.chapterId?._id
-          : task.chapterId;
-        return chapterId === selectedChapterId && task.status === 'MANGAKA_APPROVED';
-      });
-      await Promise.all(
-        tasksToApprove.map((task) =>
-          apiClient.tasks.review(task._id, 'APPROVE', 'Final approval by editor'),
-        ),
+      if (chapterFeedback.length > 0) {
+        await apiClient.feedback.approve(selectedChapterId!, true, 'Approved by Tantou Editor');
+      }
+
+      const tasksToApprove = reviewTasks.filter(
+        (task: any) => task.status === 'MANGAKA_APPROVED',
       );
-      return apiClient.chapters.update(
-        selectedChapterId!,
-        { status: 'SENT_TO_EDITORIAL' as any },
-      );
+      for (const task of tasksToApprove) {
+        await apiClient.tasks.review(task._id, 'APPROVE', 'Final approval by editor');
+      }
+
+      await apiClient.chapters.update(selectedChapterId!, { status: 'SENT_TO_EDITORIAL' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chapter', selectedChapterId] });
       queryClient.invalidateQueries({ queryKey: ['chapters', seriesId] });
+      queryClient.invalidateQueries({ queryKey: ['chapter-feedback', selectedChapterId] });
+      queryClient.invalidateQueries({ queryKey: ['production-tasks', seriesId, selectedChapterId] });
       setShowApproveDialog(false);
     },
   });
-
   const handleSave = () => {
     setSavedNotification(true);
     setTimeout(() => setSavedNotification(false), 2500);
   };
 
   const handleAddAnnotation = (data: Omit<Annotation, 'id' | 'createdAt' | 'resolved'>) => {
-    addAnnotationMutation.mutate({ ...data, chapterId: selectedChapterId! });
+    // NOTE: data.chapterId intentionally carries the PAGE id (see AnnotationCanvas).
+    // Do not override it with selectedChapterId — the backend needs the real pageId.
+    addAnnotationMutation.mutate({ ...data });
   };
 
   const handleResolveAnnotation = (chapterId: string, annotationId: string) => {
@@ -331,7 +360,7 @@ export const ManuscriptReviewPage: React.FC = () => {
   };
 
   if (seriesLoading || chaptersLoading) return <LoadingState message="Loading manuscript..." />;
-  if (!series) return <ErrorState message="Series not found." />;
+  if (!series) return <ErrorState message={t("Series not found.")} />;
 
   // Get chapter to display — prefer from series object (has full pages)
   const displayChapter =
@@ -339,6 +368,10 @@ export const ManuscriptReviewPage: React.FC = () => {
     series.chapters.find((c) => c.id === selectedChapterId);
 
   const allChapters = series.chapters.length > 0 ? series.chapters : (chapters ?? []);
+  const canReview =
+    !!displayChapter &&
+    ['SUBMITTED', 'UNDER_REVIEW', 'REVISION_REQUESTED'].includes(displayChapter.status);
+  const reviewError = revisionMutation.error || approveMutation.error;
 
   return (
     <div className="-m-6 h-[calc(100vh-64px)] flex flex-col">
@@ -348,24 +381,24 @@ export const ManuscriptReviewPage: React.FC = () => {
           onClick={() => navigate(`/editor/series/${seriesId}`)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-white border-2 border-ink-black text-[10px] font-mono font-bold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-50 transition-colors cursor-pointer"
         >
-          <ArrowLeft className="w-3 h-3" /> Back
+          <ArrowLeft className="w-3 h-3" /> {t("Back")}
         </button>
         <div className="h-5 w-px bg-neutral-200" />
         <div className="flex-1 min-w-0">
           <h1 className="font-syne font-extrabold text-sm text-ink-black truncate">
-            Manuscript Review — {series.title}
+            {t("Manuscript Review")} — {series.title}
           </h1>
           {displayChapter && (
             <p className="font-mono text-[9px] text-neutral-500">
-              Chapter {displayChapter.chapterNumber}: {displayChapter.title}
+              {t("Chapter")} {displayChapter.chapterNumber}: {displayChapter.title}
               {' · '}
-              {displayChapter.totalPages} pages
+              {displayChapter.totalPages} {t("pages")}
             </p>
           )}
         </div>
         {savedNotification && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-400 text-emerald-700 text-[10px] font-mono font-bold">
-            <CheckCircle2 className="w-3 h-3" /> Review Saved
+            <CheckCircle2 className="w-3 h-3" /> {t("Review Saved")}
           </div>
         )}
       </div>
@@ -385,13 +418,13 @@ export const ManuscriptReviewPage: React.FC = () => {
         {/* Manuscript Viewer */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {chapterLoading ? (
-            <LoadingState message="Loading chapter pages..." />
+            <LoadingState message={t("Loading chapter pages...")} />
           ) : !displayChapter ? (
             <div className="flex-1 flex items-center justify-center bg-neutral-900">
               <div className="text-center">
                 <BookOpen className="w-12 h-12 text-neutral-600 mx-auto mb-3" />
                 <p className="font-mono text-sm text-neutral-400 uppercase tracking-widest">
-                  Select a chapter to review
+                  {t("Select a chapter to review")}
                 </p>
               </div>
             </div>
@@ -400,10 +433,10 @@ export const ManuscriptReviewPage: React.FC = () => {
               <div className="text-center">
                 <AlertCircle className="w-12 h-12 text-neutral-600 mx-auto mb-3" />
                 <p className="font-mono text-sm text-neutral-400 uppercase tracking-widest">
-                  No page images available
+                  {t("No page images available")}
                 </p>
                 <p className="font-mono text-xs text-neutral-500 mt-1">
-                  (mock data only loads pages for chapters with status UNDER_REVIEW)
+                  {t("Upload and assign at least one chapter page before final review.")}
                 </p>
               </div>
             </div>
@@ -417,12 +450,30 @@ export const ManuscriptReviewPage: React.FC = () => {
                   onAddAnnotation={handleAddAnnotation}
                 />
               </div>
-              <ReviewActionBar
+              {reviewError && (
+                <div className="px-4 py-2 bg-red-50 border-t-2 border-red-400 text-red-700 font-mono text-[10px] font-bold">
+                  {reviewError instanceof Error ? t(reviewError.message) : t("Unable to complete review.")}
+                </div>
+              )}
+              {chapterFeedback.length > 0 && (
+                <div className="max-h-28 overflow-y-auto border-t-2 border-ink-black bg-amber-50 px-4 py-2">
+                  <p className="mb-1 font-mono text-[9px] font-black uppercase text-amber-800">{t('Feedback history')}</p>
+                  <div className="space-y-1">
+                    {chapterFeedback.map((feedback: any) => (
+                      <div key={feedback._id} className="flex items-start justify-between gap-3 text-[10px]">
+                        <p className="text-pretty font-sans font-bold text-neutral-700"><span className="text-amber-800">v{feedback.version}</span> · {feedback.message}</p>
+                        <span className="shrink-0 border border-amber-700 px-1.5 py-0.5 font-mono text-[8px] font-bold text-amber-800">{t(feedback.status)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}              <ReviewActionBar
                 onSave={handleSave}
                 onRequestRevision={() => setShowRevisionDialog(true)}
                 onApprove={() => setShowApproveDialog(true)}
                 loading={revisionMutation.isPending || approveMutation.isPending}
                 chapterStatus={displayChapter.status}
+                canReview={canReview}
               />
             </>
           )}
@@ -444,24 +495,35 @@ export const ManuscriptReviewPage: React.FC = () => {
       {/* Revision Dialog */}
       <ConfirmDialog
         isOpen={showRevisionDialog}
-        onClose={() => setShowRevisionDialog(false)}
+        onClose={() => {
+          setShowRevisionDialog(false);
+          setRevisionNotes('');
+        }}
         onConfirm={() => revisionMutation.mutate()}
-        title="Request Revision"
-        message="Request revision for this chapter? The mangaka will be notified to revise based on your annotations."
-        confirmLabel="Request Revision"
-        cancelLabel="Cancel"
+        title={t("Request Revision")}
+        message={t("Send a clear correction request to the Mangaka. The Mangaka will assign an Assistant and return a new revision for review.")}
+        confirmLabel={t("Request Revision")}
+        cancelLabel={t("Cancel")}
         variant="warning"
         loading={revisionMutation.isPending}
-      />
+      >
+        <textarea
+          value={revisionNotes}
+          onChange={(event) => setRevisionNotes(event.target.value)}
+          placeholder={t("Describe exactly what the Assistant needs to revise...")}
+          rows={4}
+          className="mt-4 w-full resize-none border-2 border-ink-black px-3 py-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-yellow-400"
+        />
+      </ConfirmDialog>
 
       {/* Approve Dialog */}
       <ConfirmDialog
         isOpen={showApproveDialog}
         onClose={() => setShowApproveDialog(false)}
         onConfirm={() => approveMutation.mutate()}
-        title="Approve & Send to Editorial"
-        message="Approve this chapter and send it to the Editorial Board for final review?"
-        confirmLabel="Approve & Submit"
+        title={t("Approve & Send to Editorial")}
+        message={t("Approve this chapter and send it to the Editorial Board for final review?")}
+        confirmLabel={t("Approve & Submit")}
         variant="default"
         loading={approveMutation.isPending}
       />

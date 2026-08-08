@@ -55,6 +55,8 @@ interface TaskDelegationProps {
   onRefreshAll: () => void;
   onSelectSeries: (series: Series) => void;
   onSelectChapter: (chapter: Chapter) => void;
+  openProposalId?: string | null;
+  onOpenProposalHandled?: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,11 +230,24 @@ function MyProposalsList({
                 >
                   {STATUS_LABELS[p.status] || p.status}
                 </span>
+                {/* Anonymous board review indicator — confirms the author's
+                    identity is hidden while the Editorial Board votes. */}
+                {p.status === "SENT_TO_EDITORIAL_BOARD" && p.isAnonymous && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-indigo-300 bg-indigo-500/10 border border-indigo-500/40">
+                    <Eye className="w-3 h-3" /> Anonymous review — name hidden from board
+                  </span>
+                )}
                 <span className="text-[9px] text-slate-600 font-mono">
                   {new Date(
                     p.submittedAt || p.submittedDate,
                   ).toLocaleDateString()}
                 </span>
+                {/* Review deadline — 7 days after submission for pending proposals */}
+                {['SUBMITTED', 'UNDER_REVIEW', 'RESUBMITTED', 'SENT_TO_EDITORIAL_BOARD'].includes(p.status) && (
+                  <span className="text-[9px] font-mono text-amber-500/80">
+                    ⏳ Due: {new Date(new Date(p.submittedAt || p.submittedDate).getTime() + 7 * 24 * 3600 * 1000).toLocaleDateString()}
+                  </span>
+                )}
               </div>
             </div>
             {p.comments && p.comments.length > 0 && (
@@ -385,6 +400,25 @@ function ProposalDetailView({
           {STATUS_LABELS[proposal.status] || proposal.status}
         </span>
       </div>
+
+      {/* Anonymous review confirmation banner */}
+      {proposal.status === "SENT_TO_EDITORIAL_BOARD" && proposal.isAnonymous && (
+        <div className="flex items-start gap-3 px-3 py-3 rounded-md bg-indigo-500/10 border border-indigo-500/40">
+          <div className="w-7 h-7 rounded-md bg-indigo-500/20 flex items-center justify-center shrink-0">
+            <Eye className="w-4 h-4 text-indigo-300" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-indigo-200 uppercase tracking-wide">
+              Anonymous Editorial Board review in progress
+            </p>
+            <p className="text-[11px] text-indigo-300/80 leading-relaxed mt-0.5">
+              Your name has been hidden from the Editorial Board while they vote
+              on your series. Only the editor who forwarded it knows your
+              identity. The result will be sent to you once voting closes.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Synopsis */}
       <div className="bg-[#121214] border border-[#2d2d34] rounded-md p-4">
@@ -1087,39 +1121,9 @@ function EditorView({
   const [editorComment, setEditorComment] = useState("");
   const [actionDone, setActionDone] = useState<"forwarded" | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isZipping, setIsZipping] = useState(false);
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
 
   const images = (proposal as any).storyboardImages || [];
-
-  const handleDownloadZip = async () => {
-    if (!(proposal as any)._id || images.length === 0) return;
-    setIsZipping(true);
-    try {
-      const zip = new JSZip();
-      const imgFolder = zip.folder("storyboard")!;
-      for (let i = 0; i < images.length; i++) {
-        const img = images[i];
-        try {
-          const resp = await fetch(img.url);
-          const blob = await resp.blob();
-          const ext = img.originalName?.includes(".")
-            ? img.originalName.split(".").pop()
-            : "png";
-          imgFolder.file(`page_${i + 1}.${ext}`, blob);
-        } catch (e) {
-          console.warn("Failed to fetch image", img.url, e);
-        }
-      }
-      const blob = await zip.generateAsync({ type: "blob" });
-      saveAs(blob, `${proposal.title}_storyboard.zip`);
-    } catch (err) {
-      console.error("ZIP error:", err);
-      alert("Failed to create ZIP download");
-    } finally {
-      setIsZipping(false);
-    }
-  };
 
   const handleForward = async () => {
     if (!editorComment.trim()) return;
@@ -1250,27 +1254,6 @@ function EditorView({
               ))}
             </div>
 
-            {/* Download ZIP button */}
-            {images.length > 1 && (
-              <button
-                onClick={handleDownloadZip}
-                disabled={isZipping}
-                className="w-full py-2 rounded-md bg-white hover:bg-slate-200 text-black font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
-              >
-                <Download className="w-3.5 h-3.5" />
-                {isZipping ? "Zipping..." : "Download All as ZIP"}
-              </button>
-            )}
-            {images.length === 1 && (
-              <button
-                onClick={handleDownloadZip}
-                disabled={isZipping}
-                className="w-full py-2 rounded-md bg-white hover:bg-slate-200 text-black font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
-              >
-                <Download className="w-3.5 h-3.5" />
-                {isZipping ? "Zipping..." : "Download as ZIP"}
-              </button>
-            )}
           </div>
         ) : (
           /* No images attached */
@@ -1367,6 +1350,8 @@ export default function TaskDelegation({
   onRefreshAll,
   onSelectSeries,
   onSelectChapter,
+  openProposalId,
+  onOpenProposalHandled,
 }: TaskDelegationProps) {
   // Toast status
   const [toast, setToast] = useState<{
@@ -1394,6 +1379,29 @@ export default function TaskDelegation({
   const isMangaka = currentUser.role === "MANGAKA";
   const isEditor =
     currentUser.role === "EDITOR" || currentUser.role === "BOARD_MEMBER";
+
+  // Open the specific proposal detail view when arriving from a notification
+  // click (the notification carries the proposal's _id in targetId).
+  useEffect(() => {
+    if (!openProposalId) return;
+    let cancelled = false;
+    apiClient.proposals
+      .getById(openProposalId)
+      .then((proposal) => {
+        if (cancelled) return;
+        if (proposal && proposal._id) {
+          setSelectedProposal(proposal);
+          setMangakaTab("detail");
+        }
+        onOpenProposalHandled?.();
+      })
+      .catch(() => {
+        if (!cancelled) onOpenProposalHandled?.();
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [openProposalId]);
 
   const fetchProposals = async () => {
     if (!isEditor) return;
@@ -1463,6 +1471,9 @@ export default function TaskDelegation({
         "Đề xuất Series mới đã được chuyển tiếp lên Board!",
         `Biên tập viên ${currentUser.name} đã chuyển tiếp đề xuất Series "${selectedProposalEditor.title}" của bạn lên Hội đồng để bỏ phiếu. Nhận xét: ${comment}`,
         "INFO",
+        "PROPOSAL",
+        selectedProposalEditor._id,
+        `/editor/proposals/${selectedProposalEditor._id}`,
       );
 
       showToast(

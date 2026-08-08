@@ -470,8 +470,15 @@ class AvatarBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (imageUrl != null && imageUrl!.isNotEmpty) {
+    final avatar = imageUrl?.trim() ?? '';
+    final lowerAvatar = avatar.toLowerCase();
+    final isSvg = lowerAvatar.startsWith('data:image/svg') ||
+        lowerAvatar.contains('/svg?') ||
+        Uri.tryParse(avatar)?.path.toLowerCase().endsWith('.svg') == true;
+    if (avatar.isNotEmpty && !isSvg) {
       return Container(
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           border: Border.all(color: AppColors.ink, width: 1.6),
           borderRadius: BorderRadius.circular(8),
@@ -482,8 +489,24 @@ class AvatarBadge extends StatelessWidget {
         ),
         child: ClipRRect(
             borderRadius: BorderRadius.circular(6),
-            child: Image.network(imageUrl!,
-                width: size, height: size, fit: BoxFit.cover)),
+            child: Image.network(
+              avatar,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => ColoredBox(
+                color: AppColors.ink,
+                child: Center(
+                  child: Text(
+                    initials(name),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            )),
       );
     }
     return Container(
@@ -521,4 +544,232 @@ class _ScreentonePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Manga Studio OS - Mobile Web Companion Notice Banner
+class WebWorkspaceBanner extends StatelessWidget {
+  const WebWorkspaceBanner({super.key, this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return StudioCard(
+      color: AppColors.paper,
+      shadowColor: AppColors.red,
+      borderColor: AppColors.red,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.red,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.devices_outlined,
+                    color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.webNoticeTitle.toUpperCase(),
+                      style: const TextStyle(
+                        color: AppColors.red,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.openWebHint,
+                      style: const TextStyle(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (!compact) ...[
+            const SizedBox(height: 10),
+            Text(
+              l10n.webNoticeBody,
+              style: const TextStyle(
+                color: AppColors.muted,
+                fontSize: 11.5,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// All Roles Workflow Status Overview Component
+class RoleStatusSummaryCard extends StatelessWidget {
+  const RoleStatusSummaryCard({
+    super.key,
+    required this.seriesCount,
+    required this.openTasksCount,
+    required this.pendingProposalsCount,
+    required this.pendingVotesCount,
+  });
+
+  final int seriesCount;
+  final int openTasksCount;
+  final int pendingProposalsCount;
+  final int pendingVotesCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: l10n.roleStatusOverview,
+          subtitle: l10n.recentActivity,
+        ),
+        const SizedBox(height: 10),
+        StudioCard(
+          color: AppColors.warmWhite,
+          child: Column(
+            children: [
+              _RoleStatusRow(
+                roleName: 'MANGAKA',
+                icon: Icons.draw_outlined,
+                color: AppColors.red,
+                statusText: '$seriesCount ${l10n.series.toLowerCase()}',
+                actionHint: l10n.isVi
+                    ? 'Theo dõi series & bản thảo'
+                    : 'Track series & drafts',
+              ),
+              const Divider(height: 18, thickness: 1, color: AppColors.line),
+              _RoleStatusRow(
+                roleName: 'ASSISTANT',
+                icon: Icons.brush_outlined,
+                color: AppColors.violet,
+                statusText: '$openTasksCount ${l10n.openTasks.toLowerCase()}',
+                actionHint: l10n.isVi
+                    ? 'Nộp task & cập nhật tiến độ'
+                    : 'Submit tasks & progress',
+              ),
+              const Divider(height: 18, thickness: 1, color: AppColors.line),
+              _RoleStatusRow(
+                roleName: 'EDITOR',
+                icon: Icons.rate_review_outlined,
+                color: AppColors.blue,
+                statusText:
+                    '$pendingProposalsCount ${l10n.pendingReview.toLowerCase()}',
+                actionHint: l10n.isVi
+                    ? 'Duyệt đề xuất & sắp xếp lịch'
+                    : 'Review proposals & queue',
+              ),
+              const Divider(height: 18, thickness: 1, color: AppColors.line),
+              _RoleStatusRow(
+                roleName: 'EDITORIAL BOARD',
+                icon: Icons.gavel_outlined,
+                color: AppColors.amber,
+                statusText:
+                    '$pendingVotesCount ${l10n.boardQueue.toLowerCase()}',
+                actionHint: l10n.isVi
+                    ? 'Biểu quyết xuất bản'
+                    : 'Cast publication votes',
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RoleStatusRow extends StatelessWidget {
+  const _RoleStatusRow({
+    required this.roleName,
+    required this.icon,
+    required this.color,
+    required this.statusText,
+    required this.actionHint,
+  });
+
+  final String roleName;
+  final IconData icon;
+  final Color color;
+  final String statusText;
+  final String actionHint;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            border: Border.all(color: color, width: 1.2),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(icon, color: color, size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                roleName,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 11,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                actionHint,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.paper,
+            border: Border.all(color: AppColors.ink, width: 1.2),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            statusText.toUpperCase(),
+            style: const TextStyle(
+              color: AppColors.ink,
+              fontWeight: FontWeight.w900,
+              fontSize: 10,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

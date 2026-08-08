@@ -28,6 +28,7 @@ import React, { useState, useEffect } from "react";
 import { User, Series, Rating } from "../types";
 import { apiClient } from "../api/client";
 import { canonicalMetricPeriod } from "../features/board/metricPeriod";
+import { useLanguage } from "../i18n/LanguageContext";
 import {
   BarChart3,
   TrendingUp,
@@ -349,6 +350,7 @@ function TrendIcon({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function RankRow({ entry }: { entry: RankEntry }) {
+  const { t } = useLanguage();
   const tier = getTier(entry.rank);
   const isHigh = tier === "high";
   const isLow = tier === "low";
@@ -382,12 +384,12 @@ function RankRow({ entry }: { entry: RankEntry }) {
         {isHigh && (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-red-600/10 border border-red-600/20 text-red-400 text-[8px] font-bold uppercase tracking-wide">
             <Flame className="w-2.5 h-2.5" />
-            TOP COMPETING
+            {t('TOP COMPETING')}
           </span>
         )}
         {isLow && (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-red-950/50 border border-red-600/30 text-red-400 text-[8px] font-bold uppercase tracking-wide animate-pulse">
-            🚨 AXE RISK
+            🚨 {t('AXE RISK')}
           </span>
         )}
       </div>
@@ -401,7 +403,7 @@ function RankRow({ entry }: { entry: RankEntry }) {
           {/* "YOUR SERIES" badge — always visible regardless of view, no button attached */}
           {entry.isCurrentUser && (
             <span className="ml-2 text-[8px] font-bold text-red-400 border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 rounded-sm uppercase align-middle">
-              YOUR SERIES
+              {t('YOUR SERIES')}
             </span>
           )}
         </p>
@@ -455,6 +457,7 @@ export default function LeaderboardAnalytics({
   ratings,
   onRefreshAll,
 }: LeaderboardAnalyticsProps) {
+  const { t } = useLanguage();
   // ── Derive view from role — NO toggle button exposed to the user ──────────
   //   MANGAKA      → 'mangaka'  (read-only)
   //   BOARD_MEMBER → 'board'    (metrics and rankings view)
@@ -510,7 +513,7 @@ export default function LeaderboardAnalytics({
         setMonthlyData(mapped);
       }
     } catch (err: any) {
-      setError(err.message || "Failed to fetch rankings");
+      setError(t(err.message || 'Failed to fetch rankings'));
     } finally {
       setLoading(false);
     }
@@ -531,11 +534,10 @@ export default function LeaderboardAnalytics({
         </div>
         <div>
           <p className="text-base font-bold text-white mb-1">
-            Access Restricted
+            {t('Access Restricted')}
           </p>
           <p className="text-sm text-slate-500">
-            This dashboard is available to Mangaka and Editorial Board members
-            only.
+            {t('This dashboard is available to Mangaka and Editorial Board members only.')}
           </p>
         </div>
       </div>
@@ -569,7 +571,7 @@ export default function LeaderboardAnalytics({
   // ── Handler: ingest reader ratings and recalculate rankings ──────────────
   const handleIngest = async () => {
     if (!ingestSeriesId) {
-      setIngestMsg("❌ Select a series.");
+      setIngestMsg(`❌ ${t('Select a series.')}`);
       return;
     }
     setIngestSubmitting(true);
@@ -585,7 +587,7 @@ export default function LeaderboardAnalytics({
         ...metricPeriod,
         sourceFrom: ingestSource,
       });
-      setIngestMsg("🚀 Ratings data ingested! Rankings updated.");
+      setIngestMsg(`🚀 ${t('Ratings data ingested! Rankings updated.')}`);
 
       // Recalculate rankings: aggregate all ratings per series and re-sort
       const allRatings = await apiClient.ratings.getAll();
@@ -619,7 +621,7 @@ export default function LeaderboardAnalytics({
 
       onRefreshAll();
     } catch (err: any) {
-      setIngestMsg(`❌ Failed: ${err.message}`);
+      setIngestMsg(`❌ ${t('Failed')}: ${t(err.message)}`);
     } finally {
       setIngestSubmitting(false);
     }
@@ -764,10 +766,10 @@ export default function LeaderboardAnalytics({
         successCount++;
       }
 
-      setIngestMsg(`🚀 Successfully imported ${successCount} series rankings!`);
+      setIngestMsg(`🚀 ${t('Successfully imported {{count}} series rankings!', { count: successCount })}`);
       handleRefresh();
     } catch (err: any) {
-      setIngestMsg(`❌ Import Error: ${err.message}`);
+      setIngestMsg(`❌ ${t('Import Error')}: ${t(err.message)}`);
     } finally {
       setIngestSubmitting(false);
     }
@@ -787,7 +789,7 @@ export default function LeaderboardAnalytics({
           </div>
           <div>
             <h1 className="text-[13px] font-bold text-white leading-none uppercase tracking-wide">
-              Series Rankings Dashboard
+              {t('Series Rankings Dashboard')}
             </h1>
             {/*
               Sub-heading changes per role — matching screenshot specs:
@@ -797,16 +799,16 @@ export default function LeaderboardAnalytics({
             <p className="text-[10px] text-slate-500 mt-0.5">
               {view === "board" ? (
                 <>
-                  Editorial Board ·{" "}
+                  {t('Editorial Board')} ·{" "}
                   <span className="text-slate-400 font-semibold">
-                    {entries.length}/20 active slots
+                    {entries.length}/20 {t('active slots')}
                   </span>
                 </>
               ) : (
                 <>
-                  Mangaka View ·{" "}
+                  {t('Mangaka View')} ·{" "}
                   <span className="text-slate-600">
-                    Read-only — rankings update each {period} cycle
+                    {t('Read-only — rankings update each {{period}} cycle', { period: t(period) })}
                   </span>
                 </>
               )}
@@ -828,7 +830,7 @@ export default function LeaderboardAnalytics({
                     : "bg-transparent text-slate-600 hover:text-slate-400"
                 }`}
               >
-                {p === "weekly" ? "📅 Weekly" : "📆 Monthly"}
+                {p === "weekly" ? <>📅 {t("Weekly")}</> : <>📆 {t("Monthly")}</>}
               </button>
             ))}
           </div>
@@ -842,11 +844,11 @@ export default function LeaderboardAnalytics({
           {view === "board" ? (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600/10 border border-red-600/25 text-red-400 text-[10px] font-bold uppercase tracking-wide select-none">
               <Shield className="w-3.5 h-3.5" />
-              Editorial Board
+              {t('Editorial Board')}
             </div>
           ) : (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#2d2d34] border border-[#3a3a44] text-slate-400 text-[10px] font-bold uppercase tracking-wide select-none">
-              ✏ Mangaka View
+              ✏ {t('Mangaka View')}
             </div>
           )}
 
@@ -863,14 +865,14 @@ export default function LeaderboardAnalytics({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 text-white text-[10px] font-bold uppercase tracking-wide hover:bg-red-700 transition-colors cursor-pointer"
             >
               <Database className="w-3.5 h-3.5" />
-              Reader Voting Form
+              {t('Reader Voting Form')}
             </button>
           )}
 
           {/* Refresh */}
           <button
             onClick={handleRefresh}
-            title="Refresh data from API"
+            title={t('Refresh data from API')}
             className="p-1.5 rounded-md border border-[#2d2d34] text-slate-600 hover:text-white hover:border-slate-500 transition-all cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -886,12 +888,10 @@ export default function LeaderboardAnalytics({
             <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse mt-1 shrink-0" />
             <div>
               <p className="text-xs font-bold text-red-300 leading-snug">
-                ⚠️ CRITICAL SYSTEM NOTICE: Your series has spent consecutive
-                periods in the bottom tier. Cancellation risk is HIGH.
+                ⚠️ {t('CRITICAL SYSTEM NOTICE: Your series has spent consecutive periods in the bottom tier. Cancellation risk is HIGH.')}
               </p>
               <p className="text-[11px] text-red-400/70 mt-1 leading-relaxed">
-                Immediately optimize your story panels and engagement strategies
-                to recover rank before the next {period} review cycle.
+                {t('Immediately optimize your story panels and engagement strategies to recover rank before the next {{period}} review cycle.', { period: t(period) })}
               </p>
             </div>
           </div>
@@ -904,7 +904,7 @@ export default function LeaderboardAnalytics({
             <div className="flex items-center gap-2">
               <Edit3 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
-                Cycle:
+                {t('Cycle')}:
               </label>
               <input
                 type="text"
@@ -917,17 +917,17 @@ export default function LeaderboardAnalytics({
             {/* Tier distribution chips */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-600/10 border border-red-600/20 text-red-400 text-[10px] font-bold">
-                🔥 {highCount} Top Tier
+                🔥 {highCount} {t('Top Tier')}
               </span>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#2d2d34] border border-[#3a3a44] text-slate-400 text-[10px] font-bold">
-                {normalCount} Normal
+                {normalCount} {t('Normal')}
               </span>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-950/40 border border-red-600/25 text-red-400 text-[10px] font-bold">
-                🚨 {lowCount} Axe Risk
+                🚨 {lowCount} {t('Axe Risk')}
               </span>
               {axedCount > 0 && (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-black border border-[#2d2d34] text-slate-600 text-[10px] font-bold">
-                  {axedCount} Terminated
+                  {axedCount} {t('Terminated')}
                 </span>
               )}
             </div>
@@ -943,24 +943,24 @@ export default function LeaderboardAnalytics({
                 {userSeries.title}
               </p>
               <p className="text-[9px] text-slate-500 mt-0.5">
-                Current rank:{" "}
+                {t('Current rank')}:{" "}
                 <span className="text-white font-bold">#{userSeries.rank}</span>
                 {" · "}
                 {userTier === "high" && (
-                  <span className="text-red-400">🔥 Top Competing</span>
+                  <span className="text-red-400">🔥 {t('Top Competing')}</span>
                 )}
                 {userTier === "normal" && (
-                  <span className="text-slate-400">Stable — Normal Tier</span>
+                  <span className="text-slate-400">{t('Stable — Normal Tier')}</span>
                 )}
                 {userTier === "low" && (
                   <span className="text-red-400 animate-pulse">
-                    🚨 Axe Risk Zone
+                    🚨 {t('Axe Risk Zone')}
                   </span>
                 )}
               </p>
             </div>
             <span className="text-[11px] font-bold font-mono text-slate-400 shrink-0">
-              {userSeries.votes.toLocaleString()} votes
+              {userSeries.votes.toLocaleString()} {t('votes')}
             </span>
           </div>
         )}
@@ -969,13 +969,13 @@ export default function LeaderboardAnalytics({
         {loading && (
           <div className="px-6 py-4 text-center">
             <p className="text-xs text-slate-500 font-mono uppercase">
-              Loading rankings...
+              {t('Loading rankings...')}
             </p>
           </div>
         )}
         {error && (
           <div className="px-6 py-4">
-            <p className="text-xs text-red-400 font-mono">Error: {error}</p>
+            <p className="text-xs text-red-400 font-mono">{t('Error')}: {error}</p>
           </div>
         )}
 
@@ -986,16 +986,16 @@ export default function LeaderboardAnalytics({
               #
             </div>
             <div className="w-[108px] shrink-0 text-[8px] font-bold text-slate-600 uppercase tracking-widest">
-              Tier
+              {t('Tier')}
             </div>
             <div className="flex-1 text-[8px] font-bold text-slate-600 uppercase tracking-widest">
-              Series / Author
+              {t('Series / Author')}
             </div>
             <div className="w-28 shrink-0 text-[8px] font-bold text-slate-600 uppercase tracking-widest text-right">
-              Votes
+              {t('Votes')}
             </div>
             <div className="w-12 shrink-0 text-[8px] font-bold text-slate-600 uppercase tracking-widest text-center">
-              Trend
+              {t('Trend')}
             </div>
           </div>
         )}
@@ -1015,15 +1015,14 @@ export default function LeaderboardAnalytics({
           <div className="flex items-center justify-between text-[9px] text-slate-700 font-mono flex-wrap gap-2">
             <span>
               {/* ← API: GET /api/rankings?type={period} */}
-              Source:{" "}
+              {t('Source')}:{" "}
               {period === "weekly"
-                ? "Weekly Vote Cycle"
-                : "Monthly Aggregate"}{" "}
+                ? t('Weekly Vote Cycle')
+                : t('Monthly Aggregate')}{" "}
               · {cycle}
             </span>
             <span>
-              {entries.filter((e) => e.directive === "active").length} active
-              series / 20 max slots
+              {entries.filter((e) => e.directive === "active").length} {t('active series')} / 20 {t('max slots')}
             </span>
           </div>
         </div>
@@ -1041,7 +1040,7 @@ export default function LeaderboardAnalytics({
               <div className="flex items-center gap-2">
                 <Database className="w-4 h-4 text-red-400" />
                 <h3 className="text-sm font-bold text-white uppercase tracking-wide">
-                  Reader Voting Form
+                  {t('Reader Voting Form')}
                 </h3>
               </div>
               <button
@@ -1063,7 +1062,7 @@ export default function LeaderboardAnalytics({
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Series
+                  {t('Series')}
                 </label>
                 <select
                   value={ingestSeriesId}
@@ -1071,7 +1070,7 @@ export default function LeaderboardAnalytics({
                   className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-slate-500 cursor-pointer"
                   required
                 >
-                  <option value="">Select series...</option>
+                  <option value="">{t('Select series...')}</option>
                   {series
                     .filter((s) => s.status !== "PENDING")
                     .map((s) => (
@@ -1084,7 +1083,7 @@ export default function LeaderboardAnalytics({
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Reader Vote Count
+                  {t('Reader Vote Count')}
                 </label>
                 <input
                   type="number"
@@ -1098,22 +1097,22 @@ export default function LeaderboardAnalytics({
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Period Source
+                  {t('Period Source')}
                 </label>
                 <select
                   value={ingestSource}
                   onChange={(e) => setIngestSource(e.target.value)}
                   className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-slate-500 cursor-pointer"
                 >
-                  <option value="Weekly">Weekly</option>
-                  <option value="Monthly">Monthly</option>
+                  <option value="Weekly">{t('Weekly')}</option>
+                  <option value="Monthly">{t('Monthly')}</option>
                 </select>
               </div>
 
               {/* Drag and Drop Upload Area */}
               <div className="border-t border-[#2d2d34] pt-4">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Or Import CSV/JSON rankings file
+                  {t('Or Import CSV/JSON rankings file')}
                 </label>
                 <div
                   onDragEnter={handleDrag}
@@ -1127,10 +1126,10 @@ export default function LeaderboardAnalytics({
                   }`}
                 >
                   <p className="text-xs text-slate-400 font-bold mb-1">
-                    Drag and drop your file here
+                    {t('Drag and drop your file here')}
                   </p>
                   <p className="text-[10px] text-slate-500 uppercase">
-                    Supported: .csv, .json (must match 'title' &amp; 'votes')
+                    {t("Supported: .csv, .json (must match 'title' & 'votes')")}
                   </p>
                   <input
                     type="file"
@@ -1143,7 +1142,7 @@ export default function LeaderboardAnalytics({
                     htmlFor="rankings-file-upload"
                     className="inline-block mt-3 px-3 py-1.5 bg-[#2d2d34] hover:bg-[#3a3a44] text-white text-[10px] font-bold uppercase rounded cursor-pointer transition-colors"
                   >
-                    Select File
+                    {t('Select File')}
                   </label>
                 </div>
               </div>
@@ -1153,14 +1152,14 @@ export default function LeaderboardAnalytics({
                   onClick={() => setShowIngestModal(false)}
                   className="flex-1 px-4 py-2.5 rounded-md border border-[#2d2d34] text-slate-400 text-[11px] font-bold uppercase tracking-wide hover:bg-[#2d2d34] transition-colors cursor-pointer"
                 >
-                  Cancel
+                  {t('Cancel')}
                 </button>
                 <button
                   onClick={handleIngest}
                   disabled={ingestSubmitting}
                   className="flex-1 px-4 py-2.5 rounded-md bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  {ingestSubmitting ? "Submitting..." : "Ingest & Update"}
+                  {ingestSubmitting ? t("Submitting...") : t("Ingest & Update")}
                 </button>
               </div>
             </div>

@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
+import { useLanguage } from '../../i18n/LanguageContext';
 import {
   Wallet,
   TrendingUp,
@@ -26,6 +27,7 @@ interface AssistantTaskItem {
 }
 
 export default function AssistantIncome() {
+  const { language, t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -49,8 +51,8 @@ export default function AssistantIncome() {
     cardNumberLast4: string;
     status: string;
   }>({
-    cardholder: 'Chưa cập nhật',
-    bankName: 'Chưa cập nhật',
+    cardholder: 'Not updated',
+    bankName: 'Not updated',
     cardNumberLast4: '----',
     status: 'Inactive'
   });
@@ -91,7 +93,7 @@ export default function AssistantIncome() {
       }
     } catch (err: any) {
       console.error('Failed to load income data:', err);
-      setError(err.message || 'Không thể lấy thông tin thu nhập từ Backend.');
+      setError(t(err.message || 'Unable to load income information from the backend.'));
     } finally {
       setLoading(false);
     }
@@ -105,7 +107,7 @@ export default function AssistantIncome() {
     return (
       <div className="h-full flex flex-col items-center justify-center bg-[#121214] text-white">
         <Loader2 className="w-10 h-10 text-red-500 animate-spin mb-4" />
-        <p className="text-sm text-slate-400">Loading your income statistics...</p>
+        <p className="text-sm text-slate-400">{t("Loading your income statistics...")}</p>
       </div>
     );
   }
@@ -114,13 +116,13 @@ export default function AssistantIncome() {
     return (
       <div className="h-full flex flex-col items-center justify-center bg-[#121214] text-white p-6">
         <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
-        <h2 className="text-lg font-bold text-white mb-2">Error Loading Income Dashboard</h2>
+        <h2 className="text-lg font-bold text-white mb-2">{t("Error Loading Income Dashboard")}</h2>
         <p className="text-sm text-slate-400 text-center max-w-md mb-6">{error}</p>
         <button
           onClick={fetchIncomeData}
           className="px-5 py-2.5 bg-red-600 hover:bg-red-700 transition-colors text-white text-xs font-bold uppercase tracking-wider rounded-md cursor-pointer"
         >
-          Try Again
+          {t("Try Again")}
         </button>
       </div>
     );
@@ -136,17 +138,17 @@ export default function AssistantIncome() {
         <div>
           <h1 className="text-xl font-bold text-white uppercase tracking-wide flex items-center gap-2">
             <Wallet className="w-5 h-5 text-red-500" />
-            Income & Earnings
+            {t("Income & Earnings")}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Track your completed tasks and payment history.
+            {t("Track your completed tasks and payment history.")}
           </p>
         </div>
         <button 
           onClick={fetchIncomeData}
           className="px-3 py-1.5 bg-[#1e1e24] border border-[#2d2d34] hover:bg-[#2d2d34] text-xs font-bold text-slate-300 rounded transition-all cursor-pointer"
         >
-          Refresh Data
+          {t("Refresh Data")}
         </button>
       </div>
 
@@ -160,7 +162,7 @@ export default function AssistantIncome() {
                 <Wallet className="w-16 h-16" />
               </div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-                Total Earnings
+                {t("Total Earnings")}
               </p>
               <div className="flex items-baseline gap-1">
                 <span className="text-sm font-medium text-slate-400">¥</span>
@@ -170,7 +172,7 @@ export default function AssistantIncome() {
               </div>
               <div className="mt-4 flex items-center gap-1.5 text-[11px] text-green-400 bg-green-400/10 w-fit px-2 py-1 rounded-md">
                 <TrendingUp className="w-3 h-3" />
-                <span>Active Billing Cycle</span>
+                <span>{t("Active Billing Cycle")}</span>
               </div>
             </div>
 
@@ -180,13 +182,13 @@ export default function AssistantIncome() {
                 <CheckCircle2 className="w-16 h-16" />
               </div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-                Completed Tasks
+                {t("Completed Tasks")}
               </p>
               <div className="text-3xl font-bold text-white">
                 {incomeData.totalCompletedTasks}
               </div>
               <p className="text-[11px] text-slate-500 mt-4">
-                Approved or Paid tasks
+                {t("Approved or Paid tasks")}
               </p>
             </div>
 
@@ -196,18 +198,18 @@ export default function AssistantIncome() {
                 <Calendar className="w-16 h-16" />
               </div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-                Next Payout
+                {t("Next Payout")}
               </p>
               <div className="text-xl font-bold text-white">
                 {incomeData.nextPayoutDate 
-                  ? new Date(incomeData.nextPayoutDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-                  : 'Chưa chốt'}
+                  ? new Date(incomeData.nextPayoutDate).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  : t("Not scheduled")}
               </div>
               <div className="mt-2 w-full bg-[#2d2d34] rounded-full h-1.5">
                 <div className="bg-red-500 h-1.5 rounded-full w-[70%]"></div>
               </div>
               <p className="text-[11px] text-slate-500 mt-2">
-                Processing to Bank ****{payoutAccount.cardNumberLast4}
+                {t("Processing to Bank")} ****{payoutAccount.cardNumberLast4}
               </p>
             </div>
           </div>
@@ -216,27 +218,27 @@ export default function AssistantIncome() {
           <div className="bg-[#1e1e24] border border-[#2d2d34] rounded-xl overflow-hidden flex flex-col">
             <div className="px-5 py-4 border-b border-[#2d2d34] flex items-center justify-between">
               <h2 className="text-xs font-bold text-slate-300 uppercase tracking-widest">
-                Recent Earnings History
+                {t("Recent Earnings History")}
               </h2>
               <button className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer">
-                <Download className="w-3.5 h-3.5" /> Export PDF
+                <Download className="w-3.5 h-3.5" /> {t("Export PDF")}
               </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[13px]">
                 <thead className="bg-[#121214] text-[10px] uppercase font-bold text-slate-500 tracking-wider">
                   <tr>
-                    <th className="px-5 py-3 font-medium">Task</th>
-                    <th className="px-5 py-3 font-medium hidden sm:table-cell">Series</th>
-                    <th className="px-5 py-3 font-medium hidden md:table-cell">Approved Date</th>
-                    <th className="px-5 py-3 font-medium text-right">Amount</th>
+                    <th className="px-5 py-3 font-medium">{t("Task")}</th>
+                    <th className="px-5 py-3 font-medium hidden sm:table-cell">{t("Series")}</th>
+                    <th className="px-5 py-3 font-medium hidden md:table-cell">{t("Approved Date")}</th>
+                    <th className="px-5 py-3 font-medium text-right">{t("Amount")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#2d2d34]">
                   {incomeData.tasks.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-5 py-8 text-center text-slate-500">
-                        Chưa có lịch sử thu nhập được duyệt.
+                        {t("No approved earnings history yet.")}
                       </td>
                     </tr>
                   ) : (
@@ -251,7 +253,7 @@ export default function AssistantIncome() {
                         </td>
                         <td className="px-5 py-3.5 hidden md:table-cell text-slate-400">
                           {task.approvedAt
-                            ? new Date(task.approvedAt).toLocaleDateString()
+                            ? new Date(task.approvedAt).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US')
                             : 'N/A'}
                         </td>
                         <td className="px-5 py-3.5 text-right">
@@ -265,7 +267,7 @@ export default function AssistantIncome() {
                   {/* Dòng Total */}
                   <tr className="bg-[#121214]/50">
                     <td colSpan={3} className="px-5 py-3.5 text-right text-[11px] font-bold text-slate-400 uppercase tracking-widest hidden sm:table-cell">
-                      Total
+                      {t("Total")}
                     </td>
                     <td className="px-5 py-3.5 text-right text-base font-bold text-white border-t-2 border-[#2d2d34]">
                       ¥{incomeData.totalEarnings.toLocaleString()}
@@ -285,12 +287,12 @@ export default function AssistantIncome() {
             <div className="flex justify-between items-start mb-8 relative z-10">
               <CreditCard className="w-8 h-8 text-slate-300" />
               <span className={`text-[10px] font-bold uppercase tracking-widest bg-[#121214]/50 px-2.5 py-1 rounded-md ${payoutAccount.status === 'Active' ? 'text-green-400' : 'text-slate-400'}`}>
-                {payoutAccount.status}
+                {t(payoutAccount.status)}
               </span>
             </div>
             <div className="space-y-1 relative z-10">
               <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
-                Payout Account
+                {t("Payout Account")}
               </p>
               <p className="text-lg font-mono tracking-widest text-white shadow-sm">
                 **** **** **** {payoutAccount.cardNumberLast4}
@@ -298,12 +300,12 @@ export default function AssistantIncome() {
             </div>
             <div className="flex justify-between mt-6 relative z-10">
               <div>
-                <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-0.5">Cardholder</p>
-                <p className="text-xs font-bold text-white uppercase">{payoutAccount.cardholder}</p>
+                <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-0.5">{t("Cardholder")}</p>
+                <p className="text-xs font-bold text-white uppercase">{t(payoutAccount.cardholder)}</p>
               </div>
               <div>
-                <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-0.5">Bank</p>
-                <p className="text-xs font-bold text-white uppercase">{payoutAccount.bankName}</p>
+                <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-0.5">{t("Bank")}</p>
+                <p className="text-xs font-bold text-white uppercase">{t(payoutAccount.bankName)}</p>
               </div>
             </div>
           </div>
@@ -312,13 +314,13 @@ export default function AssistantIncome() {
           <div className="bg-[#1e1e24] border border-[#2d2d34] rounded-xl p-5">
             <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-slate-400" />
-              Quarterly Trend
+              {t("Quarterly Trend")}
             </h3>
             <div className="space-y-4">
               {analytics.map((data) => {
                 const percentage = Math.min((data.amount / maxMonthAmount) * 100, 100);
                 return (
-                  <div key={data.month} className="space-y-1.5">
+                  <div key={t(data.month)} className="space-y-1.5">
                     <div className="flex justify-between text-xs">
                       <span className="font-medium text-slate-400">{data.month}</span>
                       <span className="font-bold text-white">¥{data.amount.toLocaleString()}</span>
@@ -336,7 +338,7 @@ export default function AssistantIncome() {
               })}
             </div>
             <button className="w-full mt-6 py-2.5 bg-[#2d2d34] hover:bg-[#3a3a44] rounded-md text-[11px] font-bold text-slate-300 transition-colors cursor-pointer flex justify-center items-center gap-1 uppercase tracking-wider">
-              View Full Analytics <ChevronRight className="w-3.5 h-3.5" />
+              {t("View Full Analytics")} <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

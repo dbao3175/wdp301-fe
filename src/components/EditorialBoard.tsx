@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { User, Series, Rating, Vote, Directive, DirectiveAction } from '../types';
 import { apiClient } from '../api/client';
-import { CheckSquare, X, Gavel, Plus, Download } from 'lucide-react';
-import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
+import { CheckSquare, X, Gavel, Plus } from 'lucide-react';
 import BoardPublicationPanel from '../features/board/BoardPublicationPanel';
 import ReaderMetricsPanel from '../features/board/ReaderMetricsPanel';
+import StoryboardGallery, { StoryboardImage } from './StoryboardGallery';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface EditorialBoardProps {
   currentUser: User;
@@ -28,19 +28,61 @@ const dedupeVotesByVoter = (votes: Vote[]) => {
   return Array.from(byVoter.values());
 };
 
+const SCORE_PREFIX = /^\[BLIND_REVIEW_SCORE:(\d{1,3})\/100\]\s*/;
+
+const getVoteScore = (vote: Vote) => {
+  const match = String(vote.comment || '').match(SCORE_PREFIX);
+  return match ? Math.min(100, Number(match[1])) : null;
+};
+
+const getVoteComment = (vote: Vote) => String(vote.comment || '').replace(SCORE_PREFIX, '').trim();
+
+const sanitizeBlindProposal = (submission: any) => {
+  const proposal = submission.proposalId || {};
+  return {
+    ...proposal,
+    mangakaId: undefined,
+    comments: [],
+    storyboardUrl: undefined,
+    storyboardPath: undefined,
+    storyboardOriginalName: undefined,
+    isAnonymous: true,
+    storyboardImages: Array.isArray(proposal.storyboardImages)
+      ? proposal.storyboardImages.map((image: any, index: number) => ({
+          _id: image._id || `blind-page-${index + 1}`,
+          imageUrl: image.imageUrl || image.url || '',
+          url: image.url || image.imageUrl || '',
+          pageNumber: image.pageNumber || index + 1,
+          originalName: `Bản thảo ẩn danh - Trang ${index + 1}`,
+        }))
+      : [],
+    _id: submission._id,
+    proposalRecordId: proposal._id,
+    decisionStatus: submission.decisionStatus || 'PENDING',
+    requiredVoters: submission.requiredVoters || [],
+    seriesId: submission.seriesId || null,
+    chairpersonId: submission.chairpersonId || null,
+    tiedDecisions: submission.tiedDecisions || [],
+    votingDeadline: submission.votingDeadline || null,
+  };
+};
+
 export default function EditorialBoard({
   currentUser,
   series,
   ratings,
   onRefreshAll
 }: EditorialBoardProps) {
+  const { t } = useLanguage();
   // Real backend proposal lists
   const [proposalsList, setProposalsList] = useState<any[]>([]);
   const [boardMembers, setBoardMembers] = useState<User[]>([]);
   const [loadingProposals, setLoadingProposals] = useState(false);
+  const [productionDeadlines, setProductionDeadlines] = useState<any[]>([]);
   const [selectedProposal, setSelectedProposal] = useState<any | null>(null);
   const [voterStatus, setVoterStatus] = useState<any>(null);
-  const [selectedVoterIds, setSelectedVoterIds] = useState<string[]>([]);
+  const [storyboardImages, setStoryboardImages] = useState<StoryboardImage[]>([]);
+  const [storyboardLoading, setStoryboardLoading] = useState(false);
 
   const ITEMS_PER_PAGE = 5;
 
@@ -50,7 +92,8 @@ export default function EditorialBoard({
     decision: 'ACCEPT' | 'REJECT';
     comment: string;
     schedule: 'WEEKLY' | 'MONTHLY';
-  }>({ decision: 'ACCEPT', comment: '', schedule: 'WEEKLY' });
+    score: number;
+  }>({ decision: 'ACCEPT', comment: '', schedule: 'WEEKLY', score: 70 });
   const [modalMessage, setModalMessage] = useState('');
   const [modalSubmitting, setModalSubmitting] = useState(false);
 
@@ -78,16 +121,8 @@ export default function EditorialBoard({
       const data = await apiClient.submissions.getAll();
       const pitches = (Array.isArray(data) ? data : [])
         .filter((submission) => submission.submissionType === 'PITCH' && submission.proposalId)
-        .map((submission) => ({
-          ...submission.proposalId,
-          _id: submission._id,
-          proposalRecordId: submission.proposalId._id,
-          decisionStatus: submission.decisionStatus || 'PENDING',
-          requiredVoters: submission.requiredVoters || [],
-          seriesId: submission.seriesId || null,
-          chairpersonId: submission.chairpersonId || null,
-          tiedDecisions: submission.tiedDecisions || [],
-        }));
+        .map(sanitizeBlindProposal);
+
       setProposalsList(pitches);
     } catch (err) {
       console.error('Failed to fetch pitch submissions:', err);
@@ -109,6 +144,15 @@ export default function EditorialBoard({
     fetchAllProposals();
     fetchBoardMembers();
     fetchSubmissions();
+    apiClient.chapters.getAll()
+      .then((chapters) => {
+        const deadlineItems = (chapters || [])
+          .filter((chapter: any) => chapter.dueAt && !Number.isNaN(new Date(chapter.dueAt).getTime()))
+          .sort((a: any, b: any) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
+          .slice(0, 6);
+        setProductionDeadlines(deadlineItems);
+      })
+      .catch((error) => console.error('Failed to load production deadlines:', error));
   }, []);
 
   const pendingPitches = proposalsList.filter(
@@ -124,26 +168,32 @@ export default function EditorialBoard({
   const openProposalModal = async (prop: any) => {
     setSelectedProposal(prop);
     setModalMessage('');
-    setModalVoteForm({ decision: 'ACCEPT', comment: '', schedule: 'WEEKLY' });
-    setSelectedVoterIds([]);
+    setModalVoteForm({ decision: 'ACCEPT', comment: '', schedule: 'WEEKLY', score: 70 });
+    setStoryboardImages(prop.storyboardImages || []);
+    setStoryboardLoading(false);
     try {
+      let statusRes = await apiClient.submissions.getVotingStatus(prop._id);
+      const requiredCount = statusRes?.totalRequired ?? statusRes?.voters?.length ?? 0;
+      if (!requiredCount && prop.decisionStatus === 'PENDING') {
+        await apiClient.submissions.assignVotersAuto(prop._id, 3);
+        statusRes = await apiClient.submissions.getVotingStatus(prop._id);
+        setModalMessage(`✅ ${t('The system randomly assigned 3 blind-review judges.')}`);
+      }
+      setVoterStatus(statusRes || null);
+
       const votes = await apiClient.votes.getForSubmission(prop._id);
       setModalVotes(Array.isArray(votes) ? votes : (votes as any)?.data || []);
-
-      const statusRes = await apiClient.submissions.getVotingStatus(prop._id);
-      setVoterStatus(statusRes || null);
     } catch (err) {
       console.error('Failed to open proposal details:', err);
       setModalVotes([]);
       setVoterStatus(null);
     }
   };
-
   const closeModal = () => {
     setSelectedProposal(null);
     setModalVotes([]);
     setVoterStatus(null);
-    setSelectedVoterIds([]);
+    setStoryboardImages([]);
     setModalMessage('');
     setModalSubmitting(false);
   };
@@ -151,9 +201,19 @@ export default function EditorialBoard({
   const handleModalVoteSubmit = async () => {
     if (!selectedProposal) return;
     if (!modalVoteForm.comment.trim()) {
-      setModalMessage('❌ Comment is required for editorial voting.');
+      setModalMessage(`❌ ${t('Comment is required for editorial voting.')}`);
       return;
     }
+    if (!Number.isFinite(modalVoteForm.score) || modalVoteForm.score < 0 || modalVoteForm.score > 100) {
+      setModalMessage(`❌ ${t('Score must be between 0 and 100.')}`);
+      return;
+    }
+    const expectedDecision = modalVoteForm.score >= 70 ? 'ACCEPT' : 'REJECT';
+    if (modalVoteForm.decision !== expectedDecision) {
+      setModalMessage(`❌ ${t('Scores from 70 pass; scores below 70 fail.')}`);
+      return;
+    }
+    const blindReviewComment = `[BLIND_REVIEW_SCORE:${modalVoteForm.score}/100] ${modalVoteForm.comment.trim()}`;
     setModalSubmitting(true);
     try {
       const isTieBreak = selectedProposal.decisionStatus === 'TIE_BREAK_REQUIRED';
@@ -171,54 +231,41 @@ export default function EditorialBoard({
         await apiClient.votes.tieBreak(
           selectedProposal._id,
           modalVoteForm.decision,
-          modalVoteForm.comment.trim(),
+          blindReviewComment,
         );
       } else {
         const scheduleParam = modalVoteForm.decision === 'ACCEPT' ? modalVoteForm.schedule : undefined;
         await apiClient.votes.submit(
           selectedProposal._id,
           modalVoteForm.decision,
-          modalVoteForm.comment.trim(),
+          blindReviewComment,
           scheduleParam,
         );
       }
-    
-      setModalMessage('🎉 Vote recorded successfully!');
-      
+      setModalMessage(`✅ ${t('Vote recorded successfully!')}`);
+
       const votes = await apiClient.votes.getForSubmission(selectedProposal._id);
       setModalVotes(Array.isArray(votes) ? votes : (votes as any)?.data || []);
-
       const statusRes = await apiClient.submissions.getVotingStatus(selectedProposal._id);
       setVoterStatus(statusRes || null);
-
       fetchAllProposals();
       onRefreshAll();
       closeModal();
     } catch (err: any) {
-      setModalMessage(`❌ ${err.message}`);
+      setModalMessage(`❌ ${t(err.message)}`);
     } finally {
       setModalSubmitting(false);
     }
   };
-
-  const handleAssignVoters = async () => {
-    if (!selectedProposal || selectedVoterIds.length === 0) return;
-    try {
-      await apiClient.submissions.assignVoters(selectedProposal._id, selectedVoterIds);
-      const statusRes = await apiClient.submissions.getVotingStatus(selectedProposal._id);
-      setVoterStatus(statusRes || null);
-      setSelectedVoterIds([]);
-      setModalMessage('🎉 Voters assigned successfully!');
-      fetchAllProposals();
-    } catch (err: any) {
-      setModalMessage(`❌ ${err.message}`);
-    }
-  };
-
   const uniqueModalVotes = dedupeVotesByVoter(modalVotes);
   const acceptVoteCount = uniqueModalVotes.filter((vote) => vote.decision === 'ACCEPT').length;
   const rejectVoteCount = uniqueModalVotes.filter((vote) => vote.decision === 'REJECT').length;
   const totalCast = acceptVoteCount + rejectVoteCount;
+  const scoredVotes = uniqueModalVotes.map(getVoteScore).filter((score): score is number => score !== null);
+  const averageScore = scoredVotes.length
+    ? Math.round((scoredVotes.reduce((sum, score) => sum + score, 0) / scoredVotes.length) * 10) / 10
+    : null;
+  const blindReviewPassed = totalCast >= 3 && acceptVoteCount >= 2 && averageScore !== null && averageScore >= 70;
   const modalRequiredVoters = voterStatus?.voters || selectedProposal?.requiredVoters || [];
   const modalRequiredCount = voterStatus?.totalRequired ?? modalRequiredVoters.length;
   const modalAwaitingCount = Math.max(modalRequiredCount - totalCast, 0);
@@ -227,6 +274,8 @@ export default function EditorialBoard({
     ? uniqueModalVotes.find((vote) => getVoteVoterId(vote) === currentUser._id)
     : null;
   const isProposalTieBreak = selectedProposal?.decisionStatus === 'TIE_BREAK_REQUIRED';
+  const proposalVotingDeadline = selectedProposal?.votingDeadline || voterStatus?.votingDeadline || null;
+  const isProposalOverdue = proposalVotingDeadline && new Date(proposalVotingDeadline) < new Date();
   const proposalChairId = typeof selectedProposal?.chairpersonId === 'object'
     ? selectedProposal.chairpersonId?._id
     : selectedProposal?.chairpersonId;
@@ -242,15 +291,15 @@ export default function EditorialBoard({
       const data = await apiClient.directives.getAll();
       setSubmissionsList(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      setDirectiveError(err.message || 'Failed to load board directives.');
+      setDirectiveError(t(err.message || 'Failed to load board directives.'));
     } finally {
       setLoadingDirectives(false);
     }
   };
 
   const handleCreateDirective = async () => {
-    if (!dirForm.seriesId) { setDirMsg('❌ Select a series.'); return; }
-    if (!dirForm.reason.trim()) { setDirMsg('❌ Reason is required.'); return; }
+    if (!dirForm.seriesId) { setDirMsg(`❌ ${t('Select a series.')}`); return; }
+    if (!dirForm.reason.trim()) { setDirMsg(`❌ ${t('Reason is required.')}`); return; }
     try {
       await apiClient.directives.create(
         dirForm.seriesId,
@@ -258,20 +307,20 @@ export default function EditorialBoard({
         dirForm.reason.trim(),
         dirForm.actionType === 'CHANGE_FORMAT' ? dirForm.newSchedule : undefined,
       );
-      setDirMsg('✅ Post-decision submission created!');
+      setDirMsg(`✅ ${t('Post-decision submission created!')}`);
       setDirForm({ seriesId: '', actionType: 'CANCEL', newSchedule: 'MONTHLY', reason: '' });
       setShowDirectiveForm(false);
       onRefreshAll();
       setTimeout(fetchSubmissions, 300);
       setTimeout(() => setDirMsg(''), 5000);
     } catch (err: any) {
-      setDirMsg(`❌ ${err.message}`);
+      setDirMsg(`❌ ${t(err.message)}`);
     }
   };
 
   const handleSubmissionVoteSubmit = async () => {
     if (!selectedDirective) return;
-    if (!dirVoteForm.comment.trim()) { setDirVoteMsg('❌ Comment required.'); return; }
+    if (!dirVoteForm.comment.trim()) { setDirVoteMsg(`❌ ${t('Comment required.')}`); return; }
     setDirVoteSubmitting(true);
     try {
       const isTieBreak = selectedDirective.status === 'TIE_BREAK_REQUIRED';
@@ -279,12 +328,12 @@ export default function EditorialBoard({
         ? apiClient.directives.tieBreak
         : apiClient.directives.vote;
       await submit(selectedDirective._id, dirVoteForm.decision, dirVoteForm.comment.trim());
-      setDirVoteMsg('✅ Vote recorded!');
+      setDirVoteMsg(`✅ ${t('Vote recorded!')}`);
       onRefreshAll();
       setTimeout(fetchSubmissions, 300);
       closeDirectiveModal();
     } catch (err: any) {
-      setDirVoteMsg(`❌ ${err.message}`);
+      setDirVoteMsg(`❌ ${t(err.message)}`);
     } finally {
       setDirVoteSubmitting(false);
     }
@@ -318,22 +367,48 @@ export default function EditorialBoard({
     <div className="space-y-6">
       <header className="mb-8 pb-5 border-b-4 border-ink-black flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="font-syne text-3xl font-black text-ink-black uppercase italic tracking-tight">Editorial Board</h1>
+          <h1 className="font-syne text-3xl font-black text-ink-black uppercase italic tracking-tight">{t("Editorial Board")}</h1>
           <p className="font-sans text-xs text-neutral-600 font-bold uppercase tracking-wider mt-1.5 flex items-center gap-2">
             <span className="inline-block w-2.5 h-2.5 bg-[#E63946]"></span>
-            Majority vote required to approve proposals. Vote tally & serialization decisions panel.
+            {t("Majority vote required to approve proposals. Vote tally & serialization decisions panel.")}
           </p>
         </div>
       </header>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
         <section className="xl:col-span-8 flex flex-col gap-6">
+          <div className="bg-white border-4 border-ink-black p-5 shadow-[4px_4px_0px_#141414]">
+            <div className="flex items-center justify-between gap-3 border-b-2 border-ink-black pb-3 mb-3">
+              <h2 className="font-syne text-sm font-black uppercase text-ink-black">{t('Production deadlines')}</h2>
+              <span className="font-mono text-[9px] font-black uppercase text-neutral-500">{productionDeadlines.length} {t('chapters')}</span>
+            </div>
+            {productionDeadlines.length === 0 ? (
+              <p className="font-mono text-[10px] font-bold uppercase text-neutral-400">{t('No chapter deadline is available.')}</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {productionDeadlines.map((chapter: any) => {
+                  const deadline = new Date(chapter.dueAt);
+                  const overdue = deadline.getTime() < Date.now();
+                  const seriesTitle = typeof chapter.seriesId === 'object' ? chapter.seriesId?.title : t('Series');
+                  return (
+                    <div key={chapter._id} className={`border-2 p-3 ${overdue ? 'border-[#E63946] bg-[#E63946]/5' : 'border-ink-black bg-manuscript-gray'}`}>
+                      <p className="font-sans text-xs font-black text-ink-black truncate">{seriesTitle} · {t('Chapter')} {chapter.chapterNumber}</p>
+                      <p className={`font-mono text-[9px] font-bold uppercase mt-1 ${overdue ? 'text-[#E63946]' : 'text-neutral-600'}`}>
+                        {overdue ? t('Overdue') : t('Deadline')}: {deadline.toLocaleString()}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <h2 className="font-syne text-xl font-black uppercase text-ink-black pb-4 border-b-4 border-ink-black flex items-center gap-3 select-none">
             <CheckSquare className="text-[#E63946] w-6 h-6 animate-pulse" />
-            Pending Series Voting
+            {t("Pending Series Voting")}
             {pendingPitches.length > 0 && (
               <span className="ml-auto text-[10px] font-mono font-black text-neutral-500">
-                {pendingPitches.length} PROPOSAL{pendingPitches.length > 1 ? 'S' : ''} AWAITING BOARD DECISION
+                {t("{{count}} proposals awaiting board decision", { count: pendingPitches.length })}
               </span>
             )}
           </h2>
@@ -347,12 +422,12 @@ export default function EditorialBoard({
               return (
                 <div key={item._id} className="bg-white border-4 border-ink-black border-t-0 first:border-t-4 p-5 flex items-center gap-5 hover:bg-manuscript-gray transition-colors">
                   <div className="w-16 h-20 bg-neutral-200 border-2 border-ink-black shrink-0-0 overflow-hidden">
-                    <div className="w-full h-full flex items-center justify-center text-neutral-400 text-[9px] font-mono font-bold">NO COVER</div>
+                    <div className="w-full h-full flex items-center justify-center text-neutral-400 text-[9px] font-mono font-bold">{t("No Cover")}</div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-syne text-sm font-black uppercase tracking-tight text-ink-black truncate">{prop.title || 'Untitled'}</h3>
+                    <h3 className="font-syne text-sm font-black uppercase tracking-tight text-ink-black truncate">{prop.title || t("Untitled")}</h3>
                     <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
-                      Author: {prop.mangakaId ? (prop.mangakaId as any).name || 'Mangaka' : 'Mangaka'}
+                      {t('Author')}: {t('Anonymous')}
                     </p>
                     <p className="font-sans text-[10px] text-neutral-400 mt-1 line-clamp-1">{prop.synopsis || ''}</p>
                     <div className="flex items-center gap-2 mt-2">
@@ -361,26 +436,31 @@ export default function EditorialBoard({
                       </span>
                       {item.decisionStatus === 'TIE_BREAK_REQUIRED' && (
                         <span className="px-2 py-0.5 text-[8px] font-mono font-black uppercase bg-[#E63946] text-white border border-ink-black">
-                          Tie-break required
+                          {t('Tie-break required')}
                         </span>
                       )}
                     </div>
                   </div>
                   <div className="shrink-0-0 text-center px-4 py-2 border-2 border-ink-black bg-manuscript-gray min-w-[100px]">
-                    <div className="font-mono text-xs font-black text-ink-black">Voters Status</div>
+                    <div className="font-mono text-xs font-black text-ink-black">{t("Voters Status")}</div>
                     <div className="font-mono text-sm font-black text-[#E63946]">
                       {votedCount}/{totalRequired}
                     </div>
+                    {item.votingDeadline && (
+                      <div className={`font-mono text-[8px] font-bold mt-1 ${new Date(item.votingDeadline) < new Date() ? 'text-[#E63946]' : 'text-neutral-500'}`}>
+                        ⏳ {new Date(item.votingDeadline).toLocaleDateString()}
+                      </div>
+                    )}
                   </div>
                   <button onClick={() => openProposalModal(item)} className="shrink-0-0 bg-[#E63946] hover:bg-red-600 text-white font-syne text-[10px] font-extrabold uppercase py-2.5 px-5 border-2 border-ink-black shadow-[3px_3px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
-                    Review & Vote
+                    {t("Review & Vote")}
                   </button>
                 </div>
               );
             })}
             {pendingPitches.length === 0 && (
               <div className="bg-white border-4 border-dashed border-ink-black rounded-none p-12 text-center text-xs font-mono font-bold text-neutral-500 uppercase select-none">
-                🌸 Perfect! All series proposals have been reviewed and voted on. No waiting items.
+                🌸 {t("Perfect! All series proposals have been reviewed and voted on. No waiting items.")}
               </div>
             )}
           </div>
@@ -388,7 +468,7 @@ export default function EditorialBoard({
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 pt-4">
               <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="bg-white border-2 border-ink-black px-3 py-1.5 font-mono text-[10px] font-bold uppercase hover:bg-manuscript-gray disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors">
-                ← Prev
+                ← {t("Previous")}
               </button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                 <button key={page} onClick={() => setCurrentPage(page)} className={`w-9 h-9 border-2 border-ink-black font-mono text-xs font-black transition-colors cursor-pointer ${page === currentPage ? 'bg-ink-black text-white shadow-[2px_2px_0px_#E63946]' : 'bg-white text-ink-black hover:bg-manuscript-gray'}`}>
@@ -396,7 +476,7 @@ export default function EditorialBoard({
                 </button>
               ))}
               <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="bg-white border-2 border-ink-black px-3 py-1.5 font-mono text-[10px] font-bold uppercase hover:bg-manuscript-gray disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors">
-                Next →
+                {t("Next")} →
               </button>
             </div>
           )}
@@ -420,10 +500,10 @@ export default function EditorialBoard({
           <section className="bg-white border-4 border-ink-black rounded-none p-6 shadow-[4px_4px_0px_#141414]">
             <h2 className="font-syne text-md font-black uppercase text-ink-black border-b-2 border-ink-black pb-3 mb-4 flex items-center gap-2 select-none">
               <Gavel className="text-[#E63946] w-5 h-5" />
-              Board Directive Proposals
+              {t("Board Directive Proposals")}
             </h2>
             <p className="font-sans text-[10px] text-neutral-500 font-bold uppercase tracking-wider mb-4">
-              Propose to continue, cancel, or change a series format. Majority vote required.
+              {t("Propose to continue, cancel, or change a series format. Majority vote required.")}
             </p>
 
             {dirMsg && (
@@ -436,7 +516,7 @@ export default function EditorialBoard({
             <div className="space-y-3 mb-4">
               {loadingDirectives && (
                 <div className="bg-manuscript-gray border-2 border-neutral-300 p-4 text-center text-xs font-mono font-bold text-neutral-500 uppercase">
-                  Loading directives...
+                  {t("Loading directives...")}
                 </div>
               )}
               {directiveError && (
@@ -444,7 +524,7 @@ export default function EditorialBoard({
               )}
               {!loadingDirectives && submissionsList.length === 0 && (
                 <div className="bg-manuscript-gray border-2 border-dashed border-neutral-300 p-4 text-center text-xs font-mono font-bold text-neutral-400 uppercase">
-                  No active post-decision directives
+                  {t("No active post-decision directives")}
                 </div>
               )}
               {submissionsList.map(d => {
@@ -458,13 +538,13 @@ export default function EditorialBoard({
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex-1 min-w-0">
                         {d.actionType === 'CONTINUE' && (
-                          <span className="inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 bg-status-success/15 text-green-800 border border-status-success">CONTINUE SERIES</span>
+                          <span className="inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 bg-status-success/15 text-green-800 border border-status-success">{t("Continue Series")}</span>
                         )}
                         <span className={`inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 ${d.actionType === 'CONTINUE' ? 'hidden' : d.actionType === 'CANCEL' ? 'bg-[#E63946] text-white' : 'bg-[#FFF3B0] text-ink-black border border-ink-black'}`}>
-                          {d.actionType === 'CANCEL' ? 'CANCEL SERIES' : `CHANGE → ${d.newSchedule || 'MONTHLY'}`}
+                          {d.actionType === 'CANCEL' ? t('Cancel Series') : `${t('Change')} → ${t(d.newSchedule || 'MONTHLY')}`}
                         </span>
                         <span className="inline-block px-2 py-0.5 text-[8px] font-mono font-black uppercase mr-2 border border-ink-black bg-white">
-                          {d.status.replaceAll('_', ' ')}
+                          {t(d.status)}
                         </span>
                         <span className="font-syne text-xs font-black text-ink-black truncate">{d.seriesTitle || targetSeriesId}</span>
                       </div>
@@ -478,21 +558,26 @@ export default function EditorialBoard({
                           <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                           </svg>
-                          Series
+                          {t("Series")}
                         </a>
                       )}
                     </div>
                     <p className="font-sans text-[10px] text-neutral-500 line-clamp-2 mb-2">{d.reason}</p>
                     <div className="flex items-center gap-3 mb-2">
                       <div className="flex items-center gap-1">
-                        <span className="font-mono text-[9px] text-status-success font-black">{acceptCount}Y</span>
+                        <span className="font-mono text-[9px] text-status-success font-black">{acceptCount} {t('Yes short')}</span>
                         <span className="font-mono text-[9px] text-neutral-400">/</span>
-                        <span className="font-mono text-[9px] text-[#E63946] font-black">{rejectCount}N</span>
-                        <span className="font-mono text-[9px] text-neutral-400 ml-1">({totalCount} total)</span>
+                        <span className="font-mono text-[9px] text-[#E63946] font-black">{rejectCount} {t('No short')}</span>
+                        <span className="font-mono text-[9px] text-neutral-400 ml-1">({totalCount} {t('total')})</span>
                       </div>
+                      {d.votingDeadline && (
+                        <span className={`font-mono text-[9px] font-black uppercase ${new Date(d.votingDeadline) < new Date() ? 'text-[#E63946]' : 'text-neutral-500'}`}>
+                          ⏳ {new Date(d.votingDeadline).toLocaleDateString()}
+                        </span>
+                      )}
                     </div>
                     <button onClick={() => openDirectiveModal(d)} className="w-full bg-ink-black hover:bg-neutral-800 text-white font-syne text-[9px] font-extrabold uppercase py-2 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
-                      Review & Vote
+                      {t("Review & Vote")}
                     </button>
                   </div>
                 );
@@ -503,48 +588,48 @@ export default function EditorialBoard({
             {!showDirectiveForm ? (
               <button onClick={() => { setShowDirectiveForm(true); setDirMsg(''); }} className="w-full flex items-center justify-center gap-2 bg-[#E63946] border-2 border-ink-black hover:bg-red-600 text-white font-syne text-xs uppercase font-extrabold py-3 rounded-none shadow-[2px_2px_0px_#141414] transition-colors cursor-pointer">
                 <Plus className="w-4 h-4" />
-                Propose New Directive
+                {t("Propose New Directive")}
               </button>
             ) : (
               <div className="border-4 border-ink-black p-4 space-y-3 bg-manuscript-gray">
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">New Directive Proposal</h3>
+                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">{t("New Directive Proposal")}</h3>
                   <button onClick={() => setShowDirectiveForm(false)} className="p-1 hover:bg-white border border-ink-black cursor-pointer">
                     <X className="w-3 h-3" />
                   </button>
                 </div>
                 <div>
-                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">Select Series</label>
+                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">{t("Select Series")}</label>
                   <select value={dirForm.seriesId} onChange={(e) => setDirForm({ ...dirForm, seriesId: e.target.value })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none cursor-pointer">
-                    <option value="">Choose active series...</option>
+                    <option value="">{t("Choose active series...")}</option>
                     {activeSeries.map(s => (
-                      <option key={s._id} value={s._id}>{s.title} ({s.status}{s.pubSchedule ? ` / ${s.pubSchedule}` : ''})</option>
+                      <option key={s._id} value={s._id}>{s.title} ({t(s.status)}{s.pubSchedule ? ` / ${t(s.pubSchedule)}` : ''})</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">Action Type</label>
+                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">{t("Action Type")}</label>
                   <select value={dirForm.actionType} onChange={(e) => setDirForm({ ...dirForm, actionType: e.target.value as DirectiveAction })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none cursor-pointer">
-                    <option value="CANCEL">Cancel Series (low ranking)</option>
-                    <option value="CONTINUE">Continue Series</option>
-                    <option value="CHANGE_FORMAT">Change Publication Format</option>
+                    <option value="CANCEL">{t("Cancel Series (low ranking)")}</option>
+                    <option value="CONTINUE">{t("Continue Series")}</option>
+                    <option value="CHANGE_FORMAT">{t("Change Publication Format")}</option>
                   </select>
                 </div>
                 {dirForm.actionType === 'CHANGE_FORMAT' && (
                   <div>
-                    <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">New Schedule</label>
+                    <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">{t("New Schedule")}</label>
                     <select value={dirForm.newSchedule} onChange={(e) => setDirForm({ ...dirForm, newSchedule: e.target.value as 'WEEKLY' | 'MONTHLY' })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none cursor-pointer">
-                      <option value="WEEKLY">WEEKLY</option>
-                      <option value="MONTHLY">MONTHLY</option>
+                      <option value="WEEKLY">{t("Weekly")}</option>
+                      <option value="MONTHLY">{t("Monthly")}</option>
                     </select>
                   </div>
                 )}
                 <div>
-                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">Justification (Required)</label>
-                  <textarea rows={3} value={dirForm.reason} onChange={(e) => setDirForm({ ...dirForm, reason: e.target.value })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none resize-none" placeholder="Explain why this directive is needed (e.g. low reader ranking data)..."></textarea>
+                  <label className="font-mono text-[10px] text-ink-black block mb-1 font-extrabold uppercase">{t("Justification (Required)")}</label>
+                  <textarea rows={3} value={dirForm.reason} onChange={(e) => setDirForm({ ...dirForm, reason: e.target.value })} className="w-full bg-white border-2 border-ink-black rounded-none p-2 font-sans text-xs font-bold text-ink-black focus:outline-none resize-none" placeholder={t("Explain why this directive is needed (e.g. low reader ranking data)...")}></textarea>
                 </div>
                 <button onClick={handleCreateDirective} className="w-full bg-ink-black hover:bg-neutral-800 text-white font-syne text-xs uppercase font-extrabold py-3 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">
-                  Submit Proposal
+                  {t("Submit Proposal")}
                 </button>
               </div>
             )}
@@ -562,7 +647,7 @@ export default function EditorialBoard({
                 <div>
                   <h2 className="font-syne text-lg font-black uppercase tracking-tight text-ink-black">{selectedProposal.title}</h2>
                   <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
-                    Author: {typeof selectedProposal.mangakaId === 'object' && selectedProposal.mangakaId !== null ? (selectedProposal.mangakaId as any).name : 'Mangaka'}
+                    {t('Author')}: {t('Anonymous')}
                   </p>
                 </div>
                 <button onClick={closeModal} className="p-2 hover:bg-manuscript-gray border-2 border-ink-black cursor-pointer transition-colors">
@@ -573,26 +658,43 @@ export default function EditorialBoard({
                 <div className="grid grid-cols-4 gap-3">
                   <div className="bg-status-success/10 border-2 border-status-success p-3 text-center">
                     <div className="font-mono text-2xl font-black text-status-success">{acceptVoteCount}</div>
-                    <div className="font-mono text-[9px] font-bold text-status-success uppercase">Accept</div>
+                    <div className="font-mono text-[9px] font-bold text-status-success uppercase">{t('PASS')}</div>
                   </div>
                   <div className="bg-[#E63946]/10 border-2 border-[#E63946] p-3 text-center">
                     <div className="font-mono text-2xl font-black text-[#E63946]">{rejectVoteCount}</div>
-                    <div className="font-mono text-[9px] font-bold text-[#E63946] uppercase">Reject</div>
+                    <div className="font-mono text-[9px] font-bold text-[#E63946] uppercase">{t('FAIL')}</div>
                   </div>
                   <div className="bg-[#FFF3B0]/60 border-2 border-[#B7791F] p-3 text-center">
                     <div className="font-mono text-2xl font-black text-[#B7791F]">{modalAwaitingCount}</div>
-                    <div className="font-mono text-[9px] font-bold text-[#B7791F] uppercase">Awaiting</div>
+                    <div className="font-mono text-[9px] font-bold text-[#B7791F] uppercase">{t('Awaiting')}</div>
                   </div>
                   <div className="bg-manuscript-gray border-2 border-ink-black p-3 text-center">
                     <div className="font-mono text-2xl font-black text-ink-black">{modalRequiredCount ? `${totalCast}/${modalRequiredCount}` : totalCast}</div>
-                    <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">Cast</div>
+                    <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">{t('Cast')}</div>
+                  </div>
+                </div>
+                <div className={`border-2 p-3 flex items-center justify-between gap-3 ${totalCast >= 3 ? (blindReviewPassed ? 'border-status-success bg-status-success/10' : 'border-[#E63946] bg-[#E63946]/10') : 'border-neutral-300 bg-neutral-50'}`}>
+                  <div>
+                    <p className="font-mono text-[9px] font-black uppercase text-neutral-500">{t('Blind-review result')}</p>
+                    <p className="font-sans text-xs font-black text-ink-black">
+                      {totalCast < 3 ? t('Waiting for all 3 judges') : blindReviewPassed ? t('PASS') : t('FAIL')}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-mono text-[9px] font-black uppercase text-neutral-500">{t('Average score')}</p>
+                    <p className="font-mono text-lg font-black text-ink-black">{averageScore === null ? '--' : `${averageScore}/100`}</p>
                   </div>
                 </div>
 
                 <div className="bg-manuscript-gray p-4 border-2 border-ink-black">
+                  {voterStatus?.votingDeadline && (
+                    <div className="mb-3 p-2 border-2 border-dashed border-amber-500 font-mono text-[9px] font-bold uppercase">
+                      ⏳ Voting deadline: {new Date(voterStatus.votingDeadline).toLocaleString()}
+                    </div>
+                  )}
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">Author Pitch Synopsis:</span>
+                      <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">{t('Author Pitch Synopsis:')}</span>
                       <p className="font-sans text-xs leading-relaxed font-bold text-ink-black">{selectedProposal.synopsis}</p>
                     </div>
                     <div className="shrink-0 flex flex-col gap-2">
@@ -606,68 +708,45 @@ export default function EditorialBoard({
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                           </svg>
-                          View Series
+                          {t('View Series')}
                         </a>
                       )}
-                      <button
-                        onClick={async () => {
-                          try {
-                            const proposalId = selectedProposal.proposalRecordId;
-                            const proposalData = await apiClient.proposals.getById(proposalId);
-                            const images = proposalData?.storyboardImages || [];
-                            if (images.length > 1) {
-                              const zip = new JSZip();
-                              const imgFolder = zip.folder("storyboard")!;
-                              for (let i = 0; i < images.length; i++) {
-                                const img = images[i];
-                                try {
-                                  const resp = await fetch(img.url);
-                                  const blob = await resp.blob();
-                                  const ext = img.originalName?.includes(".")
-                                    ? img.originalName.split(".").pop()
-                                    : "png";
-                                  imgFolder.file(`page_${i + 1}.${ext}`, blob);
-                                } catch (e) {
-                                  console.warn("Failed to fetch image", img.url, e);
-                                }
-                              }
-                              const blob = await zip.generateAsync({ type: "blob" });
-                              saveAs(blob, `${selectedProposal.title}_storyboard.zip`);
-                            } else if (images.length === 1) {
-                              const resp = await fetch(images[0].url);
-                              const blob = await resp.blob();
-                              const ext = images[0].originalName?.includes(".")
-                                ? images[0].originalName.split(".").pop()
-                                : "png";
-                              saveAs(blob, `${selectedProposal.title}_storyboard.${ext}`);
-                            } else {
-                              await apiClient.proposals.downloadStoryboard(proposalId);
-                            }
-                          } catch (err) {
-                            console.error('Download failed', err);
-                            alert('Failed to download storyboard');
-                          }
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#E63946] text-white text-[9px] font-mono font-extrabold uppercase border-2 border-ink-black hover:bg-red-600 transition-colors shadow-[2px_2px_0px_#141414] cursor-pointer"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        Download Storyboard
-                      </button>
                     </div>
+                  </div>
+
+                  {/* Storyboard gallery — replaces the removed download button */}
+                  <div className="mt-4">
+                    {storyboardLoading ? (
+                      <div className="border-2 border-ink-black bg-manuscript-gray p-4 text-center">
+                        <p className="font-mono text-[9px] font-bold uppercase text-neutral-500">
+                          Loading storyboard...
+                        </p>
+                      </div>
+                    ) : (
+                      <StoryboardGallery
+                        images={storyboardImages}
+                        title="Storyboard"
+                      />
+                    )}
                   </div>
                 </div>
 
-                {/* Voter Assignment Section */}
                 {!isProposalTieBreak && (
-                <div className="bg-manuscript-gray p-4 border-2 border-ink-black space-y-3">
-                  <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1">Assign Required Voters:</span>
-                  
-                  {/* Current voters list */}
-                  {voterStatus && voterStatus.voters && voterStatus.voters.length > 0 && (
-                    <div className="space-y-1 mb-3">
-                      <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase">Assigned Board Members:</p>
+                  <div className="bg-manuscript-gray p-4 border-2 border-ink-black space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-mono text-[10px] uppercase font-extrabold text-[#E63946]">
+                        {t('Blind-review judges')}
+                      </span>
+                      <span className="font-mono text-[9px] font-black uppercase border border-ink-black bg-white px-2 py-1">
+                        {modalRequiredCount}/3
+                      </span>
+                    </div>
+                    <p className="font-sans text-[10px] font-bold text-neutral-600">
+                      {t('The system randomly assigns exactly 3 active judges. Board members cannot choose or replace judges from this screen.')}
+                    </p>
+                    {voterStatus?.voters?.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
-                        {voterStatus.voters.map((v: any) => {
+                        {voterStatus.voters.map((v: any, index: number) => {
                           const voterId = v.userId?._id || v.userId;
                           const voterVote = uniqueModalVotes.find((vote) => getVoteVoterId(vote) === voterId);
                           const decision = voterVote?.decision;
@@ -677,62 +756,24 @@ export default function EditorialBoard({
                               ? 'bg-[#E63946]/10 border-[#E63946] text-[#E63946]'
                               : 'bg-[#FFF3B0]/60 border-[#B7791F] text-[#B7791F]';
                           return (
-                            <span key={voterId} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono font-black uppercase border ${chipClass}`}>
-                              {v.userId?.name || 'Unknown'} - {decision || 'WAITING'}
+                            <span key={voterId || index} className={`inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-mono font-black uppercase border ${chipClass}`}>
+                              {t('Judge')} {index + 1} - {t(decision === 'ACCEPT' ? 'PASS' : decision === 'REJECT' ? 'FAIL' : 'WAITING')}
                             </span>
                           );
                         })}
                       </div>
-                    </div>
-                  )}
-
-                  {/* Checkbox list of available board members to add */}
-                  <div className="space-y-1">
-                    <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase">Available Board Members:</p>
-                    <div className="border-2 border-ink-black p-2 bg-white max-h-28 overflow-y-auto">
-                      {boardMembers
-                        .filter(m => !voterStatus?.voters?.some((v: any) => (v.userId?._id || v.userId) === m._id))
-                        .map(m => (
-                          <label key={m._id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-manuscript-gray p-1">
-                            <input
-                              type="checkbox"
-                              checked={selectedVoterIds.includes(m._id)}
-                              onChange={() => {
-                                setSelectedVoterIds(prev =>
-                                  prev.includes(m._id)
-                                    ? prev.filter(id => id !== m._id)
-                                    : [...prev, m._id]
-                                );
-                              }}
-                              className="w-4 h-4 accent-ink-black"
-                            />
-                            {m.name}
-                          </label>
-                        ))}
-                      {boardMembers.filter(m => !voterStatus?.voters?.some((v: any) => (v.userId?._id || v.userId) === m._id)).length === 0 && (
-                        <p className="font-mono text-[9px] text-neutral-400 text-center py-2">All board members already assigned.</p>
-                      )}
-                    </div>
+                    )}
                   </div>
-                  <button 
-                    onClick={handleAssignVoters}
-                    disabled={selectedVoterIds.length === 0}
-                    className="w-full bg-ink-black hover:bg-neutral-800 text-white font-syne text-[10px] font-extrabold uppercase px-4 py-2 border-2 border-ink-black shadow-[2px_2px_0px_#E63946] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Assign Voters ({selectedVoterIds.length} selected)
-                  </button>
-                </div>
                 )}
-
                 {uniqueModalVotes.length > 0 && (
                   <div>
-                    <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black mb-2">Board Member Votes</h3>
+                    <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black mb-2">{t('Board Member Votes')}</h3>
                     <div className="space-y-2">
                       {uniqueModalVotes.map(vote => (
                         <div key={vote._id} className={`p-3 border-2 ${vote.decision === 'ACCEPT' ? 'border-status-success bg-status-success/5' : 'border-[#E63946] bg-[#E63946]/5'}`}>
                           <div className="flex items-center gap-2 mb-1">
                             <span className={`px-2 py-0.5 text-[8px] font-mono font-black uppercase ${vote.decision === 'ACCEPT' ? 'bg-status-success text-white' : 'bg-[#E63946] text-white'}`}>
-                              {vote.decision}
+                              {t(vote.decision === 'ACCEPT' ? 'PASS' : 'FAIL')}
                             </span>
                             {vote.schedule && (
                               <span className="px-2 py-0.5 text-[8px] font-mono font-black uppercase bg-[#FFF3B0] text-ink-black border border-ink-black">
@@ -740,7 +781,10 @@ export default function EditorialBoard({
                               </span>
                             )}
                           </div>
-                          <p className="font-sans text-[10px] text-ink-black font-bold">{vote.comment}</p>
+                          {getVoteScore(vote) !== null && (
+                            <p className="font-mono text-[10px] font-black text-ink-black mb-1">{t('Score')}: {getVoteScore(vote)}/100</p>
+                          )}
+                          <p className="font-sans text-[10px] text-ink-black font-bold">{getVoteComment(vote)}</p>
                         </div>
                       ))}
                     </div>
@@ -751,12 +795,24 @@ export default function EditorialBoard({
                   const isAssigned = voterStatus?.voters?.some(
                     (v: any) => (v.userId?._id || v.userId) === currentUser._id
                   );
+                  if (isProposalOverdue && !isProposalTieBreak && !userVote) {
+                    return (
+                      <div className="bg-[#E63946]/10 border-4 border-[#E63946] p-5 text-center">
+                        <p className="font-mono text-xs font-black uppercase text-[#E63946] mb-1">
+                          ⏳ Voting deadline has passed
+                        </p>
+                        <p className="font-sans text-[10px] text-neutral-600 font-bold">
+                          This session is closed for voting. Results are being finalized from the votes already cast.
+                        </p>
+                      </div>
+                    );
+                  }
                   if (isProposalTieBreak && !canResolveProposalTie) {
                     return (
                       <div className="bg-[#FFF3B0]/40 border-4 border-[#FFF3B0] p-5 text-center">
-                        <p className="font-mono text-xs font-black uppercase text-ink-black mb-1">Tie-break pending</p>
+                        <p className="font-mono text-xs font-black uppercase text-ink-black mb-1">{t('Tie-break pending')}</p>
                         <p className="font-sans text-[10px] text-neutral-600 font-bold">
-                          Only the assigned chairperson can choose between the tied decisions.
+                          {t('Only the assigned chairperson can choose between the tied decisions.')}
                         </p>
                       </div>
                     );
@@ -764,9 +820,9 @@ export default function EditorialBoard({
                   if (!isProposalTieBreak && !isAssigned && !userVote) {
                     return (
                       <div className="bg-neutral-100 border-4 border-dashed border-neutral-400 p-5 text-center">
-                        <p className="font-mono text-xs font-black uppercase text-neutral-500 mb-1">Currently not Assigned</p>
+                        <p className="font-mono text-xs font-black uppercase text-neutral-500 mb-1">{t('Currently not Assigned')}</p>
                         <p className="font-sans text-[10px] text-neutral-400 font-bold">
-                          You are not assigned as a voter for this submission. Assign yourself or wait for assignment.
+                          {t('You are not assigned as a voter for this submission. Assign yourself or wait for assignment.')}
                         </p>
                       </div>
                     );
@@ -775,23 +831,43 @@ export default function EditorialBoard({
                     return (
                       <div className={`p-4 border-4 ${userVote.decision === 'ACCEPT' ? 'border-status-success bg-status-success/10' : 'border-[#E63946] bg-[#E63946]/10'}`}>
                         <p className="font-mono text-xs font-black uppercase mb-1">
-                          ✅ You voted: {userVote.decision}
+                          ✅ {t('You voted')}: {t(userVote.decision === 'ACCEPT' ? 'PASS' : 'FAIL')}
                           {userVote.schedule && ` (${userVote.schedule})`}
                         </p>
-                        <p className="font-sans text-[10px] text-neutral-600 font-bold">{userVote.comment}</p>
+                        {getVoteScore(userVote) !== null && <p className="font-mono text-[10px] font-black">{t('Score')}: {getVoteScore(userVote)}/100</p>}
+                        <p className="font-sans text-[10px] text-neutral-600 font-bold">{getVoteComment(userVote)}</p>
                       </div>
                     );
                   }
                   return (
                     <div className="border-4 border-ink-black p-5 space-y-4">
                       <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">
-                        {isProposalTieBreak ? 'Chairperson Tie-break' : 'Cast Your Vote'}
+                        {isProposalTieBreak ? t('Chairperson Tie-break') : t('Cast Your Vote')}
                       </h3>
                       {modalMessage && (
-                        <div className={`p-3 border-2 text-xs font-mono font-bold uppercase ${modalMessage.startsWith('🎉') ? 'bg-status-success/15 text-status-success border-status-success' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
+                        <div className={`p-3 border-2 text-xs font-mono font-bold uppercase ${modalMessage.startsWith('✅') ? 'bg-status-success/15 text-status-success border-status-success' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
                           {modalMessage}
                         </div>
                       )}
+                      <div>
+                        <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">{t('Blind-review score (0-100)')}</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={modalVoteForm.score}
+                          onChange={(e) => {
+                            const score = Number(e.target.value);
+                            setModalVoteForm({
+                              ...modalVoteForm,
+                              score,
+                              decision: score >= 70 ? 'ACCEPT' : 'REJECT',
+                            });
+                          }}
+                          className="w-full bg-manuscript-gray border-2 border-ink-black p-3 font-mono text-lg font-black focus:bg-white focus:outline-none"
+                        />
+                        <p className="mt-1 font-sans text-[9px] font-bold text-neutral-500">{t('70 or higher is PASS; below 70 is FAIL.')}</p>
+                      </div>
                       <div className="space-y-2">
                         {proposalVoteOptions.map((option) => (
                           <label key={option} className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-manuscript-gray text-xs font-bold font-sans uppercase">
@@ -802,25 +878,25 @@ export default function EditorialBoard({
                               checked={modalVoteForm.decision === option}
                               onChange={() => setModalVoteForm({ ...modalVoteForm, decision: option })}
                             />
-                            {option === 'ACCEPT' ? 'Accept Serialization' : 'Reject / Revise pitch'}
+                            {option === 'ACCEPT' ? t('PASS') : t('FAIL')}
                           </label>
                         ))}
                       </div>
                       {!isProposalTieBreak && modalVoteForm.decision === 'ACCEPT' && (
                         <div className="animate-fadeIn">
-                          <label className="block text-[10px] font-mono text-neutral-500 uppercase mb-1 font-bold">Preferred Schedule</label>
+                          <label className="block text-[10px] font-mono text-neutral-500 uppercase mb-1 font-bold">{t('Preferred Schedule')}</label>
                           <select className="bg-white border-2 border-ink-black rounded-none p-2 text-xs w-full focus:outline-none cursor-pointer font-bold" value={modalVoteForm.schedule} onChange={(e) => setModalVoteForm({ ...modalVoteForm, schedule: e.target.value as any })}>
-                            <option value="WEEKLY">WEEKLY</option>
-                            <option value="MONTHLY">MONTHLY</option>
+                            <option value="WEEKLY">{t("Weekly")}</option>
+                            <option value="MONTHLY">{t("Monthly")}</option>
                           </select>
                         </div>
                       )}
                       <div>
-                        <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">Editorial Feedback (Required)</label>
-                        <textarea rows={3} className="w-full bg-manuscript-gray border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder="Provide detailed feedback on the proposal..." value={modalVoteForm.comment} onChange={(e) => setModalVoteForm({ ...modalVoteForm, comment: e.target.value })}></textarea>
+                        <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">{t('Editorial Feedback (Required)')}</label>
+                        <textarea rows={3} className="w-full bg-manuscript-gray border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder={t('Provide detailed feedback on the proposal...')} value={modalVoteForm.comment} onChange={(e) => setModalVoteForm({ ...modalVoteForm, comment: e.target.value })}></textarea>
                       </div>
                       <button onClick={handleModalVoteSubmit} disabled={modalSubmitting} className="w-full bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs font-extrabold uppercase py-3 border-2 border-ink-black shadow-[4px_4px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer disabled:opacity-50">
-                        {modalSubmitting ? 'Submitting...' : isProposalTieBreak ? 'Resolve Tie' : 'Submit Vote'}
+                        {modalSubmitting ? t('Submitting...') : isProposalTieBreak ? t('Resolve Tie') : t('Submit Vote')}
                       </button>
                     </div>
                   );
@@ -840,18 +916,18 @@ export default function EditorialBoard({
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   {selectedDirective.actionType === 'CONTINUE' && (
-                    <span className="px-2 py-0.5 text-[9px] font-mono font-black uppercase bg-status-success/15 text-green-800 border border-status-success">CONTINUE SERIES</span>
+                    <span className="px-2 py-0.5 text-[9px] font-mono font-black uppercase bg-status-success/15 text-green-800 border border-status-success">{t("Continue Series")}</span>
                   )}
                   <span className={`px-2 py-0.5 text-[9px] font-mono font-black uppercase ${selectedDirective.actionType === 'CONTINUE' ? 'hidden' : selectedDirective.actionType === 'CANCEL' ? 'bg-[#E63946] text-white' : 'bg-[#FFF3B0] text-ink-black border border-ink-black'}`}>
-                    {selectedDirective.actionType === 'CANCEL' ? 'CANCEL SERIES' : `CHANGE → ${selectedDirective.newSchedule || 'MONTHLY'}`}
+                    {selectedDirective.actionType === 'CANCEL' ? t('Cancel Series') : `${t('Change')} → ${t(selectedDirective.newSchedule || 'MONTHLY')}`}
                   </span>
                   <span className="px-2 py-0.5 text-[9px] font-mono font-black uppercase border border-ink-black bg-white">
-                    {selectedDirective.status.replaceAll('_', ' ')}
+                    {t(selectedDirective.status)}
                   </span>
                 </div>
                 <h2 className="font-syne text-lg font-black uppercase tracking-tight text-ink-black">{selectedDirective.seriesTitle || selectedDirective.seriesId}</h2>
                 <p className="font-sans text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
-                  Proposed by: {selectedDirective.proposedByName || selectedDirective.proposedBy}
+                  {t('Proposed by')}: {selectedDirective.proposedByName || selectedDirective.proposedBy}
                 </p>
               </div>
               <button onClick={closeDirectiveModal} className="p-2 hover:bg-manuscript-gray border-2 border-ink-black cursor-pointer transition-colors">
@@ -859,38 +935,43 @@ export default function EditorialBoard({
               </button>
             </div>
             <div className="p-5 space-y-5">
+              {selectedDirective.votingDeadline && (
+                <div className={`p-3 border-2 border-dashed border-amber-500 font-mono text-[9px] font-bold uppercase ${new Date(selectedDirective.votingDeadline) < new Date() ? 'text-[#E63946] border-[#E63946]' : ''}`}>
+                  ⏳ Voting deadline: {new Date(selectedDirective.votingDeadline).toLocaleString()}
+                </div>
+              )}
               {/* Tally */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-status-success/10 border-2 border-status-success p-3 text-center">
                   <div className="font-mono text-2xl font-black text-status-success">{(selectedDirective.votes || []).filter(v => v.decision === 'ACCEPT').length}</div>
-                  <div className="font-mono text-[9px] font-bold text-status-success uppercase">Accept</div>
+                  <div className="font-mono text-[9px] font-bold text-status-success uppercase">{t('Accept')}</div>
                 </div>
                 <div className="bg-[#E63946]/10 border-2 border-[#E63946] p-3 text-center">
                   <div className="font-mono text-2xl font-black text-[#E63946]">{(selectedDirective.votes || []).filter(v => v.decision === 'REJECT').length}</div>
-                  <div className="font-mono text-[9px] font-bold text-[#E63946] uppercase">Reject</div>
+                  <div className="font-mono text-[9px] font-bold text-[#E63946] uppercase">{t('Reject')}</div>
                 </div>
                 <div className="bg-manuscript-gray border-2 border-ink-black p-3 text-center">
                   <div className="font-mono text-2xl font-black text-ink-black">{(selectedDirective.votes || []).length}</div>
-                  <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">Total Cast</div>
+                  <div className="font-mono text-[9px] font-bold text-neutral-500 uppercase">{t('Total Cast')}</div>
                 </div>
               </div>
 
               {/* Reason */}
               <div className="bg-manuscript-gray p-4 border-2 border-ink-black">
-                <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">Justification:</span>
+                <span className="font-mono block text-[10px] uppercase font-extrabold text-[#E63946] mb-1.5">{t('Justification:')}</span>
                 <p className="font-sans text-xs leading-relaxed font-bold text-ink-black">{selectedDirective.reason}</p>
               </div>
 
               {/* Existing votes */}
               {(selectedDirective.votes || []).length > 0 && (
                 <div>
-                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black mb-2">Board Votes</h3>
+                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black mb-2">{t('Board Votes')}</h3>
                   <div className="space-y-2">
                     {(selectedDirective.votes || []).map(vote => (
                       <div key={vote._id} className={`p-3 border-2 ${vote.decision === 'ACCEPT' ? 'border-status-success bg-status-success/5' : 'border-[#E63946] bg-[#E63946]/5'}`}>
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`px-2 py-0.5 text-[8px] font-mono font-black uppercase ${vote.decision === 'ACCEPT' ? 'bg-status-success text-white' : 'bg-[#E63946] text-white'}`}>
-                            {vote.decision}
+                            {t(vote.decision === 'ACCEPT' ? 'PASS' : 'FAIL')}
                           </span>
                           {vote.voterName && <span className="font-sans text-[9px] text-neutral-500 font-bold">{vote.voterName}</span>}
                         </div>
@@ -904,7 +985,7 @@ export default function EditorialBoard({
               {/* Cast vote form */}
               {(selectedDirective.status === 'PENDING' && !currentDirectiveVote) || canResolveDirectiveTie ? (
                 <div className="border-4 border-ink-black p-5 space-y-4">
-                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">{canResolveDirectiveTie ? 'Chairperson Tie-break' : 'Cast Your Vote'}</h3>
+                  <h3 className="font-mono text-[10px] font-extrabold uppercase text-ink-black">{canResolveDirectiveTie ? t('Chairperson Tie-break') : t('Cast Your Vote')}</h3>
                   {dirVoteMsg && (
                     <div className={`p-3 border-2 text-xs font-mono font-bold uppercase ${dirVoteMsg.startsWith('✅') ? 'bg-status-success/15 text-status-success border-status-success' : 'bg-[#E63946]/15 text-[#E63946] border-[#E63946]'}`}>
                       {dirVoteMsg}
@@ -913,19 +994,19 @@ export default function EditorialBoard({
                   <div className="space-y-2">
                     <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-manuscript-gray text-xs font-bold font-sans uppercase">
                       <input type="radio" name="dir_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={dirVoteForm.decision === 'ACCEPT'} onChange={() => setDirVoteForm({ ...dirVoteForm, decision: 'ACCEPT' })} />
-                      Approve Directive
+                      {t('Approve Directive')}
                     </label>
                     <label className="flex items-center gap-3 p-3 border-2 border-ink-black cursor-pointer hover:bg-manuscript-gray text-xs font-bold font-sans uppercase">
                       <input type="radio" name="dir_decision" className="w-4 h-4 text-[#E63946] border-2 border-[#141414] focus:ring-0 cursor-pointer" checked={dirVoteForm.decision === 'REJECT'} onChange={() => setDirVoteForm({ ...dirVoteForm, decision: 'REJECT' })} />
-                      Reject Directive
+                      {t('Reject Directive')}
                     </label>
                   </div>
                   <div>
-                    <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">Board Feedback (Required)</label>
-                    <textarea rows={3} className="w-full bg-manuscript-gray border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder="Explain your vote..." value={dirVoteForm.comment} onChange={(e) => setDirVoteForm({ ...dirVoteForm, comment: e.target.value })}></textarea>
+                    <label className="font-mono text-[10px] text-ink-black block font-extrabold uppercase mb-2">{t('Board Feedback (Required)')}</label>
+                    <textarea rows={3} className="w-full bg-manuscript-gray border-2 border-ink-black rounded-none p-3 font-sans text-xs font-bold text-ink-black placeholder:text-neutral-400 focus:bg-white focus:outline-none resize-none" placeholder={t('Explain your vote...')} value={dirVoteForm.comment} onChange={(e) => setDirVoteForm({ ...dirVoteForm, comment: e.target.value })}></textarea>
                   </div>
                   <button onClick={handleSubmissionVoteSubmit} disabled={dirVoteSubmitting} className="w-full bg-[#E63946] hover:bg-red-600 text-white font-syne text-xs font-extrabold uppercase py-3 border-2 border-ink-black shadow-[4px_4px_0px_#141414] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer disabled:opacity-50">
-                    {dirVoteSubmitting ? 'Submitting...' : canResolveDirectiveTie ? 'Resolve Tie' : 'Submit Vote'}
+                    {dirVoteSubmitting ? t('Submitting...') : canResolveDirectiveTie ? t('Resolve Tie') : t('Submit Vote')}
                   </button>
                 </div>
               ) : (
@@ -933,13 +1014,13 @@ export default function EditorialBoard({
                   {currentDirectiveVote ? (
                     <div>
                       <p className="font-mono text-xs font-black uppercase mb-1">
-                        ✅ You voted: {currentDirectiveVote.decision}
+                        ✅ {t('You voted')}: {t(currentDirectiveVote.decision)}
                       </p>
                       <p className="font-sans text-[10px] text-neutral-600 font-bold">{currentDirectiveVote.comment}</p>
                     </div>
                   ) : (
                     <p className="font-mono text-xs font-black uppercase text-neutral-400">
-                      {selectedDirective.status === 'APPROVED' ? '✅ Directive APPROVED' : selectedDirective.status === 'REJECTED' ? '❌ Directive REJECTED' : 'Voting closed'}
+                      {selectedDirective.status === 'APPROVED' ? `✅ ${t('Directive approved')}` : selectedDirective.status === 'REJECTED' ? `❌ ${t('Directive rejected')}` : t('Voting closed')}
                     </p>
                   )}
                 </div>

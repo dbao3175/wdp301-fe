@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { User, Series, Chapter, Task } from '../types';
+import React, { useEffect, useState } from 'react';
+import { User, Series, Chapter, Task, Volume } from '../types';
 import { apiClient } from '../api/client';
+import { useLanguage } from '../i18n/LanguageContext';
 import { 
-  BookOpen, Plus, Edit2, Archive, Check, X, ArrowRight, Save
+  BookOpen, Plus, Edit2, Archive, X, ArrowRight, Save, LibraryBig
 } from 'lucide-react';
+import ChapterFeedbackPanel from './ChapterFeedbackPanel';
 
 interface ChapterManagementProps {
   currentUser: User;
@@ -20,6 +22,7 @@ interface ChapterManagementProps {
 export default function ChapterManagement({
   currentUser, series, chapters, tasks, activeSeries, onRefreshAll, onSelectSeries, onSelectChapter, onChangeTab
 }: ChapterManagementProps) {
+  const { language, t } = useLanguage();
   const [isCreating, setIsCreating] = useState(false);
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
   
@@ -27,6 +30,12 @@ export default function ChapterManagement({
   const [cNumber, setCNumber] = useState<number | ''>('');
   const [cTitle, setCTitle] = useState('');
   const [cDeadline, setCDeadline] = useState('');
+  const [cVolumeId, setCVolumeId] = useState('');
+  const [volumes, setVolumes] = useState<Volume[]>([]);
+  const [isCreatingVolume, setIsCreatingVolume] = useState(false);
+  const [vNumber, setVNumber] = useState<number | ''>('');
+  const [vTitle, setVTitle] = useState('');
+  const [vDeadline, setVDeadline] = useState('');
 
   const [toast, setToast] = useState<{msg: string, type: 'success'|'error'} | null>(null);
 
@@ -35,6 +44,42 @@ export default function ChapterManagement({
     setTimeout(() => setToast(null), 3000);
   };
 
+  useEffect(() => {
+    if (!activeSeries) {
+      setVolumes([]);
+      return;
+    }
+    apiClient.volumes.getAll(activeSeries._id)
+      .then(setVolumes)
+      .catch((error) => showToast(t(error.message || 'Failed to load volumes'), 'error'));
+  }, [activeSeries?._id]);
+
+  const refreshVolumes = async () => {
+    if (!activeSeries) return;
+    setVolumes(await apiClient.volumes.getAll(activeSeries._id));
+  };
+
+  const handleCreateVolume = async () => {
+    if (!activeSeries) return showToast(t('Please select a series first'), 'error');
+    if (!vNumber || Number(vNumber) <= 0) return showToast(t('Invalid volume number'), 'error');
+    try {
+      const created = await apiClient.volumes.create({
+        seriesId: activeSeries._id,
+        volumeNumber: Number(vNumber),
+        title: vTitle.trim() || undefined,
+        dueAt: vDeadline || undefined,
+      });
+      await refreshVolumes();
+      setCVolumeId(created._id);
+      setVNumber('');
+      setVTitle('');
+      setVDeadline('');
+      setIsCreatingVolume(false);
+      showToast(t('Volume created successfully.'));
+    } catch (error: any) {
+      showToast(t(error.message || 'Failed to create volume'), 'error');
+    }
+  };
   const currentSeriesChapters = activeSeries 
     ? chapters.filter(c => {
         const sid = typeof c.seriesId === 'object' && c.seriesId !== null ? (c.seriesId as any)._id : c.seriesId;
@@ -44,47 +89,48 @@ export default function ChapterManagement({
     : [];
 
   const handleCreate = async () => {
-    if (!activeSeries) return showToast('Please select a series first', 'error');
-    if (!cNumber || isNaN(Number(cNumber))) return showToast('Invalid chapter number', 'error');
-    if (!cDeadline) return showToast('Deadline is required', 'error');
+    if (!activeSeries) return showToast(t('Please select a series first'), 'error');
+    if (!cNumber || isNaN(Number(cNumber))) return showToast(t('Invalid chapter number'), 'error');
+    if (!cDeadline) return showToast(t('Deadline is required'), 'error');
 
     try {
-      await apiClient.chapters.create(activeSeries._id, Number(cNumber), cDeadline, cTitle.trim());
-      showToast(`Chapter ${cNumber} created successfully!`);
+      await apiClient.chapters.create(activeSeries._id, Number(cNumber), cDeadline, cTitle.trim(), cVolumeId || undefined);
+      showToast(t("Chapter {{number}} created successfully!", { number: cNumber }));
       setIsCreating(false);
       resetForm();
       onRefreshAll();
     } catch (err: any) {
-      showToast(err.message || 'Failed to create chapter', 'error');
+      showToast(t(err.message || 'Failed to create chapter'), 'error');
     }
   };
 
   const handleUpdate = async (chapterId: string) => {
-    if (!cNumber || isNaN(Number(cNumber))) return showToast('Invalid chapter number', 'error');
+    if (!cNumber || isNaN(Number(cNumber))) return showToast(t('Invalid chapter number'), 'error');
 
     try {
       await apiClient.chapters.update(chapterId, { 
         chapterNumber: Number(cNumber),
         title: cTitle.trim(),
-        deadline: cDeadline
+        deadline: cDeadline,
+        volumeId: cVolumeId || null
       });
-      showToast(`Chapter updated successfully!`);
+      showToast(t("Chapter updated successfully!"));
       setEditingChapterId(null);
       resetForm();
       onRefreshAll();
     } catch (err: any) {
-      showToast(err.message || 'Failed to update chapter', 'error');
+      showToast(t(err.message || 'Failed to update chapter'), 'error');
     }
   };
 
   const handleArchive = async (chapterId: string) => {
-    if (!confirm('Are you sure you want to archive this chapter? This will hide it from the active list.')) return;
+    if (!confirm(t('Are you sure you want to archive this chapter? This will hide it from the active list.'))) return;
     try {
       await apiClient.chapters.update(chapterId, { status: 'ARCHIVED' });
-      showToast('Chapter archived.');
+      showToast(t('Chapter archived.'));
       onRefreshAll();
     } catch (err: any) {
-      showToast(err.message || 'Failed to archive chapter', 'error');
+      showToast(t(err.message || 'Failed to archive chapter'), 'error');
     }
   };
 
@@ -93,6 +139,7 @@ export default function ChapterManagement({
     setCNumber(c.chapterNumber);
     setCTitle(c.title || '');
     setCDeadline(c.deadline ? new Date(c.deadline).toISOString().split('T')[0] : '');
+    setCVolumeId(typeof c.volumeId === 'object' && c.volumeId !== null ? c.volumeId._id : String(c.volumeId || ''));
     setIsCreating(false);
   };
 
@@ -100,32 +147,8 @@ export default function ChapterManagement({
     setCNumber('');
     setCTitle('');
     setCDeadline('');
+    setCVolumeId('');
     setEditingChapterId(null);
-  };
-
-  const handlePublish = async (chapterId: string, chapterNumber: number) => {
-    const chapterTasks = tasks.filter(t => {
-      const cid = typeof t.chapterId === 'object' && t.chapterId !== null ? (t.chapterId as any)._id : t.chapterId;
-      return cid === chapterId;
-    });
-
-    if (chapterTasks.length === 0) {
-      showToast('Cannot publish chapter: No tasks assigned yet.', 'error');
-      return;
-    }
-    const allApproved = chapterTasks.every(t => t.status === 'APPROVED');
-    if (!allApproved) {
-      showToast('Cannot publish chapter: All tasks must be final-approved by Editor.', 'error');
-      return;
-    }
-
-    try {
-      await apiClient.chapters.publish(chapterId);
-      showToast(`Chapter ${chapterNumber} published successfully!`);
-      onRefreshAll();
-    } catch (err: any) {
-      showToast(err.message || 'Publishing failed', 'error');
-    }
   };
 
   const goToWorkspace = (c: Chapter) => {
@@ -137,14 +160,14 @@ export default function ChapterManagement({
     <div className="flex flex-col h-[calc(100vh-6rem)] min-h-[600px] bg-[#121214] rounded-md overflow-hidden border border-[#2d2d34] shadow-2xl shadow-black">
       
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 bg-[#181820] border-b border-[#2d2d34] shrink-0">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 bg-[#181820] border-b border-[#2d2d34] shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-md bg-red-600 flex items-center justify-center shrink-0">
             <BookOpen className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white leading-none">Chapter Management</h1>
-            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest">Manage your series and chapters</p>
+            <h1 className="text-sm font-bold text-white leading-none">{t("Chapter Management")}</h1>
+            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest">{t("Manage your series and chapters")}</p>
           </div>
         </div>
         {toast && (
@@ -154,10 +177,10 @@ export default function ChapterManagement({
         )}
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col lg:flex-row overflow-hidden min-w-0">
         {/* Left Col: Series Selection */}
-        <aside className="w-1/3 min-w-[250px] border-r border-[#2d2d34] bg-[#1e1e24] flex flex-col p-4">
-          <h2 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Your Series</h2>
+        <aside className="w-full lg:w-1/3 lg:min-w-[250px] max-h-52 lg:max-h-none border-b lg:border-b-0 lg:border-r border-[#2d2d34] bg-[#1e1e24] flex flex-col p-4 shrink-0">
+          <h2 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">{t("Your Series")}</h2>
           <div className="space-y-2 overflow-y-auto">
             {series.filter(s => s.status !== 'PENDING' && s.status !== 'REJECTED').map(s => (
               <button
@@ -170,68 +193,84 @@ export default function ChapterManagement({
                 }`}
               >
                 <div className="font-bold text-sm">{s.title}</div>
-                <div className="text-[10px] text-slate-500 mt-1 uppercase">{s.status}</div>
+                <div className="text-[10px] text-slate-500 mt-1 uppercase">{t(s.status)}</div>
               </button>
             ))}
             {series.filter(s => s.status !== 'PENDING' && s.status !== 'REJECTED').length === 0 && (
-              <p className="text-xs text-slate-500 text-center py-4">No series found.</p>
+              <p className="text-xs text-slate-500 text-center py-4">{t("No series found.")}</p>
             )}
           </div>
         </aside>
 
         {/* Right Col: Chapter List */}
-        <main className="flex-1 bg-[#121214] flex flex-col relative overflow-hidden">
+        <main className="flex-1 min-w-0 bg-[#121214] flex flex-col relative overflow-hidden">
           {!activeSeries ? (
             <div className="flex-1 flex items-center justify-center text-slate-500 text-sm font-medium">
-              Select a series to manage its chapters.
+              {t("Select a series to manage its chapters.")}
             </div>
           ) : (
             <>
               {/* Toolbar */}
-              <div className="px-6 py-4 border-b border-[#2d2d34] flex items-center justify-between">
+              <div className="px-4 sm:px-6 py-4 border-b border-[#2d2d34] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <h2 className="text-sm font-bold text-white">
-                  Chapters for <span className="text-red-400">{activeSeries.title}</span>
+                  {t("Chapters for")} <span className="text-red-400">{activeSeries.title}</span>
                 </h2>
                 {!isCreating && !editingChapterId && (
-                  <button 
-                    onClick={() => { setIsCreating(true); resetForm(); }}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-slate-200 text-black text-xs font-bold rounded-md transition-all"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add Chapter
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setIsCreatingVolume((value) => !value)} className="flex items-center gap-2 rounded-md border border-[#3a3a44] bg-[#1e1e24] px-3 py-1.5 text-xs font-bold text-slate-200 transition-colors hover:border-slate-500">
+                      <LibraryBig className="size-3.5" /> {t("Add Volume")}
+                    </button>
+                    <button type="button" onClick={() => { setIsCreating(true); resetForm(); }} className="flex items-center gap-2 rounded-md bg-white px-3 py-1.5 text-xs font-bold text-black transition-colors hover:bg-slate-200">
+                      <Plus className="size-3.5" /> {t("Add Chapter")}
+                    </button>
+                  </div>
                 )}
               </div>
 
+              {isCreatingVolume && (
+                <div className="m-4 mb-0 rounded-md border border-[#2d2d34] bg-[#1e1e24] p-4 sm:mx-6">
+                  <h3 className="mb-4 text-xs font-bold uppercase text-white">{t('Create New Volume')}</h3>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <input type="number" min={1} value={vNumber} onChange={(event) => setVNumber(event.target.value ? Number(event.target.value) : '')} placeholder={t('Volume number')} className="rounded-md border border-[#2d2d34] bg-[#121214] px-3 py-2 text-sm text-white focus:border-red-500 focus:outline-none" />
+                    <input value={vTitle} onChange={(event) => setVTitle(event.target.value)} placeholder={t('Volume title (optional)')} className="rounded-md border border-[#2d2d34] bg-[#121214] px-3 py-2 text-sm text-white focus:border-red-500 focus:outline-none" />
+                    <input type="date" value={vDeadline} onChange={(event) => setVDeadline(event.target.value)} className="rounded-md border border-[#2d2d34] bg-[#121214] px-3 py-2 text-sm text-white focus:border-red-500 focus:outline-none [&::-webkit-calendar-picker-indicator]:invert" />
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button type="button" onClick={handleCreateVolume} className="rounded-md bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-500">{t('Save Volume')}</button>
+                    <button type="button" onClick={() => setIsCreatingVolume(false)} className="rounded-md border border-[#3a3a44] px-4 py-2 text-xs font-bold text-slate-300 hover:bg-[#2d2d34]">{t('Cancel')}</button>
+                  </div>
+                </div>
+              )}
               {/* Editor / Creator Form */}
               {(isCreating || editingChapterId) && (
-                <div className="m-6 p-4 bg-[#1e1e24] border border-[#2d2d34] rounded-md">
+                <div className="m-4 sm:m-6 p-4 bg-[#1e1e24] border border-[#2d2d34] rounded-md">
                   <h3 className="text-xs font-bold text-white mb-4 uppercase tracking-wider">
-                    {isCreating ? 'Create New Chapter' : 'Edit Chapter'}
+                    {isCreating ? t("Create New Chapter") : t("Edit Chapter")}
                   </h3>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Chapter Number</label>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t("Chapter Number")}</label>
                       <input 
                         type="number"
                         value={cNumber}
                         onChange={e => setCNumber(e.target.value ? Number(e.target.value) : '')}
                         className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 transition-colors"
-                        placeholder="e.g. 1"
+                        placeholder={t("e.g. 1")}
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Chapter Title (Optional)</label>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t("Chapter Title (Optional)")}</label>
                       <input 
                         type="text"
                         value={cTitle}
                         onChange={e => setCTitle(e.target.value)}
                         className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 transition-colors"
-                        placeholder="e.g. The Beginning"
+                        placeholder={t("e.g. The Beginning")}
                       />
                     </div>
                   </div>
                   <div className="mb-4">
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Deadline</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{t("Deadline")}</label>
                     <input 
                       type="date"
                       value={cDeadline}
@@ -239,28 +278,34 @@ export default function ChapterManagement({
                       className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 transition-colors [&::-webkit-calendar-picker-indicator]:invert"
                     />
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="mb-4">
+                    <label className="mb-1.5 block text-[10px] font-bold uppercase text-slate-500">{t('Volume')}</label>
+                    <select value={cVolumeId} onChange={(event) => setCVolumeId(event.target.value)} className="w-full rounded-md border border-[#2d2d34] bg-[#121214] px-3 py-2 text-sm text-white focus:border-red-500 focus:outline-none">
+                      <option value="">{t('No volume')}</option>
+                      {volumes.map((volume) => <option key={volume._id} value={volume._id}>{t('Volume')} {volume.volumeNumber}{volume.title ? ` - ${volume.title}` : ''}</option>)}
+                    </select>
+                  </div>                  <div className="flex items-center gap-2">
                     <button 
                       onClick={() => editingChapterId ? handleUpdate(editingChapterId) : handleCreate()}
                       className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-md transition-all"
                     >
-                      <Save className="w-3.5 h-3.5" /> Save Chapter
+                      <Save className="w-3.5 h-3.5" /> {t("Save Chapter")}
                     </button>
                     <button 
                       onClick={() => { setIsCreating(false); resetForm(); }}
                       className="flex items-center gap-1.5 px-4 py-2 bg-transparent border border-[#2d2d34] hover:bg-[#2d2d34] text-slate-300 text-xs font-bold rounded-md transition-all"
                     >
-                      <X className="w-3.5 h-3.5" /> Cancel
+                      <X className="w-3.5 h-3.5" /> {t("Cancel")}
                     </button>
                   </div>
                 </div>
               )}
 
               {/* List */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-3">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3">
                 {currentSeriesChapters.length === 0 ? (
                   <div className="text-center text-slate-500 text-xs py-8">
-                    No chapters exist for this series yet.
+                    {t("No chapters exist for this series yet.")}
                   </div>
                 ) : (
                   currentSeriesChapters.map(c => {
@@ -271,67 +316,65 @@ export default function ChapterManagement({
                     const allApproved = chapterTasks.length > 0 && chapterTasks.every(t => t.status === 'APPROVED');
 
                     return (
-                      <div key={c._id} className="flex items-center justify-between p-4 bg-[#1e1e24] border border-[#2d2d34] hover:border-slate-500 rounded-md transition-all group">
-                        <div className="flex items-center gap-4">
+                      <div key={c._id} className="group rounded-md border border-[#2d2d34] bg-[#1e1e24] p-4 transition-colors hover:border-slate-500">
+                        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                        <div className="flex items-start sm:items-center gap-4 min-w-0">
                           <div className="w-10 h-10 rounded bg-[#121214] border border-[#2d2d34] flex flex-col items-center justify-center text-slate-300">
-                            <span className="text-[9px] font-bold uppercase">CH</span>
+                            <span className="text-[9px] font-bold uppercase">{t('Chapter short')}</span>
                             <span className="text-xs font-black">{c.chapterNumber}</span>
                           </div>
-                          <div>
-                            <div className="text-sm font-bold text-white flex items-center gap-2">
-                              Chapter {c.chapterNumber} {c.title && <span className="text-slate-400 font-medium">- {c.title}</span>}
+                          <div className="min-w-0">
+                            <div className="text-sm font-bold text-white flex flex-wrap items-center gap-2">
+                              {t("Chapter")} {c.chapterNumber} {c.title && <span className="text-slate-400 font-medium">- {c.title}</span>}
                               <span className={`px-2 py-0.5 rounded text-[9px] font-mono border ${
-                                c.status === 'COMPLETED' 
-                                  ? 'bg-green-500/10 border-green-500/40 text-green-400' 
-                                  : allApproved 
-                                    ? 'bg-[#FFF3B0]/10 border-[#FFF3B0]/40 text-[#FFF3B0]' 
-                                    : 'bg-red-500/10 border-red-500/40 text-red-400'
+                                c.status === 'SENT_TO_EDITORIAL'
+                                  ? 'bg-green-500/10 border-green-500/40 text-green-400'
+                                  : c.status === 'REVISION_REQUESTED'
+                                    ? 'bg-red-500/10 border-red-500/40 text-red-400'
+                                    : ['SUBMITTED', 'UNDER_REVIEW'].includes(c.status) || allApproved
+                                      ? 'bg-[#FFF3B0]/10 border-[#FFF3B0]/40 text-[#FFF3B0]'
+                                      : 'bg-slate-500/10 border-slate-500/40 text-slate-400'
                               }`}>
-                                {c.status === 'COMPLETED' ? 'PUBLISHED' : allApproved ? 'READY TO PUBLISH' : 'INCOMPLETE TASKS'}
+                                {c.status === 'SENT_TO_EDITORIAL' ? t('Ready for Board')
+                                  : c.status === 'UNDER_REVIEW' ? t('Editor Final Review')
+                                    : c.status === 'SUBMITTED' ? t('Mangaka Review')
+                                      : c.status === 'REVISION_REQUESTED' ? t('Revision Requested')
+                                        : allApproved ? t('Final Review Complete') : t('In Production')}
                               </span>
                             </div>
                             <div className="text-[10px] text-slate-400 mt-1">
-                              Deadline: {c.deadline ? new Date(c.deadline).toLocaleDateString() : 'N/A'}
+                              {c.volumeId && <span className="mr-3 text-red-300">{t('Volume')} {typeof c.volumeId === 'object' ? c.volumeId.volumeNumber : '?'}</span>}
+                              {t("Deadline")}: {c.deadline ? new Date(c.deadline).toLocaleDateString(language === "vi" ? "vi-VN" : "en-US") : "N/A"}
                             </div>
                           </div>
                         </div>
                         
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {currentUser.role === 'MANGAKA' && c.status !== 'COMPLETED' && (
-                            <button 
-                              onClick={() => handlePublish(c._id, c.chapterNumber)}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase rounded cursor-pointer transition-colors ${
-                                allApproved 
-                                  ? 'bg-green-600 hover:bg-green-500 text-white' 
-                                  : 'bg-red-900/30 text-red-400/50 border border-red-900/50 cursor-not-allowed'
-                              }`}
-                              title={allApproved ? 'Publish Chapter to readers' : 'Cannot publish: All tasks must be APPROVED by Editor'}
-                            >
-                              Publish
-                            </button>
-                          )}
+                        <div className="flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity self-end sm:self-auto">
                           <button 
                             onClick={() => goToWorkspace(c)}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black hover:bg-slate-200 text-[10px] font-bold uppercase rounded cursor-pointer"
                           >
-                            Workspace <ArrowRight className="w-3 h-3" />
+                            {t("Workspace")} <ArrowRight className="w-3 h-3" />
                           </button>
                           <button 
                             onClick={() => startEdit(c)}
                             className="p-1.5 bg-[#121214] border border-[#2d2d34] hover:text-white rounded text-slate-400 transition-colors cursor-pointer"
-                            title="Edit Chapter"
+                            title={t("Edit Chapter")}
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button 
                             onClick={() => handleArchive(c._id)}
                             className="p-1.5 bg-[#121214] border border-[#2d2d34] hover:border-amber-500/50 hover:text-amber-400 rounded text-slate-400 transition-colors cursor-pointer"
-                            title="Archive Chapter"
+                            title={t("Archive Chapter")}
                           >
                             <Archive className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                      </div>
+                        </div>
+                        {currentUser.role === 'MANGAKA' && (
+                          <ChapterFeedbackPanel chapter={c} seriesId={activeSeries._id} onChanged={onRefreshAll} />
+                        )}                      </div>
                     );
                   })
                 )}

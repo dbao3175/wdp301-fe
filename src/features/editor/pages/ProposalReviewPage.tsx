@@ -14,6 +14,7 @@ import {
   Send,
   Clock,
   Download,
+  XCircle,
 } from "lucide-react";
 import { apiClient } from "../../../api/client.ts";
 import type {
@@ -28,6 +29,8 @@ import {
 } from "../components/common/States.tsx";
 import { Modal, ConfirmDialog } from "../components/common/Modal.tsx";
 import { User } from "@/src/types.ts";
+import StoryboardGallery from "../../../components/StoryboardGallery.tsx";
+import { useLanguage } from "../../../i18n/LanguageContext";
 
 // =========================================================
 // STATUS FLOW DISPLAY
@@ -89,11 +92,12 @@ interface SamplePageViewerProps {
 }
 
 const SamplePageViewer: React.FC<SamplePageViewerProps> = ({ pages }) => {
+  const { t } = useLanguage();
   const [current, setCurrent] = useState(0);
   if (!pages.length)
     return (
       <p className="font-mono text-xs text-neutral-400">
-        No sample pages available.
+        {t('No sample pages available.')}
       </p>
     );
 
@@ -119,17 +123,17 @@ const SamplePageViewer: React.FC<SamplePageViewerProps> = ({ pages }) => {
           onClick={() => setCurrent((c) => c - 1)}
           className="flex items-center gap-1 px-3 py-1.5 border-2 border-ink-black text-[10px] font-mono font-bold uppercase disabled:opacity-40 hover:bg-ink-black hover:text-white transition-colors cursor-pointer"
         >
-          <ChevronLeft className="w-3 h-3" /> Prev
+          <ChevronLeft className="w-3 h-3" /> {t('Prev')}
         </button>
         <span className="font-mono text-[10px] text-neutral-500">
-          Page {current + 1} / {pages.length}
+          {t('Page')} {current + 1} / {pages.length}
         </span>
         <button
           disabled={current === pages.length - 1}
           onClick={() => setCurrent((c) => c + 1)}
           className="flex items-center gap-1 px-3 py-1.5 border-2 border-ink-black text-[10px] font-mono font-bold uppercase disabled:opacity-40 hover:bg-ink-black hover:text-white transition-colors cursor-pointer"
         >
-          Next <ChevronRight className="w-3 h-3" />
+          {t('Next')} <ChevronRight className="w-3 h-3" />
         </button>
       </div>
     </div>
@@ -144,10 +148,12 @@ export const ProposalReviewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { language, t } = useLanguage();
 
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
 
   const mapProposal = (p: any) => ({
     id: p._id || p.id,
@@ -172,6 +178,7 @@ export const ProposalReviewPage: React.FC = () => {
       description: p.synopsis || "",
       samplePages: [],
     },
+    storyboardImages: p.storyboardImages || [],
     characterDesigns: p.characterDesigns || [],
     comments: p.comments || [],
     assignedEditorId: p.assignedEditorId || "",
@@ -231,6 +238,20 @@ export const ProposalReviewPage: React.FC = () => {
     },
   });
 
+  const rejectMutation = useMutation({
+    mutationFn: () =>
+      apiClient.proposals.reject(
+        id!,
+        "Rejected by Tantou Editor.",
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["proposal", id] });
+      queryClient.invalidateQueries({ queryKey: ["proposals"] });
+      setShowRejectDialog(false);
+      navigate("/editor/proposals");
+    },
+  });
+
   const commentForm = useForm<CommentFormData>({
     resolver: zodResolver(commentSchema),
     defaultValues: { content: "", isInternal: false },
@@ -258,7 +279,7 @@ export const ProposalReviewPage: React.FC = () => {
           onClick={() => navigate("/editor/proposals")}
           className="flex items-center gap-1.5 px-3 py-2 bg-white border-2 border-ink-black text-xs font-mono font-bold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-50 transition-colors cursor-pointer shrink-0"
         >
-          <ArrowLeft className="w-3.5 h-3.5" /> Back
+          <ArrowLeft className="w-3.5 h-3.5" /> {t('Back')}
         </button>
         <div>
           <h1 className="font-syne font-extrabold text-xl text-ink-black tracking-tight">
@@ -282,7 +303,7 @@ export const ProposalReviewPage: React.FC = () => {
               }
             />
             <span className="font-mono text-[9px] text-neutral-400">
-              Last updated:{" "}
+              {t('Last updated')}:{" "}
               {new Date(proposal.lastUpdated).toLocaleDateString()}
             </span>
           </div>
@@ -292,7 +313,7 @@ export const ProposalReviewPage: React.FC = () => {
       {/* Status Flow Timeline */}
       <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414] p-5">
         <p className="font-mono text-[9px] font-extrabold uppercase tracking-widest text-neutral-500 mb-4">
-          Status Flow
+          {t('Status Flow')}
         </p>
         <div className="flex items-center overflow-x-auto">
           {STATUS_FLOW.filter((s) => s !== "REJECTED").map((status, idx) => {
@@ -319,7 +340,7 @@ export const ProposalReviewPage: React.FC = () => {
                           : "text-neutral-400"
                     }`}
                   >
-                    {STATUS_LABELS[status]}
+                    {t(STATUS_LABELS[status])}
                   </span>
                 </div>
                 {idx <
@@ -342,14 +363,14 @@ export const ProposalReviewPage: React.FC = () => {
           <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
             <div className="px-5 py-3 border-b-2 border-ink-black bg-ink-black">
               <h2 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-                Proposal Information
+                {t('Proposal Information')}
               </h2>
             </div>
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">
-                    Genre
+                    {t('Genre')}
                   </p>
                   <span className="inline-block px-2 py-1 bg-ink-black text-white font-mono text-[10px] font-bold uppercase">
                     {proposal.genre}
@@ -357,7 +378,7 @@ export const ProposalReviewPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">
-                    Target Audience
+                    {t('Target Audience')}
                   </p>
                   <p className="font-sans text-xs text-ink-black font-medium">
                     {proposal.targetAudience}
@@ -365,7 +386,7 @@ export const ProposalReviewPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">
-                    Est. Chapters
+                    {t('Est. Chapters')}
                   </p>
                   <p className="font-syne font-extrabold text-lg text-ink-black">
                     {proposal.estimatedChapters}
@@ -373,7 +394,7 @@ export const ProposalReviewPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">
-                    Frequency
+                    {t('Frequency')}
                   </p>
                   <p className="font-sans text-xs text-ink-black font-medium">
                     {proposal.scheduledFrequency}
@@ -382,7 +403,7 @@ export const ProposalReviewPage: React.FC = () => {
               </div>
               <div>
                 <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-1">
-                  Tags
+                  {t('Tags')}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {proposal.tags.map((tag: string) => (
@@ -397,7 +418,7 @@ export const ProposalReviewPage: React.FC = () => {
               </div>
               <div>
                 <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-2">
-                  Synopsis
+                  {t('Synopsis')}
                 </p>
                 <p className="font-sans text-sm text-ink-black leading-relaxed bg-neutral-50 border border-neutral-200 p-3">
                   {proposal.synopsis}
@@ -410,13 +431,13 @@ export const ProposalReviewPage: React.FC = () => {
           <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
             <div className="px-5 py-3 border-b-2 border-ink-black bg-ink-black">
               <h2 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-                Story Draft
+                {t('Story Draft')}
               </h2>
             </div>
             <div className="p-5 space-y-4">
               <div>
                 <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-2">
-                  Description
+                  {t('Description')}
                 </p>
                 <p className="font-sans text-sm text-ink-black leading-relaxed bg-neutral-50 border border-neutral-200 p-3">
                   {proposal.storyDraft.description}
@@ -424,10 +445,18 @@ export const ProposalReviewPage: React.FC = () => {
               </div>
               <div>
                 <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-3">
-                  Sample Pages ({proposal.storyDraft.samplePages.length})
+                  {t('Sample Pages')} ({proposal.storyDraft.samplePages.length})
                 </p>
                 <SamplePageViewer pages={proposal.storyDraft.samplePages} />
               </div>
+              {proposal.storyboardImages.length > 0 && (
+                <div>
+                  <p className="font-mono text-[9px] font-extrabold uppercase text-neutral-400 mb-3">
+                    Storyboard ({proposal.storyboardImages.length})
+                  </p>
+                  <StoryboardGallery images={proposal.storyboardImages} />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -438,7 +467,7 @@ export const ProposalReviewPage: React.FC = () => {
           <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
             <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black">
               <h3 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-                Mangaka
+                {t('Mangaka')}
               </h3>
             </div>
             <div className="p-4 flex items-start gap-3">
@@ -456,13 +485,13 @@ export const ProposalReviewPage: React.FC = () => {
                 </p>
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-[9px] text-neutral-500">
-                    {proposal.mangaka.totalSeries} total series
+                    {proposal.mangaka.totalSeries} {t('total series')}
                   </span>
                 </div>
                 <p className="font-mono text-[9px] text-neutral-400 mt-1">
-                  Joined:{" "}
+                  {t('Joined')}:{" "}
                   {new Date(proposal.mangaka.joinedDate).toLocaleDateString(
-                    "en-US",
+                    language === 'vi' ? "vi-VN" : "en-US",
                     { month: "short", year: "numeric" },
                   )}
                 </p>
@@ -474,7 +503,7 @@ export const ProposalReviewPage: React.FC = () => {
           <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
             <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black">
               <h3 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-                Actions
+                {t('Actions')}
               </h3>
             </div>
             <div className="p-4 space-y-2">
@@ -483,7 +512,7 @@ export const ProposalReviewPage: React.FC = () => {
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-ink-black border-2 border-ink-black text-xs font-mono font-extrabold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-50 transition-colors cursor-pointer"
               >
                 <MessageSquarePlus className="w-3.5 h-3.5" />
-                Add Review Comment
+                {t('Add Review Comment')}
               </button>
               <button
                 disabled={!canTakeAction}
@@ -491,7 +520,7 @@ export const ProposalReviewPage: React.FC = () => {
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-500 text-white border-2 border-orange-600 text-xs font-mono font-extrabold uppercase shadow-[2px_2px_0px_#141414] hover:bg-orange-600 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                Request Revision
+                {t('Request Revision')}
               </button>
               <button
                 disabled={!canTakeAction || approveMutation.isPending}
@@ -499,58 +528,12 @@ export const ProposalReviewPage: React.FC = () => {
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white border-2 border-emerald-700 text-xs font-mono font-extrabold uppercase shadow-[2px_2px_0px_#141414] hover:bg-emerald-700 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Approve & Submit to Board
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    const proposalData = await apiClient.proposals.getById(id!);
-                    const images = proposalData?.storyboardImages || [];
-                    if (images.length > 1) {
-                      const JSZip = (await import('jszip')).default;
-                      const { saveAs } = await import('file-saver');
-                      const zip = new JSZip();
-                      const imgFolder = zip.folder("storyboard")!;
-                      for (let i = 0; i < images.length; i++) {
-                        const img = images[i];
-                        try {
-                          const resp = await fetch(img.url);
-                          const blob = await resp.blob();
-                          const ext = img.originalName?.includes(".")
-                            ? img.originalName.split(".").pop()
-                            : "png";
-                          imgFolder.file(`page_${i + 1}.${ext}`, blob);
-                        } catch (e) {
-                          console.warn("Failed to fetch image", img.url, e);
-                        }
-                      }
-                      const blob = await zip.generateAsync({ type: "blob" });
-                      saveAs(blob, `${proposal.title}_storyboard.zip`);
-                    } else if (images.length === 1) {
-                      const { saveAs } = await import('file-saver');
-                      const resp = await fetch(images[0].url);
-                      const blob = await resp.blob();
-                      const ext = images[0].originalName?.includes(".")
-                        ? images[0].originalName.split(".").pop()
-                        : "png";
-                      saveAs(blob, `${proposal.title}_storyboard.${ext}`);
-                    } else {
-                      await apiClient.proposals.downloadStoryboard(id!);
-                    }
-                  } catch (err) {
-                    console.error('Download failed', err);
-                    alert('Failed to download storyboard');
-                  }
-                }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-ink-black text-white border-2 border-ink-black text-xs font-mono font-extrabold uppercase shadow-[2px_2px_0px_#141414] hover:bg-neutral-800 transition-colors cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Download Storyboard
+                {t('Approve & Submit to Board')}
               </button>
               {!canTakeAction && (
                 <p className="text-[9px] font-mono text-neutral-400 text-center uppercase">
-                  Actions locked — current status:{" "}
-                  {STATUS_LABELS[proposal.status]}
+                  {t('Actions locked — current status')}:{" "}
+                  {t(STATUS_LABELS[proposal.status])}
                 </p>
               )}
             </div>
@@ -560,7 +543,7 @@ export const ProposalReviewPage: React.FC = () => {
           <div className="bg-white border-2 border-ink-black shadow-[4px_4px_0px_#141414]">
             <div className="px-4 py-3 border-b-2 border-ink-black bg-ink-black flex items-center justify-between">
               <h3 className="font-syne font-extrabold text-white text-xs uppercase tracking-widest">
-                Review Comments
+                {t('Review Comments')}
               </h3>
               <span className="bg-neutral-700 text-white text-[9px] font-mono px-1.5 py-0.5">
                 {proposal.comments.length}
@@ -570,7 +553,7 @@ export const ProposalReviewPage: React.FC = () => {
               {proposal.comments.length === 0 ? (
                 <div className="p-4 text-center">
                   <p className="font-mono text-[10px] text-neutral-400 uppercase">
-                    No comments yet
+                    {t('No comments yet')}
                   </p>
                 </div>
               ) : (
@@ -606,11 +589,11 @@ export const ProposalReviewPage: React.FC = () => {
                                   : "bg-neutral-100 text-neutral-600"
                             }`}
                           >
-                            {comment.authorRole}
+                            {t(comment.authorRole)}
                           </span>
                           {comment.isInternal && (
                             <span className="text-[8px] font-mono uppercase px-1 py-0.5 bg-yellow-100 text-yellow-700">
-                              Internal
+                              {t('Internal')}
                             </span>
                           )}
                         </div>
@@ -643,7 +626,7 @@ export const ProposalReviewPage: React.FC = () => {
       <Modal
         isOpen={showCommentModal}
         onClose={() => setShowCommentModal(false)}
-        title="Add Review Comment"
+        title={t('Add Review Comment')}
         size="md"
       >
         <form
@@ -654,12 +637,12 @@ export const ProposalReviewPage: React.FC = () => {
         >
           <div>
             <label className="block font-mono text-[9px] font-extrabold uppercase text-neutral-500 mb-1">
-              Comment
+              {t('Comment')}
             </label>
             <textarea
               {...commentForm.register("content")}
               rows={4}
-              placeholder="Write your review comment..."
+              placeholder={t('Write your review comment...')}
               className="w-full border-2 border-ink-black px-3 py-2 text-xs font-sans outline-none focus:border-[#E63946] resize-none"
             />
             {commentForm.formState.errors.content && (
@@ -675,7 +658,7 @@ export const ProposalReviewPage: React.FC = () => {
               className="w-4 h-4 accent-ink-black"
             />
             <span className="font-mono text-[10px] font-bold uppercase text-neutral-600">
-              Internal note (not visible to mangaka)
+              {t('Internal note (not visible to mangaka)')}
             </span>
           </label>
           <div className="flex justify-end gap-2">
@@ -684,7 +667,7 @@ export const ProposalReviewPage: React.FC = () => {
               onClick={() => setShowCommentModal(false)}
               className="px-4 py-2 border-2 border-ink-black bg-white text-xs font-mono font-bold uppercase hover:bg-neutral-50 cursor-pointer"
             >
-              Cancel
+              {t('Cancel')}
             </button>
             <button
               type="submit"
@@ -692,7 +675,7 @@ export const ProposalReviewPage: React.FC = () => {
               className="px-4 py-2 bg-ink-black text-white border-2 border-ink-black text-xs font-mono font-bold uppercase hover:bg-neutral-800 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
             >
               <Send className="w-3 h-3" />
-              {addCommentMutation.isPending ? "Posting..." : "Post Comment"}
+              {addCommentMutation.isPending ? t("Posting...") : t("Post Comment")}
             </button>
           </div>
         </form>
@@ -702,7 +685,7 @@ export const ProposalReviewPage: React.FC = () => {
       <Modal
         isOpen={showRevisionModal}
         onClose={() => setShowRevisionModal(false)}
-        title="Request Revision"
+        title={t('Request Revision')}
         size="md"
       >
         <form
@@ -712,17 +695,16 @@ export const ProposalReviewPage: React.FC = () => {
           className="space-y-4"
         >
           <p className="font-sans text-xs text-neutral-600">
-            Provide specific feedback for the mangaka. This will change the
-            proposal status to <strong>Revision Requested</strong>.
+            {t('Provide specific feedback for the mangaka. This will change the proposal status to')} <strong>{t('Revision Requested')}</strong>.
           </p>
           <div>
             <label className="block font-mono text-[9px] font-extrabold uppercase text-neutral-500 mb-1">
-              Revision Reason
+              {t('Revision Reason')}
             </label>
             <textarea
               {...revisionForm.register("reason")}
               rows={4}
-              placeholder="Explain what needs to be revised..."
+              placeholder={t('Explain what needs to be revised...')}
               className="w-full border-2 border-ink-black px-3 py-2 text-xs font-sans outline-none focus:border-[#E63946] resize-none"
             />
             {revisionForm.formState.errors.reason && (
@@ -737,7 +719,7 @@ export const ProposalReviewPage: React.FC = () => {
               onClick={() => setShowRevisionModal(false)}
               className="px-4 py-2 border-2 border-ink-black bg-white text-xs font-mono font-bold uppercase hover:bg-neutral-50 cursor-pointer"
             >
-              Cancel
+              {t('Cancel')}
             </button>
             <button
               type="submit"
@@ -745,7 +727,7 @@ export const ProposalReviewPage: React.FC = () => {
               className="px-4 py-2 bg-orange-500 text-white border-2 border-orange-600 text-xs font-mono font-bold uppercase hover:bg-orange-600 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
             >
               <RotateCcw className="w-3 h-3" />
-              {revisionMutation.isPending ? "Sending..." : "Request Revision"}
+              {revisionMutation.isPending ? t("Sending...") : t("Request Revision")}
             </button>
           </div>
         </form>
@@ -756,13 +738,24 @@ export const ProposalReviewPage: React.FC = () => {
         isOpen={showApproveDialog}
         onClose={() => setShowApproveDialog(false)}
         onConfirm={() => approveMutation.mutate()}
-        title="Approve & Submit to Editorial Board"
-        message={`Are you sure you want to approve "${proposal.title}" and submit it to the Editorial Board? This action will move the proposal to the Board for final review.`}
-        confirmLabel="Approve & Submit"
+        title={t('Approve & Submit to Editorial Board')}
+        message={t('Are you sure you want to approve "{{title}}" and submit it to the Editorial Board? This action will move the proposal to the Board for final review.', { title: proposal.title })}
+        confirmLabel={t('Approve & Submit')}
         variant="default"
         loading={approveMutation.isPending}
       />
 
+      {/* Reject Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={showRejectDialog}
+        onClose={() => setShowRejectDialog(false)}
+        onConfirm={() => rejectMutation.mutate()}
+        title={t('Reject Proposal')}
+        message={t('Are you sure you want to reject "{{title}}"? This action cannot be undone.', { title: proposal.title })}
+        confirmLabel={t('Reject')}
+        variant="danger"
+        loading={rejectMutation.isPending}
+      />
     </div>
   );
 };

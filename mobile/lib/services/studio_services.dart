@@ -103,6 +103,11 @@ class StudioService {
         .toList(growable: false);
   }
 
+  Future<SeriesProposal> getProposalById(String proposalId) async {
+    final item = await _api.getMap('/api/series/proposal/$proposalId');
+    return SeriesProposal.fromJson(item);
+  }
+
   Future<void> forwardProposal(String proposalId, String comment) async {
     await _api.putMap(
         '/api/series/proposal/$proposalId/forward', {'content': comment});
@@ -246,6 +251,50 @@ class StudioService {
         .whereType<Json>()
         .map(StudioUser.fromJson)
         .toList(growable: false);
+  }
+
+  Future<StudioUser> createUser(Json payload) async {
+    final item = await _api.postMap('/api/users', payload);
+    return StudioUser.fromJson(item);
+  }
+
+  Future<StudioUser> updateUser(String userId, Json payload) async {
+    final item = await _api.putMap('/api/users/', payload);
+    return StudioUser.fromJson(item);
+  }
+
+  Future<void> toggleUserStatus(String userId) async {
+    await _api.putMap('/api/users//status');
+  }
+
+  Future<void> deleteUser(String userId) async {
+    await _api.deleteMap('/api/users/');
+  }
+
+  Future<List<StudioNotification>> getAdminNotifications() async {
+    final list = await _api.getList('/api/notifications');
+    return list
+        .whereType<Json>()
+        .map(StudioNotification.fromJson)
+        .toList(growable: false);
+  }
+
+  Future<void> createAdminNotification({
+    required String userId,
+    required String title,
+    required String content,
+    required String type,
+  }) async {
+    await _api.postMap('/api/notifications', {
+      'userId': userId,
+      'title': title,
+      'content': content,
+      'type': type,
+    });
+  }
+
+  Future<void> deleteAdminNotification(String id) async {
+    await _api.deleteMap('/api/notifications/');
   }
 
   Future<List<Json>> getAuditLogs() async {

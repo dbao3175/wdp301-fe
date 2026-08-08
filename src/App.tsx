@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { User, Series, Chapter, Task, Rating, UserRole } from "./types";
 import { apiClient, getStoredUser, setStoredUserSession } from "./api/client";
 import WorkspaceCanvas from "./components/WorkspaceCanvas";
@@ -75,6 +75,9 @@ export default function App() {
 
   // Configuration settings check
   const config = apiClient.getConfig();
+
+  // Pending proposal to open in the tasks tab (set by a proposal notification click)
+  const [openProposalId, setOpenProposalId] = useState<string | null>(null);
 
   // Load and refresh core DB models from unified client
   const refreshAllModelCaches = async () => {
@@ -181,6 +184,31 @@ export default function App() {
     }
   };
 
+  // Open a specific chapter in the workspace from a notification click.
+  const handleOpenChapter = (chapterId: string) => {
+    const chapter = chapterList.find((c) => c._id === chapterId);
+    if (!chapter) {
+      setActiveTab("workspace");
+      return;
+    }
+    const sid =
+      typeof chapter.seriesId === "object" &&
+      chapter.seriesId !== null &&
+      (chapter.seriesId as any)?._id
+        ? (chapter.seriesId as any)._id
+        : (chapter.seriesId as any);
+    const series = seriesList.find((s) => s._id === sid) || null;
+    setActiveSeries(series);
+    setActiveChapter(chapter);
+    setActiveTab("workspace");
+  };
+
+  // Open a specific proposal detail view from a proposal notification click.
+  const handleOpenProposal = (proposalId: string) => {
+    setOpenProposalId(proposalId);
+    setActiveTab("tasks");
+  };
+
   // Logout session
   const handleLogout = () => {
     apiClient.auth.logout();
@@ -194,7 +222,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-manuscript-gray font-sans selection:bg-action-blue selection:text-white">
+    <div className="min-h-screen bg-manuscript-gray font-sans selection:bg-action-blue selection:text-white" style={{ overflowX: "clip" }}>
       {/* Universal Grid backdrop decoration dots */}
       <div
         className="ambient-grid fixed top-0 left-0 w-full h-full pointer-events-none z-[-1] opacity-40"
@@ -250,6 +278,8 @@ export default function App() {
             onChangeTab={setActiveTab}
             onLogout={handleLogout}
             onConfigChange={refreshAllModelCaches}
+            onOpenChapter={handleOpenChapter}
+            onOpenProposal={handleOpenProposal}
           />
 
           {/* Core Content canvas viewports */}
@@ -263,6 +293,7 @@ export default function App() {
                     activeSeries={activeSeries}
                     activeChapter={activeChapter}
                     onRefreshTasks={refreshAllModelCaches}
+                    onPageSubmitted={refreshAllModelCaches}
                   />
                 </div>
               )}
@@ -293,6 +324,8 @@ export default function App() {
                     onRefreshAll={refreshAllModelCaches}
                     onSelectSeries={setActiveSeries}
                     onSelectChapter={setActiveChapter}
+                    openProposalId={openProposalId}
+                    onOpenProposalHandled={() => setOpenProposalId(null)}
                   />
                 )}
 

@@ -2,11 +2,19 @@
  * Assistant module types
  */
 
-export type AssistantTaskStatus = 'ASSIGNED' | 'IN_PROGRESS' | 'SUBMITTED' | 'APPROVED' | 'REVISING';
+export type AssistantTaskStatus =
+  | 'ASSIGNED'
+  | 'IN_PROGRESS'
+  | 'SUBMITTED'
+  | 'MANGAKA_APPROVED'
+  | 'APPROVED'
+  | 'REVISING';
 export type UrgencyLevel = 'critical' | 'warning' | 'normal';
 
 export interface AssistantTask {
   _id: string;
+  source?: 'TASK' | 'ASSIGNMENT';
+  feedbackId?: string;
   title: string;
   type: string;
   status: AssistantTaskStatus;
@@ -25,6 +33,15 @@ export interface AssistantTask {
   submittedAt?: string;
   approvedAt?: string;
   imageUrl?: string;
+  reviewNote?: string;
+  regions?: Array<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    type: string;
+    comment?: string;
+  }>;
   assistantImageUrl?: string;
   pages?: any[];
   region?: {
@@ -64,6 +81,9 @@ export interface AssistantNotification {
   actorAvatar: string;
   message: string;
   taskId?: string;
+  targetId?: string;
+  targetType?: string;
+  link?: string;
   createdAt: string;
   read: boolean;
 }

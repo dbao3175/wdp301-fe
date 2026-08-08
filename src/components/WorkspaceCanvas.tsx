@@ -7,18 +7,22 @@
  *  bg-panel  #1e1e24  — deep slate gray    (sidebar panels)
  *  divider   #2d2d34  — medium gray        (all borders/separators)
  *
- * Two modes:
+ * Three modes:
  *   "REVIEW"   — normal 3-col review workflow
  *   "CREATION" — canvas-based task creation:
  *       Left   → muted task list (disabled interaction, visual opacity)
  *       Center → sketch upload dropzone → full-image canvas + bounding-box draw
  *       Right  → task assignment form (title / type / assistant / instructions)
+ *   "SUBMIT"   — canvas-based page submission to the editor:
+ *       Center → page-image upload dropzone → full-image canvas + zone draw
+ *       Right  → note + submit form (creates a Page, marks the chapter SUBMITTED)
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { User, Series, Chapter } from '../types';
 import { apiClient } from '../api/client';
+import { useLanguage } from '../i18n/LanguageContext';
 import {
   Plus,
   CheckCircle2,
@@ -80,18 +84,6 @@ interface DraftBox {
   curYPct: number;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Static seed tasks
-// ─────────────────────────────────────────────────────────────────────────────
-
-const SEED_TASKS: WTask[] = [
-  { id: 't1', title: 'Background Lineart',       type: 'Background', status: 'PENDING_REVIEW', assistant: 'Kenji Sato', assistantInitials: 'KS', submittedAt: '2 hours ago'   },
-  { id: 't2', title: 'Character Inking — Hiro',  type: 'Character',  status: 'APPROVED',       assistant: 'Mei Lin',   assistantInitials: 'ML', submittedAt: '1 day ago'     },
-  { id: 't3', title: 'Speed Lines & FX',         type: 'Effects',    status: 'REVISING',       assistant: 'Ryu Park',  assistantInitials: 'RP', submittedAt: '3 hours ago'   },
-  { id: 't4', title: 'Dialogue Bubbles — Scene 2', type: 'Lettering', status: 'ASSIGNED',      assistant: 'Kenji Sato', assistantInitials: 'KS', submittedAt: 'Not submitted' },
-];
-
-const ASSISTANTS = ['Kenji Sato', 'Mei Lin', 'Ryu Park', 'Sakura Ito'];
 const TASK_TYPES = ['Background', 'Character', 'Effects', 'Lettering', 'Toning'];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,10 +103,11 @@ const STATUS_META: Record<WTaskStatus, { label: string; color: string; icon: Rea
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: WTaskStatus }) {
+  const { t } = useLanguage();
   const m = STATUS_META[status];
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide ${m.color}`}>
-      {m.icon}{m.label}
+      {m.icon}{t(m.label)}
     </span>
   );
 }
@@ -136,6 +129,7 @@ function normaliseDraft(d: DraftBox): Omit<BBox, 'id' | 'comment'> {
 function TaskCard({ task, isActive, muted, onClick }: {
   task: WTask; isActive: boolean; muted: boolean; onClick: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <button
       onClick={onClick}
@@ -149,7 +143,7 @@ function TaskCard({ task, isActive, muted, onClick }: {
       }`}
     >
       <div className="flex items-center justify-between mb-1.5 gap-2">
-        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600 shrink-0">{task.type}</span>
+        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600 shrink-0">{t(task.type)}</span>
         <StatusBadge status={task.status} />
       </div>
       <p className={`text-[13px] font-semibold leading-snug mb-2.5 ${isActive && !muted ? 'text-white' : 'text-slate-300'}`}>
@@ -167,7 +161,7 @@ function TaskCard({ task, isActive, muted, onClick }: {
       {isActive && !muted && (
         <div className="mt-2 pt-1.5 border-t border-[#2d2d34] flex items-center justify-end">
           <span className="text-[9px] text-red-500/70 font-semibold uppercase tracking-wide flex items-center gap-0.5">
-            Reviewing <ChevronRight className="w-3 h-3" />
+            {t('Reviewing')} <ChevronRight className="w-3 h-3" />
           </span>
         </div>
       )}
@@ -228,6 +222,7 @@ function DrawableCanvas({
   onBoxDelete:  (id: string) => void;
   creationMode?: boolean;
 }) {
+  const { t } = useLanguage();
   const containerRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft]     = useState<DraftBox | null>(null);
   const isDrawing              = useRef(false);
@@ -275,7 +270,7 @@ function DrawableCanvas({
       {sketchSrc ? (
         <AuthImage
           src={sketchSrc}
-          alt="Rough sketch"
+          alt={t('Rough sketch')}
           draggable={false}
           className="absolute inset-0 w-full h-full object-contain pointer-events-none"
         />
@@ -290,7 +285,7 @@ function DrawableCanvas({
                     <line key={i} x1="50" y1="50" x2={i * 9} y2="0" stroke="#e2e8f0" strokeWidth="0.5" />
                   ))}
                 </svg>
-                <span className="relative text-[7px] text-slate-700 font-bold uppercase tracking-wider">Panel 1</span>
+                <span className="relative text-[7px] text-slate-700 font-bold uppercase tracking-wider">{t('Panel {{number}}', { number: 1 })}</span>
               </div>
               <div className="col-span-2 bg-[#121214] flex items-center justify-center">
                 <div className="w-12 h-8 rounded-full border border-slate-700 bg-white/5 flex items-center justify-center">
@@ -303,10 +298,10 @@ function DrawableCanvas({
                 <div className="absolute inset-0 flex items-center justify-center opacity-10">
                   <div className="w-12 h-20 rounded-sm bg-white" />
                 </div>
-                <span className="relative text-[7px] text-slate-700 font-bold uppercase tracking-wider">Panel 2</span>
+                <span className="relative text-[7px] text-slate-700 font-bold uppercase tracking-wider">{t('Panel {{number}}', { number: 2 })}</span>
               </div>
               <div className="bg-[#121214] relative p-2 flex items-end justify-end">
-                <span className="text-[7px] text-slate-700 font-bold uppercase tracking-wider">Panel 3</span>
+                <span className="text-[7px] text-slate-700 font-bold uppercase tracking-wider">{t('Panel {{number}}', { number: 3 })}</span>
               </div>
             </div>
             <div className="bg-[#181820] relative flex items-end p-2">
@@ -315,11 +310,11 @@ function DrawableCanvas({
                   <line key={i} x1={i * 22} y1="0" x2={i * 22 + 11} y2="60" stroke="#e2e8f0" strokeWidth="1" />
                 ))}
               </svg>
-              <span className="relative text-[7px] text-slate-700 font-bold uppercase tracking-wider">Page 04 · Ep. 12</span>
+              <span className="relative text-[7px] text-slate-700 font-bold uppercase tracking-wider">{t('Page')} 04 / {t('Chapter')} 12</span>
             </div>
           </div>
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-3xl font-black opacity-[0.025] select-none rotate-[-18deg] uppercase tracking-widest text-white">SUBMISSION</span>
+            <span className="text-3xl font-black opacity-[0.025] select-none rotate-[-18deg] uppercase tracking-widest text-white">{t('SUBMISSION')}</span>
           </div>
         </div>
       )}
@@ -366,10 +361,91 @@ function DrawableCanvas({
           style={{ top: `${live.topPct}%`, left: `${live.leftPct}%`, width: `${live.widthPct}%`, height: `${live.heightPct}%` }}
         >
           <div className="absolute -top-5 left-0 bg-red-600 px-1.5 py-0.5 rounded-sm">
-            <span className="text-[8px] font-bold text-white uppercase tracking-wide">Drawing…</span>
+            <span className="text-[8px] font-bold text-white uppercase tracking-wide">{t('Drawing…')}</span>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AnnotationPageCanvas — chapter-page image with annotation pins overlay
+// Used in PAGES mode (mangaka reviews / adds annotations)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ANN_COLORS: Record<string, string> = {
+  DIALOGUE_ISSUE: '#E63946',
+  CONTENT_CORRECTION: '#F4A261',
+  SCRIPT_REVISION: '#2A9D8F',
+  GENERAL_FEEDBACK: '#457B9D',
+};
+
+interface PageAnnotation {
+  id: string;
+  x: number;
+  y: number;
+  category: string;
+  comment: string;
+  authorName: string;
+  createdAt: string;
+  resolved: boolean;
+}
+
+function AnnotationPageCanvas({
+  imageUrl,
+  annotations,
+  selectedAnnId,
+  onPinClick,
+}: {
+  imageUrl: string;
+  annotations: PageAnnotation[];
+  selectedAnnId: string | null;
+  onPinClick: (id: string) => void;
+}) {
+  const { t } = useLanguage();
+
+  return (
+    <div className="relative w-full h-full select-none overflow-hidden">
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt={t('Chapter page')}
+          className="w-full h-full object-contain pointer-events-none select-none"
+          draggable={false}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-[#181820] flex items-center justify-center">
+          <p className="text-[10px] text-slate-600 font-mono">{t('No image')}</p>
+        </div>
+      )}
+
+      {/* Existing annotation pins */}
+      {annotations.map((ann) => {
+        const color = ANN_COLORS[ann.category] || ANN_COLORS.GENERAL_FEEDBACK;
+        return (
+          <button
+            key={ann.id}
+            onClick={(e) => { e.stopPropagation(); onPinClick(ann.id); }}
+            title={ann.comment}
+            className={`absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 flex items-center justify-center text-white text-[9px] font-mono font-extrabold transition-all z-10 cursor-pointer ${
+              ann.resolved
+                ? 'opacity-50 grayscale'
+                : selectedAnnId === ann.id
+                  ? 'scale-150 shadow-lg'
+                  : 'hover:scale-125'
+            }`}
+            style={{
+              left: `${ann.x}%`,
+              top: `${ann.y}%`,
+              backgroundColor: color,
+              borderColor: ann.resolved ? '#9ca3af' : '#141414',
+            }}
+          >
+            {ann.resolved ? '✓' : '!'}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -383,16 +459,18 @@ interface WorkspaceCanvasProps {
   activeSeries: Series | null;
   activeChapter: Chapter | null;
   onRefreshTasks: () => void;
+  onPageSubmitted?: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapter }: WorkspaceCanvasProps) {
+export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapter, onRefreshTasks, onPageSubmitted }: WorkspaceCanvasProps) {
+  const { t } = useLanguage();
 
   // ── Workspace mode ─────────────────────────────────────────────────────────
-  const [mode, setMode] = useState<'REVIEW' | 'CREATION'>('REVIEW');
+  const [mode, setMode] = useState<'REVIEW' | 'CREATION' | 'SUBMIT' | 'PAGES'>('REVIEW');
 
   // ── Review mode state ──────────────────────────────────────────────────────
   const [tasks,        setTasks]       = useState<WTask[]>([]);
@@ -419,6 +497,13 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
     return d.toISOString().split('T')[0];
   });
   const [deployToast,   setDeployToast]   = useState<string | null>(null);
+  const [submitNote,    setSubmitNote]    = useState('');
+
+  // ── Chapter pages mode state ───────────────────────────────────────────────
+  const [chapterPages,   setChapterPages]   = useState<any[]>([]);
+  const [activePageId,   setActivePageId]   = useState('');
+  const [selectedAnnId,  setSelectedAnnId]  = useState<string | null>(null);
+  const [pagesLoading,   setPagesLoading]   = useState(false);
 
   const [assistantsList, setAssistantsList] = useState<any[]>([]);
 
@@ -428,9 +513,20 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
   const activeTask    = tasks.find(t => t.id === activeTaskId) ?? null;
   const activeBox     = reviewBoxes.find(b => b.id === activeBoxId) ?? null;
   const activeCreateBox = createBoxes.find(b => b.id === activeCreateBoxId) ?? null;
+  const activePage    = chapterPages.find(p => (p._id || p.id) === activePageId) ?? null;
+  const pageAnnotations = (activePage?.annotations || []).map((ann: any) => ({
+    id: ann._id || ann.id,
+    x: ann.coords?.x || 0,
+    y: ann.coords?.y || 0,
+    category: ann.type || 'GENERAL_FEEDBACK',
+    comment: ann.content || '',
+    authorName: ann.annotatorId?.name || 'Mangaka',
+    createdAt: ann.createdAt || '',
+    resolved: !!ann.resolved,
+  }));
   const episodeLabel  = activeSeries
-    ? `${activeSeries.title} — Ch. ${activeChapter?.chapterNumber ?? '??'}`
-    : 'Episode 12 — Page 04 Workspace';
+    ? `${activeSeries.title} - ${t('Chapter')} ${activeChapter?.chapterNumber ?? '??'}`
+    : `${t('Chapter')} 12 - ${t('Page')} 04 ${t('Workspace')}`;
 
   // ── Review helpers ─────────────────────────────────────────────────────────
   const showToast = (msg: string, type: 'success' | 'warn') => {
@@ -527,19 +623,10 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
     if (!activeTask) return;
     try {
       await apiClient.tasks.review(activeTask.id, 'APPROVE', 'Approved by author');
-      const localTasksRaw = localStorage.getItem('m_tasks_local');
-      if (localTasksRaw) {
-        const localTasks = JSON.parse(localTasksRaw);
-        const idx = localTasks.findIndex((t: any) => t._id === activeTask.id);
-        if (idx !== -1) {
-          localTasks[idx].status = 'APPROVED';
-          localStorage.setItem('m_tasks_local', JSON.stringify(localTasks));
-        }
-      }
-      showToast(`"${activeTask.title}" approved.`, 'success');
+      showToast(t('"{{task}}" passed the Mangaka review and is waiting for the Tantou Editor.', { task: activeTask.title }), 'success');
       fetchWorkspaceData();
     } catch (err: any) {
-      showToast(err.message, 'warn');
+      showToast(t(err.message), 'warn');
     }
   };
 
@@ -547,21 +634,11 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
     if (!activeTask || !reviewComment.trim()) return;
     try {
       await apiClient.tasks.review(activeTask.id, 'REVISION_REQUESTED', reviewComment.trim());
-      const localTasksRaw = localStorage.getItem('m_tasks_local');
-      if (localTasksRaw) {
-        const localTasks = JSON.parse(localTasksRaw);
-        const idx = localTasks.findIndex((t: any) => t._id === activeTask.id);
-        if (idx !== -1) {
-          localTasks[idx].status = 'REVISION_REQUESTED';
-          localTasks[idx].reviewNote = reviewComment.trim();
-          localStorage.setItem('m_tasks_local', JSON.stringify(localTasks));
-        }
-      }
-      showToast(`Revision sent to ${activeTask.assistant}.`, 'warn');
+      showToast(t('Revision sent to {{assistant}}.', { assistant: activeTask.assistant }), 'warn');
       setReviewComment('');
       fetchWorkspaceData();
     } catch (err: any) {
-      showToast(err.message, 'warn');
+      showToast(t(err.message), 'warn');
     }
   };
 
@@ -590,9 +667,106 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
     setMode('REVIEW');
   };
 
+  /** Enter submit-to-editor mode — upload a page image onto the canvas directly */
+  const enterSubmitMode = () => {
+    if (sketchPreview) URL.revokeObjectURL(sketchPreview);
+    setSketchFile(null);
+    setSketchPreview(null);
+    setCreateBoxes([]);
+    setActiveCreateBoxId(null);
+    setSubmitNote('');
+    setDeployToast(null);
+    setMode('SUBMIT');
+  };
+
+  /** Cancel submit mode — back to review */
+  const exitSubmitMode = () => {
+    if (sketchPreview) URL.revokeObjectURL(sketchPreview);
+    setSketchFile(null);
+    setSketchPreview(null);
+    setCreateBoxes([]);
+    setActiveCreateBoxId(null);
+    setSubmitNote('');
+    setMode('REVIEW');
+  };
+
+  /** Enter chapter-pages (annotation viewer) mode */
+  const enterPagesMode = async () => {
+    setMode('PAGES');
+    setPagesLoading(true);
+    setSelectedAnnId(null);
+    try {
+      const chapterData = await apiClient.chapters.getById(activeChapter?._id || '');
+      const pages = chapterData?.pages || chapterData?.data?.pages || [];
+      setChapterPages(pages);
+      if (pages.length > 0) {
+        const firstId = pages[0]._id || pages[0].id;
+        setActivePageId((prev) => pages.some((p: any) => (p._id || p.id) === prev) ? prev : firstId);
+      } else {
+        setActivePageId('');
+      }
+    } catch (err: any) {
+      showToast(t(err.message || 'Failed to load chapter pages'), 'warn');
+    } finally {
+      setPagesLoading(false);
+    }
+  };
+
+  /** Exit chapter-pages mode — back to review */
+  const exitPagesMode = () => {
+    setChapterPages([]);
+    setActivePageId('');
+    setSelectedAnnId(null);
+    setMode('REVIEW');
+  };
+
+  /** Submit the annotated page image directly to the editor */
+  const handleSubmitToEditor = async () => {
+    if (!activeSeries || !activeChapter) {
+      showToast(t('Select a series and chapter before submitting.'), 'warn');
+      return;
+    }
+    if (!sketchFile) {
+      showToast(t('A page image is required before submitting.'), 'warn');
+      return;
+    }
+    try {
+      setDeployToast(t('Uploading the page image to the server...'));
+
+      let fileUrl = "";
+      const fileRes = await apiClient.files.upload(sketchFile, activeChapter._id);
+      fileUrl = fileRes.fileUrl || fileRes.data?.fileUrl || "";
+      if (!fileUrl) throw new Error('Failed to resolve uploaded image URL');
+
+      setDeployToast(t('Submitting the page to the editor...'));
+
+      await apiClient.chapters.submitPageToEditor(activeChapter._id, {
+        imageUrl: fileUrl,
+        note: submitNote.trim(),
+      });
+
+      setDeployToast(t('Page submitted to the editor for review!'));
+      setTimeout(() => {
+        exitSubmitMode();
+        fetchWorkspaceData();
+        if (onPageSubmitted) onPageSubmitted();
+      }, 1400);
+    } catch (err: any) {
+      setDeployToast(null);
+      showToast(t(err.message || 'Failed to submit page'), 'warn');
+    }
+  };
+
   /** Handle sketch file selection */
   const handleSketchFile = (file: File) => {
-    if (!file.type.startsWith('image/')) return;
+    if (!file.type.startsWith('image/')) {
+      showToast(t('Please select a valid image file.'), 'warn');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showToast(t('The source image must not exceed 10 MB.'), 'warn');
+      return;
+    }
     if (sketchPreview) URL.revokeObjectURL(sketchPreview);
     setSketchFile(file);
     setSketchPreview(URL.createObjectURL(file));
@@ -615,18 +789,37 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
 
   /** Deploy — build FormData, upload sketch, create task via API, exit creation mode */
   const handleDeploy = async () => {
-    if (!cTitle.trim()) return;
     if (!activeSeries || !activeChapter) {
-      showToast("Vui lòng chọn Series và Chapter trước khi giao việc.", "warn");
+      showToast(t('Select a series and chapter before assigning work.'), 'warn');
       return;
     }
 
-    try {
-    if (!sketchFile) {
-      showToast("A sketch page image is required before assigning a task.", "warn");
+    if (!cTitle.trim()) {
+      showToast(t('Task title is required.'), 'warn');
       return;
     }
-      setDeployToast("Đang tải ảnh thô lên server...");
+    if (!cAssistant) {
+      showToast(t('Please select an Assistant.'), 'warn');
+      return;
+    }
+    if (createBoxes.length === 0) {
+      showToast(t('Mark at least one work region on the page.'), 'warn');
+      return;
+    }
+    if (!cInstructions.trim()) {
+      showToast(t('Task instructions are required.'), 'warn');
+      return;
+    }
+    if (!cDueAt || cDueAt < new Date().toISOString().split('T')[0]) {
+      showToast(t('The deadline cannot be in the past.'), 'warn');
+      return;
+    }
+    try {
+    if (!sketchFile) {
+      showToast(t('A sketch page image is required before assigning a task.'), 'warn');
+      return;
+    }
+      setDeployToast(t('Uploading the source image to the server...'));
 
       let fileId = "";
       let sourceImageUrl = "";
@@ -636,43 +829,42 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
         sourceImageUrl = fileRes.fileUrl || fileRes.data?.fileUrl || "";
       }
 
-      setDeployToast("Đang tạo và phân công nhiệm vụ...");
+      setDeployToast(t('Creating and assigning tasks...'));
 
-      const primaryBox = activeCreateBox ?? createBoxes[0] ?? null;
-      const region = primaryBox
-        ? {
-            x: Number(primaryBox.leftPct.toFixed(2)),
-            y: Number(primaryBox.topPct.toFixed(2)),
-            width: Number(primaryBox.widthPct.toFixed(2)),
-            height: Number(primaryBox.heightPct.toFixed(2)),
-            type: 'TASK_ZONE',
-          }
-        : null;
+      const regions = createBoxes.map((box) => ({
+        x: Number(box.leftPct.toFixed(2)),
+        y: Number(box.topPct.toFixed(2)),
+        width: Number(box.widthPct.toFixed(2)),
+        height: Number(box.heightPct.toFixed(2)),
+        type: cType,
+        comment: box.comment || cInstructions.trim(),
+      }));
 
       const description = fileId
         ? `[IMAGE_URL:api/files/download/${fileId}] ${cInstructions.trim()}`
         : cInstructions.trim();
 
-      const createdTask = await apiClient.tasks.create(
-        activeSeries._id,
-        activeChapter._id,
-        cAssistant,
-        cTitle.trim(),
-        region,
+      await apiClient.tasks.create({
+        seriesId: activeSeries._id,
+        chapterId: activeChapter._id,
+        assignedTo: cAssistant,
+        title: cTitle.trim(),
+        type: cType,
+        regions,
         description,
-        undefined,
+        pageIds: undefined,
         sourceImageUrl,
-        cDueAt ? new Date(cDueAt).toISOString() : undefined,
-      );
+        dueAt: new Date(cDueAt).toISOString(),
+      });
 
-      setDeployToast(`"${cTitle.trim()}" đã được phân công thành công!`);
+      setDeployToast(t('{{chapter}} was assigned successfully!', { chapter: cTitle.trim() }));
       setTimeout(() => {
         exitCreationMode();
         fetchWorkspaceData();
       }, 1400);
     } catch (err: any) {
       setDeployToast(null);
-      showToast(err.message || "Tạo task thất bại", "warn");
+      showToast(t(err.message || 'Failed to create task'), 'warn');
     }
   };
 
@@ -695,8 +887,12 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
             <h1 className="text-[13px] font-bold text-white leading-none">{episodeLabel}</h1>
             <p className="text-[10px] text-slate-500 mt-0.5">
               {mode === 'CREATION'
-                ? <span className="text-red-400 font-semibold">Creation Mode — Assign a new task</span>
-                : <>Author: <span className="text-slate-400 font-medium">{currentUser.name}</span></>
+                ? <span className="text-red-400 font-semibold">{t("Creation Mode — Assign a new task")}</span>
+                : mode === 'SUBMIT'
+                  ? <span className="text-red-400 font-semibold">{t("Submit Mode — Upload a page to the editor")}</span>
+                  : mode === 'PAGES'
+                    ? <span className="text-red-400 font-semibold">{t("Chapter Pages — Annotation review")}</span>
+                    : <>{t("Author")}: <span className="text-slate-400 font-medium">{currentUser.name}</span></>
               }
             </p>
           </div>
@@ -721,17 +917,17 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
         )}
 
         {/* Mode indicator + cancel */}
-        {mode === 'CREATION' ? (
+        {mode !== 'REVIEW' ? (
           <button
-            onClick={exitCreationMode}
+            onClick={mode === 'CREATION' ? exitCreationMode : mode === 'SUBMIT' ? exitSubmitMode : exitPagesMode}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#2d2d34] text-[11px] font-bold text-slate-400 hover:text-white hover:border-slate-500 transition-all cursor-pointer"
           >
-            <ArrowLeft className="w-3.5 h-3.5" /> Cancel
+            <ArrowLeft className="w-3.5 h-3.5" /> {t("Cancel")}
           </button>
         ) : (
           <div className="flex items-center gap-2 text-[10px] text-slate-600 font-mono">
             <div className="w-1.5 h-1.5 rounded-full bg-white/30 animate-pulse" />
-            Live Session
+            {t("Live Session")}
           </div>
         )}
       </header>
@@ -748,63 +944,128 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
 
           {/* Create button (review mode only) */}
           {mode === 'REVIEW' && (
-            <div className="p-3 border-b border-[#2d2d34] shrink-0">
+            <div className="p-3 border-b border-[#2d2d34] shrink-0 space-y-2">
               <button
                 onClick={enterCreationMode}
                 className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-white hover:bg-slate-100 transition-all text-xs font-bold text-black cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Create &amp; Assign New Task
+                {t("Create & Assign New Task")}
+              </button>
+              <button
+                onClick={enterSubmitMode}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-[#2d2d34] hover:bg-[#3a3a44] transition-all text-xs font-bold text-slate-200 cursor-pointer"
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                {t("Upload Page & Submit to Editor")}
+              </button>
+              <button
+                onClick={enterPagesMode}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-[#2d2d34] hover:bg-[#3a3a44] transition-all text-xs font-bold text-slate-200 cursor-pointer"
+              >
+                <FileImage className="w-3.5 h-3.5" />
+                {t("Chapter Pages & Annotations")}
               </button>
             </div>
           )}
 
           {/* Section label */}
-          <div className={`px-3 pt-3 pb-1.5 shrink-0 ${mode === 'CREATION' ? 'opacity-40' : ''}`}>
+          <div className={`px-3 pt-3 pb-1.5 shrink-0 ${mode === 'CREATION' || mode === 'SUBMIT' ? 'opacity-40' : ''}`}>
             <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600">
-              Tasks — {tasks.length}
+              {mode === 'PAGES' ? `${t("Pages")} — ${chapterPages.length}` : `${t("Tasks")} — ${tasks.length}`}
             </span>
           </div>
 
           {/* Cards */}
-          <div className={`flex-1 overflow-y-auto px-3 pb-3 space-y-1.5 ${mode === 'CREATION' ? 'overflow-hidden' : ''}`}>
-            {tasks.map(task => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                isActive={task.id === activeTaskId}
-                muted={mode === 'CREATION'}
-                onClick={() => mode === 'REVIEW' && setActiveTaskId(task.id)}
-              />
-            ))}
-          </div>
+          {mode === 'PAGES' ? (
+            <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1.5">
+              {pagesLoading && (
+                <p className="text-center text-[10px] text-slate-600 font-mono py-4">
+                  {t("Loading pages...")}
+                </p>
+              )}
+              {!pagesLoading && chapterPages.map((page: any) => {
+                const pageId = page._id || page.id;
+                const annCount = (page.annotations || []).length;
+                return (
+                  <button
+                    key={pageId}
+                    onClick={() => { setActivePageId(pageId); setSelectedAnnId(null); }}
+                    className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-md border text-left transition-all cursor-pointer ${
+                      activePageId === pageId
+                        ? 'bg-[#2a2a32] border-[#4a4a55]'
+                        : 'bg-[#1e1e24] border-[#2d2d34] hover:border-[#3a3a44]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileImage className="w-3.5 h-3.5 text-slate-500" />
+                      <div>
+                        <p className="text-[11px] font-bold text-white leading-tight">
+                          {t("Page")} {page.pageNumber || 0}
+                        </p>
+                        <p className="text-[8px] text-slate-600 font-mono">
+                          {page.status || ''}
+                        </p>
+                      </div>
+                    </div>
+                    {annCount > 0 && (
+                      <span className="shrink-0 text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
+                        {annCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+              {!pagesLoading && chapterPages.length === 0 && (
+                <p className="text-center text-[10px] text-slate-600 font-mono py-4">
+                  {t("No pages in this chapter yet.")}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className={`flex-1 overflow-y-auto px-3 pb-3 space-y-1.5 ${mode !== 'REVIEW' ? 'overflow-hidden' : ''}`}>
+              {tasks.map(task => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  isActive={task.id === activeTaskId}
+                  muted={mode !== 'REVIEW'}
+                  onClick={() => mode === 'REVIEW' && setActiveTaskId(task.id)}
+                />
+              ))}
+              {tasks.length === 0 && (
+                <p className="text-center text-[10px] text-slate-600 font-mono py-4">
+                  {t("No tasks for this chapter yet.")}
+                </p>
+              )}
+            </div>
+          )}
 
-          {/* CREATION mode overlay — blocks interaction, shows label */}
-          {mode === 'CREATION' && (
+          {/* Mode overlay — blocks interaction during CREATION/SUBMIT */}
+          {mode === 'CREATION' || mode === 'SUBMIT' ? (
             <div className="absolute inset-0 bg-[#121214]/60 flex flex-col items-center justify-center gap-2 pointer-events-auto cursor-not-allowed select-none">
               <div className="w-8 h-8 rounded-full bg-[#2d2d34] flex items-center justify-center">
                 <Plus className="w-4 h-4 text-slate-500 rotate-45" />
               </div>
               <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600 text-center px-4">
-                Task list paused<br />during creation
+                {t("Task list paused")}<br />{t("during creation")}
               </span>
             </div>
-          )}
+          ) : null}
         </aside>
 
         {/* ── COL 2 — Center Canvas ── */}
         <main className="flex-1 flex flex-col bg-[#121214] overflow-hidden">
 
           {mode === 'REVIEW' ? (
-            /* ── REVIEW: existing canvas with mock manga ── */
             <>
               <div className="flex items-center justify-between px-4 py-2.5 bg-[#181820] border-b border-[#2d2d34] shrink-0 select-none">
                 <span className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
                   <ImageIcon className="w-3.5 h-3.5 text-slate-600" />
-                  Manga Canvas — Drag to annotate
+                  {t("Manga Canvas — Drag to annotate")}
                 </span>
                 <span className="text-[9px] font-bold text-slate-600 font-mono">
-                  {reviewBoxes.length} zone{reviewBoxes.length !== 1 ? 's' : ''} marked
+                  {t("{{count}} marked zones", { count: reviewBoxes.length })}
                 </span>
               </div>
               <div className="flex-1 flex items-center justify-center p-8 bg-[#121214] overflow-auto">
@@ -829,7 +1090,18 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                         return url.startsWith('http') ? url : `${apiClient.getConfig().baseUrl}/${url.startsWith('/') ? url.slice(1) : url}`;
                       }
 
-                      if (!activeTask?.rawTask?.description || !activeTask.rawTask.description.startsWith('[IMAGE_URL:')) return null;
+                      if (!activeTask?.rawTask?.description || !activeTask.rawTask.description.startsWith('[IMAGE_URL:')) {
+                        // Fall back to the chapter's own submitted pages (direct page submissions aren't tied to tasks)
+                        const chapterPages = activeChapter?.pages || [];
+                        const latestPage = Array.isArray(chapterPages) && chapterPages.length > 0
+                          ? chapterPages[chapterPages.length - 1]
+                          : null;
+                        if (latestPage?.assistantImageUrl || latestPage?.imageUrl) {
+                          const url = latestPage.assistantImageUrl || latestPage.imageUrl;
+                          return url.startsWith('http') ? url : `${apiClient.getConfig().baseUrl}/${url.startsWith('/') ? url.slice(1) : url}`;
+                        }
+                        return null;
+                      }
                       const match = activeTask.rawTask.description.match(/^\[IMAGE_URL:([^\]]+)\]/);
                       if (!match) return null;
                       const rawUrl = match[1];
@@ -856,15 +1128,57 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 </div>
               </div>
             </>
+          ) : mode === 'PAGES' ? (
+            /* ── PAGES: chapter page + annotation pins overlay ── */
+            <>
+              <div className="flex items-center justify-between px-4 py-2.5 bg-[#181820] border-b border-[#2d2d34] shrink-0 select-none">
+                <span className="flex items-center gap-1.5 text-[10px] font-semibold text-red-400/80 uppercase tracking-widest">
+                  <MapPin className="w-3.5 h-3.5 text-red-500" />
+                  {activePage
+                    ? `${t("Page")} ${activePage.pageNumber || 0} — ${t("click pins to review comments")}`
+                    : t("Select a page to review annotations")}
+                </span>
+              </div>
+              <div className="flex-1 flex items-center justify-center p-8 bg-[#121214] overflow-auto">
+                {pagesLoading ? (
+                  <p className="text-center text-[11px] text-slate-600 font-mono">
+                    {t("Loading chapter pages...")}
+                  </p>
+                ) : !activePage ? (
+                  <p className="text-center text-[11px] text-slate-600 font-mono">
+                    {t("No pages to display for this chapter.")}
+                  </p>
+                ) : (
+                  <div
+                    className="relative rounded-md overflow-visible border border-[#2d2d34] shadow-2xl shadow-black"
+                    style={{ width: '100%', maxWidth: '360px', aspectRatio: '3/4' }}
+                  >
+                    <AnnotationPageCanvas
+                      imageUrl={(() => {
+                        const url = activePage.assistantImageUrl || activePage.imageUrl || '';
+                        if (!url) return '';
+                        return url.startsWith('http') ? url : `${apiClient.getConfig().baseUrl}/${url.startsWith('/') ? url.slice(1) : url}`;
+                      })()}
+                      annotations={pageAnnotations}
+                      selectedAnnId={selectedAnnId}
+                      onPinClick={(id) => setSelectedAnnId(selectedAnnId === id ? null : id)}
+                    />
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
-            /* ── CREATION: upload dropzone → annotatable sketch canvas ── */
             <>
               <div className="flex items-center justify-between px-4 py-2.5 bg-[#181820] border-b border-[#2d2d34] shrink-0 select-none">
                 <span className="flex items-center gap-1.5 text-[10px] font-semibold text-red-400/80 uppercase tracking-widest">
                   <Crosshair className="w-3.5 h-3.5 text-red-500" />
                   {sketchPreview
-                    ? 'Sketch uploaded — drag to mark work zone'
-                    : 'Step 1 — Upload rough sketch / storyboard'}
+                    ? mode === 'SUBMIT'
+                      ? t("Image loaded — ready to submit")
+                      : t("Image loaded — drag to mark work zones")
+                    : mode === 'SUBMIT'
+                      ? t("Step 1 — Upload the page image")
+                      : t("Step 1 — Upload rough sketch / storyboard")}
                 </span>
                 {sketchPreview && (
                   <button
@@ -877,7 +1191,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                     }}
                     className="flex items-center gap-1 text-[9px] text-slate-600 hover:text-red-400 transition-colors cursor-pointer font-bold uppercase tracking-wide"
                   >
-                    <X className="w-3 h-3" /> Remove sketch
+                    <X className="w-3 h-3" /> {t("Remove image")}
                   </button>
                 )}
               </div>
@@ -906,12 +1220,14 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                       </div>
                       <div className="text-center space-y-1 px-8">
                         <p className="text-sm font-semibold text-slate-400">
-                          Click to upload storyboard or rough sketch
+                          {mode === 'SUBMIT'
+                            ? t("Click to upload the finished page")
+                            : t("Click to upload storyboard or rough sketch")}
                         </p>
-                        <p className="text-[10px] text-slate-700 font-mono">.png · .jpg · .jpeg · .webp — max 10 MB</p>
+                        <p className="text-[10px] text-slate-700 font-mono">.png ? .jpg ? .jpeg ? .webp ? {t('Maximum size')}: 10 MB</p>
                       </div>
                       <div className="px-4 py-2 rounded-md bg-[#2d2d34] border border-[#3a3a44]">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Browse files</span>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t("Browse files")}</span>
                       </div>
                     </div>
                     <input
@@ -922,8 +1238,24 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                       className="hidden"
                     />
                   </>
+                ) : mode === 'SUBMIT' ? (
+                  /* ── SUBMIT: plain page preview (no zone marking) ── */
+                  <div
+                    className="relative rounded-md overflow-hidden border border-[#2d2d34] shadow-2xl shadow-black"
+                    style={{ width: '100%', maxWidth: '400px', aspectRatio: '3/4' }}
+                  >
+                    <img
+                      src={sketchPreview}
+                      alt={t('Page to submit')}
+                      className="w-full h-full object-contain select-none pointer-events-none"
+                      draggable={false}
+                    />
+                    <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[8px] font-bold uppercase tracking-widest text-slate-300 bg-black/70 px-2 py-0.5 rounded-sm">
+                      {t("Ready to submit")}
+                    </span>
+                  </div>
                 ) : (
-                  /* ── Sketch loaded: full canvas with bounding-box drawing ── */
+                  /* ── CREATION: full canvas with bounding-box drawing ── */
                   <div
                     className="relative rounded-md overflow-visible border border-[#2d2d34] shadow-2xl shadow-black"
                     style={{ width: '100%', maxWidth: '400px', aspectRatio: '3/4' }}
@@ -954,13 +1286,75 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
         {/* ── COL 3 — Right Panel ── */}
         <aside className="w-1/4 min-w-[200px] flex flex-col border-l border-[#2d2d34] bg-[#1e1e24] overflow-hidden">
 
-          {mode === 'REVIEW' ? (
+          {mode === 'PAGES' ? (
+            /* ── PAGES: annotations for the active page ── */
+            <div className="flex flex-col h-full overflow-y-auto">
+              <div className="px-4 pt-4 pb-3 border-b border-[#2d2d34] shrink-0">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1">
+                  {t("Page Annotations")}
+                </p>
+                {activePage && (
+                  <h2 className="text-sm font-bold text-white leading-snug">
+                    {t("Page")} {activePage.pageNumber || 0}
+                  </h2>
+                )}
+                <p className="text-[9px] text-slate-500 mt-1">
+                  {pageAnnotations.length} {t("annotations")}
+                </p>
+              </div>
+
+              {/* Annotation list */}
+              <div className="flex-1 px-4 py-3 space-y-2">
+                {pageAnnotations.length === 0 && (
+                  <p className="text-center text-[10px] text-slate-600 font-mono py-4">
+                    {t("No annotations on this page yet.")}
+                  </p>
+                )}
+                {pageAnnotations.map((ann) => {
+                  const color = ANN_COLORS[ann.category] || ANN_COLORS.GENERAL_FEEDBACK;
+                  return (
+                    <div
+                      key={ann.id}
+                      className={`rounded-md border p-3 transition-colors ${
+                        selectedAnnId === ann.id
+                          ? 'bg-[#2a2a32] border-[#4a4a55]'
+                          : 'bg-[#121214]/40 border-[#2d2d34]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span
+                          className="shrink-0 w-2 h-2 rounded-full"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="flex-1 text-[8px] font-bold uppercase tracking-widest text-slate-500 truncate">
+                          {ann.category}
+                        </span>
+                        {ann.resolved && (
+                          <span className="shrink-0 flex items-center gap-1 text-[8px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            <Check className="w-2.5 h-2.5" />
+                            {t("Resolved")}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-snug mb-2">{ann.comment}</p>
+                      <div className="flex items-center justify-between text-[8px] text-slate-600 font-mono">
+                        <span>{ann.authorName}</span>
+                        {ann.createdAt && (
+                          <span>{new Date(ann.createdAt).toLocaleDateString()}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : mode === 'REVIEW' ? (
             /* ── REVIEW: feedback / approve panel ── */
             activeTask ? (
               <div className="flex flex-col h-full overflow-y-auto">
                 {/* Task header */}
                 <div className="px-4 pt-4 pb-3 border-b border-[#2d2d34] shrink-0">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1">Reviewing Task</p>
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1">{t("Reviewing Task")}</p>
                   <h2 className="text-sm font-bold text-white leading-snug">{activeTask.title}</h2>
                   <div className="flex items-center gap-2 mt-2.5">
                     <div className="w-6 h-6 rounded-md bg-[#2d2d34] border border-[#3a3a44] text-slate-300 flex items-center justify-center text-[9px] font-black shrink-0">
@@ -968,7 +1362,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                     </div>
                     <div>
                       <p className="text-[10px] font-medium text-white">{activeTask.assistant}</p>
-                      <p className="text-[9px] text-slate-500">Submitted {activeTask.submittedAt}</p>
+                      <p className="text-[9px] text-slate-500">{t("Submitted")} {activeTask.submittedAt}</p>
                     </div>
                   </div>
                   <div className="mt-2.5"><StatusBadge status={activeTask.status} /></div>
@@ -977,7 +1371,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 {/* Comparison toggles */}
                 <div className="px-4 py-3 border-b border-[#2d2d34] shrink-0">
                   <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-2 flex items-center gap-1.5">
-                    <ArrowLeftRight className="w-3 h-3" /> Comparison View
+                    <ArrowLeftRight className="w-3 h-3" /> {t("Comparison View")}
                   </p>
                   {(['original', 'submission'] as const).map(m => (
                     <button
@@ -990,7 +1384,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                       }`}
                     >
                       {m === 'original' ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                      {m === 'original' ? 'Original rough sketch' : "Assistant's submission"}
+                      {m === "original" ? t("Original rough sketch") : t("Assistant's submission")}
                     </button>
                   ))}
                 </div>
@@ -999,7 +1393,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 {activeBox && (
                   <div className="px-4 py-2.5 border-b border-[#2d2d34] shrink-0">
                     <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1.5 flex items-center gap-1">
-                      <MapPin className="w-2.5 h-2.5 text-red-500" /> Selected Zone
+                      <MapPin className="w-2.5 h-2.5 text-red-500" /> {t("Selected Zone")}
                     </p>
                     <div className="bg-[#121214] border border-[#2d2d34] rounded-md px-2.5 py-2 font-mono text-[9px] text-slate-500 space-y-0.5">
                       <div>X: <span className="text-slate-300">{activeBox.leftPct.toFixed(1)}%</span> &nbsp; Y: <span className="text-slate-300">{activeBox.topPct.toFixed(1)}%</span></div>
@@ -1019,13 +1413,13 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                     }
                     className="w-full py-2.5 rounded-md bg-white hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-black transition-all cursor-pointer flex items-center justify-center gap-2"
                   >
-                    <Check className="w-4 h-4" /> Approve Task
+                    <Check className="w-4 h-4" /> {t("Approve Task")}
                   </button>
                   {(activeTask.status === 'MANGAKA_APPROVED' || activeTask.status === 'APPROVED' || activeTask.rawTask?.status === 'MANGAKA_APPROVED') && (
-                    <p className="text-[9px] text-green-400 text-center mt-1.5 font-bold uppercase tracking-wide">✓ Mangaka Approved — Task đã hoàn tất</p>
+                    <p className="text-[9px] text-green-400 text-center mt-1.5 font-bold uppercase tracking-wide">{t("✓ Mangaka Approved — Task completed")}</p>
                   )}
                   {activeTask.status === 'REVISING' && (
-                    <p className="text-[9px] text-amber-400 text-center mt-1.5">Đã yêu cầu Assistant chỉnh sửa lại</p>
+                    <p className="text-[9px] text-amber-400 text-center mt-1.5">{t("Assistant revision requested")}</p>
                   )}
                 </div>
 
@@ -1033,16 +1427,16 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 <div className="px-4 py-3 flex flex-col gap-3 flex-1">
                   <div>
                     <h3 className="text-xs font-bold text-white flex items-center gap-1.5 mb-1">
-                      <XCircle className="w-3.5 h-3.5 text-red-500" /> Request Changes
+                      <XCircle className="w-3.5 h-3.5 text-red-500" /> {t("Request Changes")}
                     </h3>
                     <p className="text-[9px] text-slate-500 leading-relaxed">
-                      {activeBox ? 'Comment will be pinned to the selected zone.' : 'Draw a zone on the canvas, then describe the correction.'}
+                      {activeBox ? t("Comment will be pinned to the selected zone.") : t("Draw a zone on the canvas, then describe the correction.")}
                     </p>
                   </div>
                   <textarea
                     value={reviewComment}
                     onChange={e => setReviewComment(e.target.value)}
-                    placeholder="Type your review comments here to send back to assistant..."
+                    placeholder={t("Type your review comments here to send back to assistant...")}
                     rows={5}
                     className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2.5 text-xs text-white placeholder:text-slate-700 focus:outline-none focus:border-slate-500 resize-none transition-colors leading-relaxed"
                   />
@@ -1051,19 +1445,115 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                     disabled={!reviewComment.trim() || activeTask.status === 'REVISING'}
                     className="w-full py-2.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-red-600/30 hover:border-red-600/50 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-2 mt-auto"
                   >
-                    <Undo2 className="w-3.5 h-3.5" /> Send Back with Selected Zone
+                    <Undo2 className="w-3.5 h-3.5" /> {t("Send Back with Selected Zone")}
                   </button>
                   {activeTask.status === 'REVISING' && (
-                    <p className="text-[9px] text-red-500/60 text-center font-medium -mt-1">Already sent for revision</p>
+                    <p className="text-[9px] text-red-500/60 text-center font-medium -mt-1">{t("Already sent for revision")}</p>
                   )}
                 </div>
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4 select-none">
                 <Eye className="w-10 h-10 stroke-[1] text-slate-700" />
-                <p className="text-xs font-medium text-slate-600 text-center">Select a task to start reviewing</p>
+                <p className="text-xs font-medium text-slate-600 text-center">{t("Select a task to start reviewing")}</p>
               </div>
             )
+          ) : mode === 'SUBMIT' ? (
+            /* ── SUBMIT: page submission form ── */
+            <div className="flex flex-col h-full overflow-y-auto">
+
+              {/* Form header */}
+              <div className="px-4 pt-4 pb-3 border-b border-[#2d2d34] shrink-0">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-red-400/80 mb-1 flex items-center gap-1.5">
+                  <UploadCloud className="w-3 h-3" /> {t("Step 2 — Submit Details")}
+                </p>
+                <h2 className="text-sm font-bold text-white leading-snug">{t("Submit Page to Editor")}</h2>
+                <p className="text-[9px] text-slate-500 mt-1 leading-relaxed">
+                  {t("Upload the page on the canvas, mark the zones to annotate, then submit for review.")}
+                </p>
+              </div>
+
+              {/* Form body */}
+              <div className="flex-1 px-4 py-3 space-y-4 overflow-y-auto">
+
+                {/* Note for editor */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                    {t("Note for the Editor")}
+                  </label>
+                  <textarea
+                    value={submitNote}
+                    onChange={e => setSubmitNote(e.target.value)}
+                    placeholder={t("Describe what this page contains or anything the editor should know...")}
+                    rows={4}
+                    className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2.5 text-xs text-white placeholder:text-slate-700 focus:outline-none focus:border-slate-500 resize-none transition-colors leading-relaxed"
+                  />
+                </div>
+
+                {/* Live zone metadata */}
+                {activeCreateBox ? (
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-red-500" /> {t("Marked Zone Coordinates")}
+                    </label>
+                    <div className="bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2.5 font-mono text-[10px] text-slate-500 grid grid-cols-2 gap-x-4 gap-y-1">
+                      <div>X: <span className="text-slate-300 font-bold">{activeCreateBox.leftPct.toFixed(1)}%</span></div>
+                      <div>Y: <span className="text-slate-300 font-bold">{activeCreateBox.topPct.toFixed(1)}%</span></div>
+                      <div>W: <span className="text-slate-300 font-bold">{activeCreateBox.widthPct.toFixed(1)}%</span></div>
+                      <div>H: <span className="text-slate-300 font-bold">{activeCreateBox.heightPct.toFixed(1)}%</span></div>
+                    </div>
+                    {createBoxes.length > 1 && (
+                      <p className="text-[9px] text-slate-600 mt-1">
+                        {t("All {{count}} marked regions will be attached to this page.", { count: createBoxes.length })}
+                      </p>
+                    )}
+                  </div>
+                ) : sketchPreview ? (
+                  <div className="bg-red-500/5 border border-red-500/15 rounded-md px-3 py-2.5">
+                    <p className="text-[9px] text-red-400/70 leading-relaxed">
+                      {t("← Drag on the canvas to mark zones for the editor.")}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-[#121214]/60 border border-[#2d2d34] rounded-md px-3 py-2.5">
+                    <p className="text-[9px] text-slate-600 leading-relaxed">
+                      {t("Upload the page on the canvas to enable zone marking.")}
+                    </p>
+                  </div>
+                )}
+
+                {/* Chapter + series context */}
+                <div className="bg-[#121214]/60 border border-[#2d2d34] rounded-md px-3 py-2.5">
+                  <p className="text-[9px] text-slate-500 leading-relaxed">
+                    <span className="text-slate-300 font-bold">{t("Chapter")} {activeChapter?.chapterNumber ?? '??'}</span>
+                    {" — "}{activeSeries?.title ?? ''}
+                  </p>
+                </div>
+
+              </div>
+
+              {/* Submit button */}
+              <div className="px-4 py-4 border-t border-[#2d2d34] shrink-0 space-y-2">
+                <button
+                  onClick={handleSubmitToEditor}
+                  disabled={
+                    !sketchFile ||
+                    !!deployToast
+                  }
+                  className="w-full py-3 rounded-md bg-white hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-black transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg"
+                >
+                  <Send className="w-4 h-4" />
+                  {t("Submit to Editor")}
+                </button>
+                <button
+                  onClick={exitSubmitMode}
+                  className="w-full py-2 rounded-md border border-[#2d2d34] text-xs font-semibold text-slate-500 hover:text-white hover:border-slate-500 transition-all cursor-pointer"
+                >
+                  {t("Cancel")}
+                </button>
+              </div>
+
+            </div>
           ) : (
             /* ── CREATION: Task Assignment Form (Req 3) ── */
             <div className="flex flex-col h-full overflow-y-auto">
@@ -1071,11 +1561,11 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
               {/* Form header */}
               <div className="px-4 pt-4 pb-3 border-b border-[#2d2d34] shrink-0">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-red-400/80 mb-1 flex items-center gap-1.5">
-                  <Crosshair className="w-3 h-3" /> Step 2 — Task Details
+                  <Crosshair className="w-3 h-3" /> {t("Step 2 — Task Details")}
                 </p>
-                <h2 className="text-sm font-bold text-white leading-snug">Assign New Task</h2>
+                <h2 className="text-sm font-bold text-white leading-snug">{t("Assign New Task")}</h2>
                 <p className="text-[9px] text-slate-500 mt-1 leading-relaxed">
-                  Fill in the task details below, then deploy to an assistant.
+                  {t("Fill in the task details below, then deploy to an assistant.")}
                 </p>
               </div>
 
@@ -1085,13 +1575,13 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 {/* Task Title */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
-                    Task Title
+                    {t("Task Title")}
                   </label>
                   <input
                     type="text"
                     value={cTitle}
                     onChange={e => setCTitle(e.target.value)}
-                    placeholder="e.g. Background Lineart — Scene 3"
+                    placeholder={t("e.g. Background Lineart — Scene 3")}
                     className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2.5 text-sm text-white placeholder:text-slate-700 focus:outline-none focus:border-slate-500 transition-colors"
                   />
                 </div>
@@ -1099,21 +1589,21 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 {/* Task Type */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
-                    Task Type
+                    {t("Task Type")}
                   </label>
                   <div className="grid grid-cols-2 gap-1.5">
-                    {TASK_TYPES.map(t => (
+                    {TASK_TYPES.map(taskType => (
                       <button
-                        key={t}
+                        key={taskType}
                         type="button"
-                        onClick={() => setCType(t)}
+                        onClick={() => setCType(taskType)}
                         className={`px-2.5 py-2 rounded-md border text-[11px] font-medium transition-all cursor-pointer ${
-                          cType === t
+                          cType === taskType
                             ? 'bg-white/10 border-white/20 text-white'
                             : 'bg-[#121214] border-[#2d2d34] text-slate-500 hover:text-slate-300 hover:border-slate-600'
                         }`}
                       >
-                        {t}
+                        {t(taskType)}
                       </button>
                     ))}
                   </div>
@@ -1121,7 +1611,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 {/* Task Deadline */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
-                    Task Deadline
+                    {t("Task Deadline")}
                   </label>
                   <input
                     type="date"
@@ -1135,7 +1625,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 {/* Assign To */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
-                    Assign To
+                    {t("Assign To")}
                   </label>
                   <div className="space-y-1.5">
                     {assistantsList.length > 0 ? (
@@ -1162,7 +1652,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                       })
                     ) : (
                       <p className="text-[10px] text-slate-600">
-                        {isWorkspaceLoading ? 'Đang tải danh sách Assistant...' : 'Không có Assistant nào trong hệ thống.'}
+                        {isWorkspaceLoading ? t("Loading Assistants...") : t("No Assistants found in the system.")}
                       </p>
                     )}
                   </div>
@@ -1171,12 +1661,12 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 {/* Instructions for the marked zone */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
-                    Instructions for the Marked Zone
+                    {t("Instructions for the Marked Zone")}
                   </label>
                   <textarea
                     value={cInstructions}
                     onChange={e => setCInstructions(e.target.value)}
-                    placeholder="Describe what the assistant should do in this zone — style, technique, references..."
+                    placeholder={t("Describe what the assistant should do in this zone — style, technique, references...")}
                     rows={4}
                     className="w-full bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2.5 text-xs text-white placeholder:text-slate-700 focus:outline-none focus:border-slate-500 resize-none transition-colors leading-relaxed"
                   />
@@ -1186,7 +1676,7 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                 {activeCreateBox ? (
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-red-500" /> Marked Zone Coordinates
+                      <MapPin className="w-3 h-3 text-red-500" /> {t("Marked Zone Coordinates")}
                     </label>
                     <div className="bg-[#121214] border border-[#2d2d34] rounded-md px-3 py-2.5 font-mono text-[10px] text-slate-500 grid grid-cols-2 gap-x-4 gap-y-1">
                       <div>X: <span className="text-slate-300 font-bold">{activeCreateBox.leftPct.toFixed(1)}%</span></div>
@@ -1196,20 +1686,20 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
                     </div>
                     {createBoxes.length > 1 && (
                       <p className="text-[9px] text-slate-600 mt-1">
-                        {createBoxes.length} zones drawn — primary zone will be sent.
+                        {t("All {{count}} marked regions will be sent to the Assistant.", { count: createBoxes.length })}
                       </p>
                     )}
                   </div>
                 ) : sketchPreview ? (
                   <div className="bg-red-500/5 border border-red-500/15 rounded-md px-3 py-2.5">
                     <p className="text-[9px] text-red-400/70 leading-relaxed">
-                      ← Drag on the canvas to mark a specific work zone for this task.
+                      {t("← Drag on the canvas to mark a specific work zone for this task.")}
                     </p>
                   </div>
                 ) : (
                   <div className="bg-[#121214]/60 border border-[#2d2d34] rounded-md px-3 py-2.5">
                     <p className="text-[9px] text-slate-600 leading-relaxed">
-                      Upload a rough sketch on the canvas to enable zone marking.
+                      {t("Upload a rough sketch on the canvas to enable zone marking.")}
                     </p>
                   </div>
                 )}
@@ -1220,17 +1710,24 @@ export default function WorkspaceCanvas({ currentUser, activeSeries, activeChapt
               <div className="px-4 py-4 border-t border-[#2d2d34] shrink-0 space-y-2">
                 <button
                   onClick={handleDeploy}
-                  disabled={!cTitle.trim() || !!deployToast}
+                  disabled={
+                    !cTitle.trim() ||
+                    !cAssistant ||
+                    !sketchFile ||
+                    createBoxes.length === 0 ||
+                    !cInstructions.trim() ||
+                    !!deployToast
+                  }
                   className="w-full py-3 rounded-md bg-white hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold text-black transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg"
                 >
                   <Rocket className="w-4 h-4" />
-                  Deploy &amp; Assign Task
+                  {t("Deploy & Assign Task")}
                 </button>
                 <button
                   onClick={exitCreationMode}
                   className="w-full py-2 rounded-md border border-[#2d2d34] text-xs font-semibold text-slate-500 hover:text-white hover:border-slate-500 transition-all cursor-pointer"
                 >
-                  Cancel
+                  {t("Cancel")}
                 </button>
               </div>
 

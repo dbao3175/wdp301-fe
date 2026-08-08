@@ -6,7 +6,7 @@
 import React, { useMemo, useState } from 'react';
 import { ExternalLink, Search, Filter } from 'lucide-react';
 import { AssistantTask, AssistantTaskStatus } from './assistantTypes';
-import { ASSIGNED_TASKS, APPROVED_TASKS } from './assistantMockData';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 interface AssistantTaskManagementProps {
   searchQuery: string;
@@ -22,6 +22,7 @@ const STATUS_OPTIONS: AssistantTaskStatus[] = [
   'IN_PROGRESS',
   'SUBMITTED',
   'REVISING',
+  'MANGAKA_APPROVED',
   'APPROVED',
 ];
 
@@ -69,16 +70,18 @@ function PageCountBars({ count }: { count: number }) {
 }
 
 function StatusBadge({ status }: { status: AssistantTaskStatus }) {
+  const { t } = useLanguage();
   const colors: Record<AssistantTaskStatus, string> = {
     ASSIGNED: 'bg-slate-700/50 text-slate-400 border-slate-600',
     IN_PROGRESS: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
     SUBMITTED: 'bg-violet-500/10 text-violet-400 border-violet-500/30',
     REVISING: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
     APPROVED: 'bg-green-500/10 text-green-400 border-green-500/30',
+    MANGAKA_APPROVED: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
   };
   return (
     <span className={`inline-block px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide border rounded-sm ${colors[status]}`}>
-      {status.replace('_', ' ')}
+      {t(status.replace('_', ' '))}
     </span>
   );
 }
@@ -89,6 +92,7 @@ export default function AssistantTaskManagement({
   tasks,
   isLoading = false,
 }: AssistantTaskManagementProps) {
+  const { language, t } = useLanguage();
   const [activeTab, setActiveTab] = useState<TabId>('assigned');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [filterChapter, setFilterChapter] = useState<string>('ALL');
@@ -96,7 +100,7 @@ export default function AssistantTaskManagement({
   const [inlineSearch, setInlineSearch] = useState('');
 
   const allTasks = useMemo(() => {
-    return tasks || [...ASSIGNED_TASKS, ...APPROVED_TASKS];
+    return tasks ?? [];
   }, [tasks]);
 
   const assignedTasks = useMemo(() => {
@@ -108,7 +112,7 @@ export default function AssistantTaskManagement({
   }, [allTasks]);
 
   const chapters = useMemo(() => {
-    return [...new Set(allTasks.map((t) => `Ch. ${t.chapterNumber}`))].sort();
+    return [...new Set(allTasks.map((task) => String(task.chapterNumber)))].sort();
   }, [allTasks]);
 
   const combinedSearch = (inlineSearch || searchQuery).toLowerCase();
@@ -120,7 +124,7 @@ export default function AssistantTaskManagement({
         if (!hay.includes(combinedSearch)) return false;
       }
       if (filterStatus !== 'ALL' && t.status !== filterStatus) return false;
-      if (filterChapter !== 'ALL' && `Ch. ${t.chapterNumber}` !== filterChapter) return false;
+      if (filterChapter !== 'ALL' && String(t.chapterNumber) !== filterChapter) return false;
       if (filterDeadline !== 'ALL') {
         const dl = formatDeadline(t.deadline);
         if (filterDeadline === 'overdue' && dl.label !== 'Overdue') return false;
@@ -133,6 +137,11 @@ export default function AssistantTaskManagement({
   const assignedFiltered = filterTasks(assignedTasks);
   const approvedFiltered = filterTasks(approvedTasks);
 
+  const deadlineLabel = (label: string) => {
+    const match = label.match(/^(\d+) days left$/);
+    return match ? t("{{count}} days left", { count: match[1] }) : t(label);
+  };
+
   const totalEarnings = approvedFiltered.reduce((s, t) => s + (t.earnings ?? 0), 0);
   const totalPages = approvedFiltered.reduce((s, t) => s + (t.pageCount ?? 0), 0);
 
@@ -140,7 +149,7 @@ export default function AssistantTaskManagement({
     <div className="h-full overflow-y-auto p-5 space-y-5">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-500">
-          <span className="text-xs">Đang tải danh sách nhiệm vụ từ server...</span>
+          <span className="text-xs">{t("Loading tasks from server...")}</span>
         </div>
       ) : (
         <>
@@ -159,7 +168,7 @@ export default function AssistantTaskManagement({
                   : 'text-slate-500 hover:text-slate-300 border border-transparent hover:bg-[#2d2d34]/60'
               }`}
             >
-              {tab === 'assigned' ? 'Assigned' : 'Approved'}
+              {tab === 'assigned' ? t("Assigned") : t("Approved")}
               <span
                 className={`min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full text-[10px] font-mono font-bold transition-all ${
                   isActive
@@ -183,9 +192,9 @@ export default function AssistantTaskManagement({
           onChange={(e) => setFilterStatus(e.target.value)}
           className="bg-[#121214] border border-[#2d2d34] text-[10px] text-slate-400 font-mono px-2 py-1.5 rounded-md focus:outline-none focus:border-red-500/50 cursor-pointer"
         >
-          <option value="ALL">Status: All</option>
+          <option value="ALL">{t("Status: All")}</option>
           {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>{s.replace('_', ' ')}</option>
+            <option key={s} value={s}>{t(s.replace('_', ' '))}</option>
           ))}
         </select>
 
@@ -194,9 +203,9 @@ export default function AssistantTaskManagement({
           onChange={(e) => setFilterChapter(e.target.value)}
           className="bg-[#121214] border border-[#2d2d34] text-[10px] text-slate-400 font-mono px-2 py-1.5 rounded-md focus:outline-none focus:border-red-500/50 cursor-pointer"
         >
-          <option value="ALL">Chapter: All</option>
+          <option value="ALL">{t("Chapter: All")}</option>
           {chapters.map((c) => (
-            <option key={c} value={c}>{c}</option>
+            <option key={c} value={c}>{t('Chapter')} {c}</option>
           ))}
         </select>
 
@@ -205,10 +214,10 @@ export default function AssistantTaskManagement({
           onChange={(e) => setFilterDeadline(e.target.value)}
           className="bg-[#121214] border border-[#2d2d34] text-[10px] text-slate-400 font-mono px-2 py-1.5 rounded-md focus:outline-none focus:border-red-500/50 cursor-pointer"
         >
-          <option value="ALL">Deadline: All</option>
-          <option value="overdue">Overdue</option>
-          <option value="urgent">Urgent (≤3 days)</option>
-          <option value="normal">Normal</option>
+          <option value="ALL">{t("Deadline: All")}</option>
+          <option value="overdue">{t("Overdue")}</option>
+          <option value="urgent">{t("Urgent (≤3 days)")}</option>
+          <option value="normal">{t("Normal")}</option>
         </select>
 
         <div className="flex-1 min-w-[160px] relative">
@@ -217,7 +226,7 @@ export default function AssistantTaskManagement({
             type="text"
             value={inlineSearch}
             onChange={(e) => setInlineSearch(e.target.value)}
-            placeholder="Filter tasks…"
+            placeholder={t("Filter tasks...")}
             className="w-full pl-8 pr-3 py-1.5 bg-[#121214] border border-[#2d2d34] rounded-md text-[10px] text-slate-400 font-mono focus:outline-none focus:border-red-500/50"
           />
         </div>
@@ -231,7 +240,7 @@ export default function AssistantTaskManagement({
               <tr className="border-b border-[#2d2d34] bg-[#181820]">
                 {['Task ID', 'Title', 'Chapter', 'Deadline', 'Status', 'Assignee', ''].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-[9px] font-bold text-slate-600 uppercase tracking-widest">
-                    {h}
+                    {t(h)}
                   </th>
                 ))}
               </tr>
@@ -250,10 +259,10 @@ export default function AssistantTaskManagement({
                     </td>
                     <td className="px-4 py-3">
                       <p className="text-[11px] font-semibold text-white">{task.title}</p>
-                      <p className="text-[9px] text-slate-600 mt-0.5">{task.series} · {task.type}</p>
+                      <p className="text-[9px] text-slate-600 mt-0.5">{task.series} · {t(task.type)}</p>
                     </td>
-                    <td className="px-4 py-3 text-[11px] font-mono text-slate-400">Ch. {task.chapterNumber}</td>
-                    <td className={`px-4 py-3 text-[11px] font-mono font-bold ${dl.color}`}>{dl.label}</td>
+                    <td className="px-4 py-3 text-[11px] font-mono text-slate-400">{t('Chapter')} {task.chapterNumber}</td>
+                    <td className={`px-4 py-3 text-[11px] font-mono font-bold ${dl.color}`}>{deadlineLabel(dl.label)}</td>
                     <td className="px-4 py-3"><StatusBadge status={task.status} /></td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -271,7 +280,7 @@ export default function AssistantTaskManagement({
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/15 hover:bg-red-600/25 border border-red-500/30 text-red-400 text-[10px] font-bold uppercase rounded-md transition-all cursor-pointer"
                       >
                         <ExternalLink className="w-3 h-3" />
-                        Open Workspace
+                        {t("Open Workspace")}
                       </button>
                     </td>
                   </tr>
@@ -280,7 +289,7 @@ export default function AssistantTaskManagement({
             </tbody>
           </table>
           {assignedFiltered.length === 0 && (
-            <p className="p-8 text-center text-[11px] text-slate-600">No assigned tasks match your filters.</p>
+            <p className="p-8 text-center text-[11px] text-slate-600">{t("No assigned tasks match your filters.")}</p>
           )}
         </div>
       )}
@@ -294,7 +303,7 @@ export default function AssistantTaskManagement({
                 <tr className="border-b border-[#2d2d34] bg-[#181820]">
                   {['Task ID', 'Title', 'Chapter', 'Pages', 'Earnings', 'Approved'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-[9px] font-bold text-slate-600 uppercase tracking-widest">
-                      {h}
+                      {t(h)}
                     </th>
                   ))}
                 </tr>
@@ -307,7 +316,7 @@ export default function AssistantTaskManagement({
                       <p className="text-[11px] font-semibold text-white">{task.title}</p>
                       <p className="text-[9px] text-slate-600 mt-0.5">{task.series}</p>
                     </td>
-                    <td className="px-4 py-3 text-[11px] font-mono text-slate-400">Ch. {task.chapterNumber}</td>
+                    <td className="px-4 py-3 text-[11px] font-mono text-slate-400">{t('Chapter')} {task.chapterNumber}</td>
                     <td className="px-4 py-3">
                       <PageCountBars count={task.pageCount ?? 0} />
                     </td>
@@ -316,7 +325,7 @@ export default function AssistantTaskManagement({
                     </td>
                     <td className="px-4 py-3 text-[10px] font-mono text-slate-500">
                       {task.approvedAt
-                        ? new Date(task.approvedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                        ? new Date(task.approvedAt).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { month: 'short', day: 'numeric' })
                         : '—'}
                     </td>
                   </tr>
@@ -324,7 +333,7 @@ export default function AssistantTaskManagement({
               </tbody>
             </table>
             {approvedFiltered.length === 0 && (
-              <p className="p-8 text-center text-[11px] text-slate-600">No approved tasks match your filters.</p>
+              <p className="p-8 text-center text-[11px] text-slate-600">{t("No approved tasks match your filters.")}</p>
             )}
           </div>
 
@@ -332,16 +341,16 @@ export default function AssistantTaskManagement({
           <div className="flex items-center justify-between px-5 py-3 bg-[#181820] border border-[#2d2d34] rounded-md">
             <div className="flex items-center gap-6">
               <div>
-                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Total Tasks</p>
+                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">{t("Total Tasks")}</p>
                 <p className="text-lg font-bold text-white font-mono">{approvedFiltered.length}</p>
               </div>
               <div>
-                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Total Pages</p>
+                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">{t("Total Pages")}</p>
                 <p className="text-lg font-bold text-white font-mono">{totalPages}</p>
               </div>
             </div>
             <div className="text-right">
-              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Total Earnings</p>
+              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">{t("Total Earnings")}</p>
               <p className="text-xl font-bold text-[#2ECC71] font-mono">¥{totalEarnings.toLocaleString()}</p>
             </div>
           </div>
